@@ -47,5 +47,31 @@ export function pruneEmpty(
     }
     pruned.workspace = prunedWorkspace;
   }
+  restoreModelDefinitions(draft, pruned);
   return pruned;
+}
+
+/**
+ * A `models.definitions[name] = {}` empty object enables a built-in model — the
+ * generic prune would drop it and leave `models.default` dangling. Re-attach
+ * any definition keys the prune removed so enable-markers survive.
+ */
+function restoreModelDefinitions(
+  draft: Record<string, unknown>,
+  pruned: Record<string, unknown>,
+): void {
+  const models = draft.models;
+  if (!isPlainObject(models) || !isPlainObject(models.definitions)) return;
+
+  const prunedModels = isPlainObject(pruned.models) ? pruned.models : {};
+  const prunedDefinitions = isPlainObject(prunedModels.definitions)
+    ? prunedModels.definitions
+    : {};
+  for (const [name, definition] of Object.entries(models.definitions)) {
+    if (!(name in prunedDefinitions)) {
+      prunedDefinitions[name] = pruneValue(definition);
+    }
+  }
+  prunedModels.definitions = prunedDefinitions;
+  pruned.models = prunedModels;
 }

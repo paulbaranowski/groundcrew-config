@@ -16,6 +16,17 @@ test("keeps workspace even if it became empty after prune", () => {
   expect(pruneEmpty({ workspace: {} })).toEqual({ workspace: {} });
 });
 
+test("preserves built-in model enable markers (empty object under models.definitions)", () => {
+  // `definitions: { claude: {} }` enables the built-in claude model; the empty
+  // object is meaningful and must survive pruning, else the saved config has a
+  // default model with no matching definition and groundcrew rejects it.
+  const input = {
+    workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
+    models: { default: "claude", definitions: { claude: {} } },
+  };
+  expect(pruneEmpty(input)).toEqual(input);
+});
+
 test("preserves populated nested values", () => {
   const input = {
     workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
