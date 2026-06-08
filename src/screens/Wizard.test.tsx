@@ -2,12 +2,6 @@ import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { Wizard } from "./Wizard.tsx";
 
-// A keypress advances the wizard and mounts the next step's field. In a real
-// terminal each press triggers a re-render before the next; in tests we must
-// yield a tick so the next field is mounted before we type into it.
-const tick = (): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, 20));
-
 test("first step asks for scope", () => {
   const { lastFrame } = render(
     <Wizard onComplete={() => {}} onCancel={() => {}} />,
@@ -18,23 +12,29 @@ test("first step asks for scope", () => {
 
 test("walking all steps completes with a draft", async () => {
   const onComplete = vi.fn();
-  const { stdin } = render(
+  const { stdin, lastFrame } = render(
     <Wizard onComplete={onComplete} onCancel={() => {}} />,
   );
+  // A keypress advances the wizard and mounts the next step's field. Wait for
+  // each step to render (rather than a fixed sleep) so the walk is robust under
+  // load — otherwise we'd type into a field that hasn't mounted yet.
+  const waitForStep = (text: string): Promise<void> =>
+    vi.waitFor(() => expect(lastFrame()).toContain(text));
+
   stdin.write("\r"); // scope: default local
-  await tick();
+  await waitForStep("Project directory");
   stdin.write("~/dev/gc"); // projectDir
-  await tick();
+  await waitForStep("~/dev/gc");
   stdin.write("\r");
-  await tick();
+  await waitForStep("Add a repository");
   stdin.write("org/repo"); // repo
-  await tick();
+  await waitForStep("org/repo");
   stdin.write("\r");
-  await tick();
+  await waitForStep("Default agent model");
   stdin.write("\r"); // model: default claude
-  await tick();
+  await waitForStep("Sandbox runner");
   stdin.write("\r"); // runner: default auto -> complete
-  await tick();
+  await vi.waitFor(() => expect(onComplete).toHaveBeenCalled());
   expect(onComplete).toHaveBeenCalledWith(
     "local",
     expect.objectContaining({

@@ -39,3 +39,8 @@ test("reads ts default export literally (no defaults applied)", async () => {
 test("returns empty draft for a missing file", async () => {
   expect(await loadDraft("/nonexistent/crew.config.json")).toBeUndefined();
 });
+
+test("throws a clear error (not a silent undefined) for malformed json", async () => {
+  const file = tmp("crew.config.json", "{ not valid json");
+  await expect(loadDraft(file)).rejects.toThrow(/crew\.config\.json/);
+});

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput, useStdin } from "ink";
 import { editJson } from "../io/editJson.ts";
 
@@ -12,6 +12,15 @@ interface Props {
 export function EscapeHatch({ title, value, onChange, onBack }: Props) {
   const { setRawMode } = useStdin();
   const [error, setError] = useState<string | undefined>(undefined);
+  // The editor runs async; guard against the component unmounting (e.g. the app
+  // quit) before it returns, so we don't touch stdin or set state on a dead tree.
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   useInput((input, key) => {
     if (key.escape) onBack();
@@ -19,6 +28,7 @@ export function EscapeHatch({ title, value, onChange, onBack }: Props) {
       // Release Ink's hold on stdin so the editor owns the terminal.
       setRawMode(false);
       void editJson(value).then((result) => {
+        if (!mountedRef.current) return;
         setRawMode(true);
         if (result.ok) {
           setError(undefined);

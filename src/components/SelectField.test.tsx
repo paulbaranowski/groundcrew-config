@@ -30,6 +30,21 @@ test("right arrow advances to next option", () => {
   expect(onChange).toHaveBeenCalledWith("sdx");
 });
 
+test("empty options: arrow keys do not emit a value", () => {
+  const onChange = vi.fn();
+  const { stdin } = render(
+    <SelectField
+      label="runner"
+      value=""
+      options={[]}
+      isActive
+      onChange={onChange}
+    />,
+  );
+  stdin.write("\u001B[C"); // right arrow
+  expect(onChange).not.toHaveBeenCalled();
+});
+
 test("left arrow wraps to the last option", () => {
   const onChange = vi.fn();
   const { stdin } = render(

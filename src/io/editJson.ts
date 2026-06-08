@@ -28,8 +28,10 @@ export async function editJson(
   // spaces work. Both inputs are trusted: the editor command is the user's own
   // environment, and the temp path is mkdtemp-generated (no shell metachars).
   const editorCommand = resolveEditor(options.editorCommand);
+  // Single-quote the temp path: unlike "..." it suppresses $-/backtick
+  // expansion. The path is mkdtemp-generated (no single quotes), so this is safe.
   const exitCode = await new Promise<number>((resolve) => {
-    const child = spawn(`${editorCommand} "${file}"`, {
+    const child = spawn(`${editorCommand} '${file}'`, {
       stdio: "inherit",
       shell: true,
     });

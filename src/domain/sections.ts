@@ -168,7 +168,9 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
     }
     case "ticketSources": {
       const shells = (draft.sources ?? []).filter((s) => s.kind === "shell");
-      return shells.length === 0 ? "none" : `${shells.length} shell`;
+      return shells.length === 0
+        ? "none"
+        : `${shells.length} shell${shells.length === 1 ? "" : "s"}`;
     }
     case "orchestrator": {
       const o = draft.orchestrator ?? {};

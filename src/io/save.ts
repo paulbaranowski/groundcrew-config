@@ -38,7 +38,11 @@ export async function saveDraft(
   for (const name of SHADOWING) {
     const candidate = path.join(dir, name);
     if (existsSync(candidate)) {
-      const backup = `${candidate}.bak`;
+      // Never clobber an existing backup: a prior save's *.bak could hold the
+      // only copy of a hand-written config. Pick the first free suffix.
+      let backup = `${candidate}.bak`;
+      let n = 1;
+      while (existsSync(backup)) backup = `${candidate}.bak.${n++}`;
       renameSync(candidate, backup);
       shadowed.push(backup);
     }

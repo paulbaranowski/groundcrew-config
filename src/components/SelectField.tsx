@@ -17,6 +17,7 @@ export function SelectField({
 }: Props) {
   useInput(
     (_input, key) => {
+      if (options.length === 0) return; // nothing to cycle; avoids `% 0` → NaN
       const index = Math.max(0, options.indexOf(value));
       if (key.rightArrow)
         onChange(options[(index + 1) % options.length] ?? value);

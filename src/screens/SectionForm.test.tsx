@@ -87,7 +87,6 @@ test("esc calls onBack", async () => {
   );
   stdin.write(""); // escape
   // ink buffers a lone ESC briefly to disambiguate it from escape sequences
-  // (arrows etc.), so let the event loop tick before asserting.
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  expect(onBack).toHaveBeenCalled();
+  // (arrows etc.), so wait for the handler rather than asserting synchronously.
+  await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
 });

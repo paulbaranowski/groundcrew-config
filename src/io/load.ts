@@ -21,7 +21,17 @@ export async function loadDraft(
 ): Promise<ConfigDraft | undefined> {
   if (!existsSync(filepath)) return undefined;
   if (path.extname(filepath) === ".json") {
-    return JSON.parse(readFileSync(filepath, "utf8")) as ConfigDraft;
+    const text = readFileSync(filepath, "utf8");
+    try {
+      return JSON.parse(text) as ConfigDraft;
+    } catch (error) {
+      // Fail loud with the offending file: a silent undefined would be read as
+      // "no config" and the wizard would overwrite the user's broken-but-real file.
+      throw new Error(
+        `Invalid JSON in ${filepath}: ${(error as Error).message}`,
+        { cause: error },
+      );
+    }
   }
   const result = await explorer.load(filepath);
   return (result?.config ?? undefined) as ConfigDraft | undefined;

@@ -18,7 +18,7 @@ crew-config ./path/to/crew.config.json
 
 - First run with no config launches a guided wizard, then drops into the editor.
 - Reads any existing `crew.config.ts`/`.js`/`.json` to pre-fill, and always saves
-  minimal `crew.config.json`. A shadowing `crew.config.ts`/`.js` is moved to `*.bak`.
+  minimal `crew.config.json`. A shadowing `crew.config.ts`/`.js`/`.mjs` is moved to `*.bak`.
 - Every save is validated by groundcrew's own loader, so "valid" means "crew accepts it".
 - `sources` (ticket adapters) and custom model definitions are edited as raw JSON in `$EDITOR`.
 

@@ -19,16 +19,12 @@ export function normalizeRepos(
 
 export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
   return entries.map((entry): RepoUnion => {
-    if (
-      entry.projectDirOverride === undefined ||
-      entry.projectDirOverride.length === 0
-    ) {
-      return entry.name;
+    const name = entry.name.trim();
+    const override = entry.projectDirOverride?.trim();
+    if (override === undefined || override.length === 0) {
+      return name;
     }
-    const repo: KnownRepo = {
-      name: entry.name,
-      projectDirOverride: entry.projectDirOverride,
-    };
+    const repo: KnownRepo = { name, projectDirOverride: override };
     return repo;
   });
 }
@@ -43,9 +39,10 @@ export function repoErrors(
 ): Array<string | undefined> {
   const seen = new Set<string>();
   return entries.map((entry) => {
-    if (entry.name.trim().length === 0) return "name is required";
-    if (seen.has(entry.name)) return "duplicate repository name";
-    seen.add(entry.name);
+    const name = entry.name.trim();
+    if (name.length === 0) return "name is required";
+    if (seen.has(name)) return "duplicate repository name";
+    seen.add(name);
     return undefined;
   });
 }

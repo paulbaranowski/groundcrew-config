@@ -39,6 +39,18 @@ test("orchestrator summary shows ghosted defaults when unset", () => {
   ).toBe("max 4 · poll 120s · limit 85%");
 });
 
+test("ticketSources summary pluralizes the shell count", () => {
+  expect(
+    sectionSummary("ticketSources", {
+      workspace: { projectDir: "~/d", knownRepositories: [] },
+      sources: [
+        { kind: "shell", name: "a" },
+        { kind: "shell", name: "b" },
+      ],
+    } as never),
+  ).toBe("2 shells");
+});
+
 test("sandbox is a select field spec over the runner enum", () => {
   const spec = simpleSectionSpec("sandbox");
   expect(spec[0]?.kind).toBe("select");

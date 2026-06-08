@@ -42,6 +42,23 @@ test("renames a shadowing crew.config.ts to .bak", async () => {
   expect(result.shadowed).toEqual([path.join(cwd, "crew.config.ts.bak")]);
 });
 
+test("does not clobber an existing .bak backup", async () => {
+  const cwd = dir();
+  writeFileSync(path.join(cwd, "crew.config.ts"), "export default {};");
+  writeFileSync(path.join(cwd, "crew.config.ts.bak"), "OLD BACKUP");
+  const result = await saveDraft(
+    { scope: "local", cwd },
+    { workspace: { projectDir: "~/d", knownRepositories: [] } },
+  );
+  // The pre-existing backup must be preserved untouched.
+  expect(readFileSync(path.join(cwd, "crew.config.ts.bak"), "utf8")).toBe(
+    "OLD BACKUP",
+  );
+  // The new backup gets a unique name.
+  expect(result.shadowed).toEqual([path.join(cwd, "crew.config.ts.bak.1")]);
+  expect(existsSync(path.join(cwd, "crew.config.ts.bak.1"))).toBe(true);
+});
+
 test("renames every shadowing file, not just the first", async () => {
   const cwd = dir();
   writeFileSync(path.join(cwd, "crew.config.ts"), "export default {};");

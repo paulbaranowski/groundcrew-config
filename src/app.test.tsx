@@ -1,14 +1,11 @@
 import { render } from "ink-testing-library";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { App } from "./app.tsx";
 
 const draft = {
   workspace: { projectDir: "~/dev/groundcrew", knownRepositories: ["a/b"] },
   models: { default: "claude", definitions: { claude: {} } },
 } as never;
-
-const tick = (): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, 20));
 
 test("starts on Home when given an existing draft", () => {
   const { lastFrame, unmount } = render(
@@ -32,10 +29,8 @@ test("enter opens a section, esc returns home", async () => {
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
   stdin.write("\r"); // open Workspace
-  await tick();
-  expect(lastFrame()).toContain("knownRepositories");
+  await vi.waitFor(() => expect(lastFrame()).toContain("knownRepositories"));
   stdin.write(""); // esc back
-  await tick();
-  expect(lastFrame()).toContain("Ticket Sources");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Ticket Sources"));
   unmount();
 });
