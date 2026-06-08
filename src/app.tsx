@@ -42,6 +42,7 @@ export function App({ initialDraft, target }: Props) {
     initialDraft ? { name: "home" } : { name: "wizard" },
   );
   const [dirty, setDirty] = useState(false);
+  const [valid, setValid] = useState(true);
   const [issues, setIssues] = useState<Set<SectionId>>(new Set());
   const [savedAt, setSavedAt] = useState<string | undefined>(undefined);
   const [quitting, setQuitting] = useState(false);
@@ -53,6 +54,7 @@ export function App({ initialDraft, target }: Props) {
     const timer = setTimeout(() => {
       void validateDraft(draft).then((result) => {
         if (cancelled) return;
+        setValid(result.ok);
         setIssues(
           result.ok || result.section === undefined
             ? new Set()
@@ -75,8 +77,8 @@ export function App({ initialDraft, target }: Props) {
     const result = await saveDraft(target, draft);
     setDirty(false);
     setSavedAt(
-      result.shadowed
-        ? `${result.path} (moved ${result.shadowed})`
+      result.shadowed.length > 0
+        ? `${result.path} (moved ${result.shadowed.join(", ")})`
         : result.path,
     );
   }
@@ -134,6 +136,7 @@ export function App({ initialDraft, target }: Props) {
         <Footer
           dirty={dirty}
           issues={issues.size}
+          valid={valid}
           hint="↑/↓ move · enter edit · s save · q quit"
         />
       </Box>

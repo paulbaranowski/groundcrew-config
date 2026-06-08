@@ -23,12 +23,15 @@ export async function editJson(
   const file = path.join(dir, "section.json");
   writeFileSync(file, `${JSON.stringify(value, undefined, 2)}\n`);
 
-  const [command, ...fixedArgs] = resolveEditor(options.editorCommand).split(
-    " ",
-  );
+  // Run through a shell (the conventional $EDITOR/$VISUAL contract — git does
+  // the same) so editor commands carrying flags ("code --wait") or paths with
+  // spaces work. Both inputs are trusted: the editor command is the user's own
+  // environment, and the temp path is mkdtemp-generated (no shell metachars).
+  const editorCommand = resolveEditor(options.editorCommand);
   const exitCode = await new Promise<number>((resolve) => {
-    const child = spawn(command ?? "vi", [...fixedArgs, file], {
+    const child = spawn(`${editorCommand} "${file}"`, {
       stdio: "inherit",
+      shell: true,
     });
     child.on("close", (code) => resolve(code ?? 0));
   });

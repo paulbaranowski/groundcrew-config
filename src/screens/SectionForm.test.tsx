@@ -51,6 +51,29 @@ test("typing into the active text field emits an updated draft", () => {
   );
 });
 
+test("a non-numeric value in a number field does not emit NaN", () => {
+  const onChange = vi.fn();
+  const numberSpec: FieldSpec[] = [
+    {
+      path: "orchestrator.maximumInProgress",
+      label: "maximumInProgress",
+      kind: "number",
+      help: "Max in progress.",
+    },
+  ];
+  const { stdin } = render(
+    <SectionForm
+      title="Orchestrator"
+      spec={numberSpec}
+      draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
+      onChange={onChange}
+      onBack={() => {}}
+    />,
+  );
+  stdin.write("x"); // not a digit
+  expect(onChange).not.toHaveBeenCalled();
+});
+
 test("esc calls onBack", async () => {
   const onBack = vi.fn();
   const { stdin } = render(

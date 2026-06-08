@@ -27,7 +27,7 @@ test("writes minimal pruned json", async () => {
   expect(written).toEqual({
     workspace: { projectDir: "~/d", knownRepositories: ["a/b"] },
   });
-  expect(result.shadowed).toBeUndefined();
+  expect(result.shadowed).toEqual([]);
 });
 
 test("renames a shadowing crew.config.ts to .bak", async () => {
@@ -39,5 +39,23 @@ test("renames a shadowing crew.config.ts to .bak", async () => {
   );
   expect(existsSync(path.join(cwd, "crew.config.ts"))).toBe(false);
   expect(existsSync(path.join(cwd, "crew.config.ts.bak"))).toBe(true);
-  expect(result.shadowed).toBe(path.join(cwd, "crew.config.ts.bak"));
+  expect(result.shadowed).toEqual([path.join(cwd, "crew.config.ts.bak")]);
+});
+
+test("renames every shadowing file, not just the first", async () => {
+  const cwd = dir();
+  writeFileSync(path.join(cwd, "crew.config.ts"), "export default {};");
+  writeFileSync(path.join(cwd, "crew.config.mjs"), "export default {};");
+  const result = await saveDraft(
+    { scope: "local", cwd },
+    { workspace: { projectDir: "~/d", knownRepositories: [] } },
+  );
+  expect(existsSync(path.join(cwd, "crew.config.ts"))).toBe(false);
+  expect(existsSync(path.join(cwd, "crew.config.mjs"))).toBe(false);
+  expect(existsSync(path.join(cwd, "crew.config.ts.bak"))).toBe(true);
+  expect(existsSync(path.join(cwd, "crew.config.mjs.bak"))).toBe(true);
+  expect(result.shadowed).toEqual([
+    path.join(cwd, "crew.config.ts.bak"),
+    path.join(cwd, "crew.config.mjs.bak"),
+  ]);
 });

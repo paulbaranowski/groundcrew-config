@@ -11,7 +11,8 @@ export interface Target {
 }
 export interface SaveResult {
   path: string;
-  shadowed: string | undefined;
+  /** Backup paths of every shadowing config file moved aside (empty if none). */
+  shadowed: string[];
 }
 
 // Loader checks these (any extension) before crew.config.json, so a leftover
@@ -31,14 +32,15 @@ export async function saveDraft(
   const dir = path.dirname(out);
   mkdirSync(dir, { recursive: true });
 
-  let shadowed: string | undefined;
+  // Move aside *every* shadowing file: any one of them would be preferred by
+  // groundcrew's loader over the crew.config.json we write.
+  const shadowed: string[] = [];
   for (const name of SHADOWING) {
     const candidate = path.join(dir, name);
     if (existsSync(candidate)) {
       const backup = `${candidate}.bak`;
       renameSync(candidate, backup);
-      shadowed = backup;
-      break;
+      shadowed.push(backup);
     }
   }
 

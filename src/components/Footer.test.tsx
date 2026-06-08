@@ -17,3 +17,11 @@ test("shows all-valid state", () => {
   );
   expect(lastFrame()).toContain("✓");
 });
+
+test("shows invalid state when not valid even with no mapped section", () => {
+  const { lastFrame } = render(
+    <Footer dirty={false} issues={0} valid={false} hint="enter edit" />,
+  );
+  expect(lastFrame()).not.toContain("✓");
+  expect(lastFrame()).toContain("invalid");
+});

@@ -28,12 +28,18 @@ export function SectionForm({ title, spec, draft, onChange, onBack }: Props) {
   });
 
   function update(field: FieldSpec, raw: string): void {
-    const value =
-      raw.length === 0
-        ? undefined
-        : field.kind === "number"
-          ? Number(raw)
-          : raw;
+    let value: string | number | undefined;
+    if (raw.length === 0) {
+      value = undefined;
+    } else if (field.kind === "number") {
+      const parsed = Number(raw);
+      // Ignore non-numeric input rather than store NaN (which serializes to
+      // null and produces an invalid config).
+      if (!Number.isFinite(parsed)) return;
+      value = parsed;
+    } else {
+      value = raw;
+    }
     onChange(
       setByPath(
         draft as unknown as Record<string, unknown>,

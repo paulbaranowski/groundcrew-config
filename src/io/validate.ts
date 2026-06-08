@@ -26,6 +26,7 @@ catch (error) { console.error(error?.message ?? String(error)); process.exit(1);
 const SECTION_PREFIXES: Array<[string, SectionId]> = [
   ["workspace", "workspace"],
   ["models", "models"],
+  ["linear", "linear"],
   ["sources", "ticketSources"],
   ["orchestrator", "orchestrator"],
   ["defaults.hooks", "hooks"],
