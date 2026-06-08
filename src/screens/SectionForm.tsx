@@ -1,0 +1,82 @@
+import { useState } from "react";
+import { Box, Text, useInput } from "ink";
+import { SelectField } from "../components/SelectField.tsx";
+import { TextField } from "../components/TextField.tsx";
+import { getByPath, setByPath } from "../domain/draftPath.ts";
+import type { FieldSpec } from "../domain/sections.ts";
+import type { ConfigDraft } from "../domain/types.ts";
+
+interface Props {
+  title: string;
+  spec: FieldSpec[];
+  draft: ConfigDraft;
+  onChange: (next: ConfigDraft) => void;
+  onBack: () => void;
+}
+
+function asString(value: unknown): string {
+  return value === undefined ? "" : String(value);
+}
+
+export function SectionForm({ title, spec, draft, onChange, onBack }: Props) {
+  const [active, setActive] = useState(0);
+
+  useInput((_input, key) => {
+    if (key.escape) onBack();
+    if (key.downArrow) setActive((a) => Math.min(spec.length - 1, a + 1));
+    if (key.upArrow) setActive((a) => Math.max(0, a - 1));
+  });
+
+  function update(field: FieldSpec, raw: string): void {
+    const value =
+      raw.length === 0
+        ? undefined
+        : field.kind === "number"
+          ? Number(raw)
+          : raw;
+    onChange(
+      setByPath(
+        draft as unknown as Record<string, unknown>,
+        field.path,
+        value,
+      ) as unknown as ConfigDraft,
+    );
+  }
+
+  const focused = spec[active];
+  return (
+    <Box flexDirection="column" borderStyle="round" paddingX={1}>
+      <Text bold>{title}</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {spec.map((field, index) =>
+          field.kind === "select" ? (
+            <SelectField
+              key={field.path}
+              label={field.label}
+              options={field.options ?? []}
+              value={asString(
+                getByPath(draft, field.path) ?? field.options?.[0],
+              )}
+              isActive={index === active}
+              onChange={(v) => update(field, v)}
+            />
+          ) : (
+            <TextField
+              key={field.path}
+              label={field.label}
+              value={asString(getByPath(draft, field.path))}
+              placeholder={field.placeholder}
+              isActive={index === active}
+              onChange={(v) => update(field, v)}
+            />
+          ),
+        )}
+      </Box>
+      {focused ? (
+        <Box marginTop={1}>
+          <Text dimColor>{focused.help}</Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
