@@ -5,6 +5,8 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2023"],
     "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
