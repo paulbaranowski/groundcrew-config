@@ -43,6 +43,7 @@ export function App({ initialDraft, target }: Props) {
   );
   const [dirty, setDirty] = useState(false);
   const [valid, setValid] = useState(true);
+  const [checked, setChecked] = useState(false);
   const [issues, setIssues] = useState<Set<SectionId>>(new Set());
   const [savedAt, setSavedAt] = useState<string | undefined>(undefined);
   const [quitting, setQuitting] = useState(false);
@@ -54,6 +55,7 @@ export function App({ initialDraft, target }: Props) {
     const timer = setTimeout(() => {
       void validateDraft(draft).then((result) => {
         if (cancelled) return;
+        setChecked(true);
         setValid(result.ok);
         setIssues(
           result.ok || result.section === undefined
@@ -137,6 +139,7 @@ export function App({ initialDraft, target }: Props) {
           dirty={dirty}
           issues={issues.size}
           valid={valid}
+          checked={checked}
           hint="↑/↓ move · enter edit · s save · q quit"
         />
       </Box>

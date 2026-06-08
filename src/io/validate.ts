@@ -22,22 +22,25 @@ try { await loadConfig(); }
 catch (error) { console.error(error?.message ?? String(error)); process.exit(1); }
 `;
 
-// Ordered longest-prefix-first so "workspace.knownRepositories" wins over "workspace".
+// Ordered most-specific-first: a longer key that *contains* a shorter one must
+// be tested before it, e.g. "workspaceKind" before "workspace" (since
+// "workspaceKind".includes("workspace") is true) and "defaults.hooks" before
+// any bare "hooks" check.
 const SECTION_PREFIXES: Array<[string, SectionId]> = [
+  ["workspaceKind", "advanced"],
+  ["defaults.hooks", "hooks"],
   ["workspace", "workspace"],
   ["models", "models"],
   ["linear", "linear"],
   ["sources", "ticketSources"],
   ["orchestrator", "orchestrator"],
-  ["defaults.hooks", "hooks"],
   ["git", "git"],
   ["local", "sandbox"],
   ["prompts", "prompts"],
-  ["workspaceKind", "advanced"],
   ["logging", "advanced"],
 ];
 
-function mapSection(message: string): SectionId | undefined {
+export function mapSection(message: string): SectionId | undefined {
   for (const [prefix, section] of SECTION_PREFIXES) {
     if (message.includes(prefix)) return section;
   }

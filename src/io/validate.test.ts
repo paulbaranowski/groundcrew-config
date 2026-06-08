@@ -1,5 +1,17 @@
 import { expect, test } from "vitest";
-import { validateDraft } from "./validate.ts";
+import { mapSection, validateDraft } from "./validate.ts";
+
+test("mapSection maps workspaceKind errors to advanced, not workspace", () => {
+  expect(mapSection("workspaceKind must be one of auto, cmux, tmux")).toBe(
+    "advanced",
+  );
+});
+
+test("mapSection maps a workspace.projectDir error to workspace", () => {
+  expect(
+    mapSection("groundcrew config: workspace.projectDir must be non-empty"),
+  ).toBe("workspace");
+});
 
 test("a complete config validates ok", async () => {
   const result = await validateDraft({
