@@ -1,0 +1,65 @@
+import { execFile } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { pruneEmpty } from "../domain/prune.ts";
+import type { ConfigDraft, SectionId } from "../domain/types.ts";
+
+const run = promisify(execFile);
+
+export type ValidationResult =
+  | { ok: true }
+  | { ok: false; message: string; section: SectionId | undefined };
+
+// Resolve groundcrew's entry once so the child imports it by absolute URL,
+// independent of the child's cwd.
+const groundcrewUrl = import.meta.resolve("@clipboard-health/groundcrew");
+
+const CHILD = `
+const { loadConfig } = await import(${JSON.stringify(groundcrewUrl)});
+try { await loadConfig(); }
+catch (error) { console.error(error?.message ?? String(error)); process.exit(1); }
+`;
+
+// Ordered longest-prefix-first so "workspace.knownRepositories" wins over "workspace".
+const SECTION_PREFIXES: Array<[string, SectionId]> = [
+  ["workspace", "workspace"],
+  ["models", "models"],
+  ["sources", "ticketSources"],
+  ["orchestrator", "orchestrator"],
+  ["defaults.hooks", "hooks"],
+  ["git", "git"],
+  ["local", "sandbox"],
+  ["prompts", "prompts"],
+  ["workspaceKind", "advanced"],
+  ["logging", "advanced"],
+];
+
+function mapSection(message: string): SectionId | undefined {
+  for (const [prefix, section] of SECTION_PREFIXES) {
+    if (message.includes(prefix)) return section;
+  }
+  return undefined;
+}
+
+export async function validateDraft(
+  draft: ConfigDraft,
+): Promise<ValidationResult> {
+  const dir = mkdtempSync(path.join(tmpdir(), "cc-validate-"));
+  const file = path.join(dir, "crew.config.json");
+  writeFileSync(
+    file,
+    JSON.stringify(pruneEmpty(draft as unknown as Record<string, unknown>)),
+  );
+  try {
+    await run(process.execPath, ["--input-type=module", "-e", CHILD], {
+      env: { ...process.env, GROUNDCREW_CONFIG: file },
+    });
+    return { ok: true };
+  } catch (error) {
+    const message =
+      (error as { stderr?: string }).stderr?.trim() || String(error);
+    return { ok: false, message, section: mapSection(message) };
+  }
+}
