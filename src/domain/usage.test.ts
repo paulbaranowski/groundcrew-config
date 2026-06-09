@@ -20,7 +20,7 @@ test("re-enabling removes only the disabled sentinel, preserving other fields", 
   const models = {
     default: "claude",
     definitions: { claude: { cmd: "claude", usage: { disabled: true } } },
-  };
+  } as never;
   const on = setUsageDisabled(models, false);
   expect(on?.definitions).toEqual({ claude: { cmd: "claude" } });
   expect(isUsageDisabled(on)).toBe(false);
