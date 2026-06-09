@@ -27,11 +27,13 @@ catch (error) { console.error(error?.message ?? String(error)); process.exit(1);
 // "workspaceKind".includes("workspace") is true) and "defaults.hooks" before
 // any bare "hooks" check.
 const SECTION_PREFIXES: Array<[string, SectionId]> = [
-  ["workspaceKind", "advanced"],
+  ["knownRepositories", "repositories"],
+  ["workspaceKind", "terminal"],
   ["defaults.hooks", "hooks"],
   ["workspace", "workspace"],
+  ["usage", "usage"],
   ["models", "models"],
-  ["linear", "linear"],
+  ["linear", "ticketSources"],
   ["sources", "ticketSources"],
   ["orchestrator", "orchestrator"],
   ["git", "git"],

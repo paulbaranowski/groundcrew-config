@@ -1,16 +1,28 @@
 import { expect, test } from "vitest";
 import { mapSection, validateDraft } from "./validate.ts";
 
-test("mapSection maps workspaceKind errors to advanced, not workspace", () => {
-  expect(mapSection("workspaceKind must be one of auto, cmux, tmux")).toBe(
-    "advanced",
-  );
-});
-
 test("mapSection maps a workspace.projectDir error to workspace", () => {
   expect(
     mapSection("groundcrew config: workspace.projectDir must be non-empty"),
   ).toBe("workspace");
+});
+
+test("mapSection maps knownRepositories errors to repositories", () => {
+  expect(mapSection("workspace.knownRepositories[0] must be a string")).toBe(
+    "repositories",
+  );
+});
+
+test("mapSection maps workspaceKind errors to terminal", () => {
+  expect(mapSection("workspaceKind must be one of auto, cmux, tmux")).toBe(
+    "terminal",
+  );
+});
+
+test("mapSection maps usage errors to usage", () => {
+  expect(mapSection("models.definitions.claude.usage is invalid")).toBe(
+    "usage",
+  );
 });
 
 test("a complete config validates ok", async () => {
