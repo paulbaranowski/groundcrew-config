@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput, useStdin } from "ink";
-import {
-  isBypassEnabled,
-  isClaudeModel,
-  setBypass,
-} from "../domain/permissions.ts";
+import { BUILTIN_MODELS, isModelEnabled, setModelEnabled } from "../domain/models.ts";
+import { isBypassEnabled, setBypass } from "../domain/permissions.ts";
 import { setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { editJson } from "../io/editJson.ts";
@@ -14,6 +11,11 @@ interface Props {
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
 }
+
+// A focusable row: enable a built-in model, or toggle claude's bypass sub-option.
+type Row =
+  | { kind: "enable"; name: (typeof BUILTIN_MODELS)[number] }
+  | { kind: "bypass" };
 
 export function ModelsForm({ draft, onChange, onBack }: Props) {
   const { setRawMode } = useStdin();
@@ -29,10 +31,33 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
   );
 
   const models = draft.models ?? {};
-  const entries = Object.entries(models.definitions ?? {});
-  const claudeModels = entries.filter(([name, def]) => isClaudeModel(name, def));
-  const otherModels = entries.filter(([name, def]) => !isClaudeModel(name, def));
-  const focused = Math.min(cursor, Math.max(0, claudeModels.length - 1));
+  const definitions = models.definitions ?? {};
+  const claudeOn = isModelEnabled(models, "claude");
+
+  // claude → (bypass when claude on) → codex. The bypass row is a child of claude.
+  const rows: Row[] = [];
+  rows.push({ kind: "enable", name: "claude" });
+  if (claudeOn) rows.push({ kind: "bypass" });
+  rows.push({ kind: "enable", name: "codex" });
+  const focused = Math.min(cursor, rows.length - 1);
+
+  const custom = Object.keys(definitions).filter(
+    (name) => !BUILTIN_MODELS.includes(name as never),
+  );
+
+  function toggle(row: Row): void {
+    if (row.kind === "enable") {
+      onChange({
+        ...draft,
+        models: setModelEnabled(models, row.name, !isModelEnabled(models, row.name)),
+      });
+    } else {
+      onChange({
+        ...draft,
+        models: setBypass(models, "claude", !isBypassEnabled("claude", definitions.claude)),
+      });
+    }
+  }
 
   useInput((input, key) => {
     if (key.escape) {
@@ -58,17 +83,11 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
       });
       return;
     }
-    if (claudeModels.length === 0) return;
-    if (key.downArrow) setCursor(Math.min(claudeModels.length - 1, focused + 1));
+    if (key.downArrow) setCursor(Math.min(rows.length - 1, focused + 1));
     if (key.upArrow) setCursor(Math.max(0, focused - 1));
     if (input === " ") {
-      const entry = claudeModels[focused];
-      if (!entry) return;
-      const [name, def] = entry;
-      onChange({
-        ...draft,
-        models: setBypass(models, name, !isBypassEnabled(name, def)),
-      });
+      const row = rows[focused];
+      if (row) toggle(row);
     }
   });
 
@@ -76,25 +95,33 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Models</Text>
       <Box marginTop={1} flexDirection="column">
-        {claudeModels.length === 0 ? (
-          <Text dimColor>(no claude models to toggle — add one via raw JSON)</Text>
-        ) : (
-          claudeModels.map(([name, def], index) => {
-            const on = isBypassEnabled(name, def);
-            const active = index === focused;
+        {rows.map((row, index) => {
+          const active = index === focused;
+          const marker = active ? "▸ " : "  ";
+          if (row.kind === "enable") {
+            const on = isModelEnabled(models, row.name);
             return (
-              <Text key={name} color={active ? "cyan" : undefined}>
-                {active ? "▸ " : "  "}
+              <Text key={row.name} color={active ? "cyan" : undefined}>
+                {marker}
                 <Text color={on ? "green" : undefined}>[{on ? "x" : " "}]</Text>{" "}
-                {name} — bypass permission prompts
+                {row.name}
               </Text>
             );
-          })
-        )}
+          }
+          const on = isBypassEnabled("claude", definitions.claude);
+          return (
+            <Text key="bypass" color={active ? "cyan" : undefined}>
+              {marker}
+              {"    "}
+              <Text color={on ? "green" : undefined}>[{on ? "x" : " "}]</Text>{" "}
+              bypass permission prompts
+            </Text>
+          );
+        })}
       </Box>
-      {otherModels.length > 0 ? (
+      {custom.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
-          {otherModels.map(([name]) => (
+          {custom.map((name) => (
             <Text key={name} dimColor>
               {name} — edit via raw JSON
             </Text>
@@ -107,10 +134,7 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>
-          {claudeModels.length > 1 ? "↑/↓ move · " : ""}space toggle · e edit raw
-          JSON · esc back
-        </Text>
+        <Text dimColor>↑/↓ move · space toggle · e edit raw JSON · esc back</Text>
       </Box>
     </Box>
   );
