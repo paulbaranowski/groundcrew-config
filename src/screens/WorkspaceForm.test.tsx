@@ -3,18 +3,14 @@ import { expect, test } from "vitest";
 import { WorkspaceForm } from "./WorkspaceForm.tsx";
 
 const draft = {
-  workspace: {
-    projectDir: "~/dev/groundcrew",
-    knownRepositories: ["a/b", "a/b"],
-  },
+  workspace: { projectDir: "~/dev/groundcrew", knownRepositories: [] },
 } as never;
 
-test("renders fields and flags the duplicate repo", () => {
+test("renders projectDir and worktreeDir, not the repo list", () => {
   const { lastFrame } = render(
     <WorkspaceForm draft={draft} onChange={() => {}} onBack={() => {}} />,
   );
   expect(lastFrame()).toContain("projectDir");
   expect(lastFrame()).toContain("worktreeDir");
-  expect(lastFrame()).toContain("a/b");
-  expect(lastFrame()).toContain("duplicate");
+  expect(lastFrame()).not.toContain("knownRepositories");
 });
