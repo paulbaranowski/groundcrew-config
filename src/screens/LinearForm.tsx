@@ -15,8 +15,8 @@ export function LinearForm({ draft, onChange, onBack, env = process.env }: Props
   const disabled = isLinearDisabled(draft);
   const key = linearApiKeyStatus(env);
 
-  useInput((input, key2) => {
-    if (key2.escape) onBack();
+  useInput((input, { escape }) => {
+    if (escape) onBack();
     // Pass the *current* disabled flag as the new `enabled` to flip the state.
     if (input === " ") onChange(setLinearEnabled(draft, disabled));
   });

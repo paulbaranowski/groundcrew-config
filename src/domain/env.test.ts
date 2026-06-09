@@ -21,3 +21,7 @@ test("falls back to LINEAR_API_KEY", () => {
 test("treats an empty string as not set", () => {
   expect(linearApiKeyStatus({ LINEAR_API_KEY: "" })).toEqual({ set: false });
 });
+
+test("treats a whitespace-only value as not set", () => {
+  expect(linearApiKeyStatus({ LINEAR_API_KEY: "   " })).toEqual({ set: false });
+});
