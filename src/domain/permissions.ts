@@ -21,12 +21,17 @@ function agentBinary(cmd: string): string {
   return first.split("/").pop() ?? first;
 }
 
-/** Replace the `--permission-mode <value>` token, or append it when absent. */
+/**
+ * Strip every existing `--permission-mode <value>` (or `=value`) flag, then
+ * append the desired one. Stripping all occurrences keeps the toggle honest
+ * even when a raw-JSON edit left duplicate flags (a later one would win).
+ */
 function applyPermissionMode(cmd: string, mode: string): string {
-  if (/--permission-mode\s+\S+/.test(cmd)) {
-    return cmd.replace(/(--permission-mode\s+)\S+/, `$1${mode}`);
-  }
-  return `${cmd} --permission-mode ${mode}`;
+  const stripped = cmd
+    .replace(/--permission-mode(?:=|\s+)\S+/g, "")
+    .trim()
+    .replace(/\s{2,}/g, " ");
+  return `${stripped} --permission-mode ${mode}`.trim();
 }
 
 /** True when this model launches the `claude` binary (the only agent we toggle). */

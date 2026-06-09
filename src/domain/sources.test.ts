@@ -145,3 +145,28 @@ test("customSources excludes managed entries; setCustomSources preserves them", 
     { kind: "shell", name: "gh" },
   ]);
 });
+
+test("planKeeperCommands returns undefined for a null commands payload", () => {
+  // typeof null === "object", so an unguarded Object.entries(null) would throw.
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "shell", name: "plankeeper", commands: null }],
+  } as never;
+  expect(planKeeperCommands(draft)).toBeUndefined();
+});
+
+test("setCustomSources drops managed entries from the incoming custom payload", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "linear" }, { kind: "shell", name: "jira" }],
+  } as never;
+  // A raw-JSON edit that re-adds a managed entry must not duplicate it.
+  const next = setCustomSources(draft, [
+    { kind: "linear" },
+    { kind: "shell", name: "gh" },
+  ] as never);
+  expect(next.sources).toEqual([
+    { kind: "linear" },
+    { kind: "shell", name: "gh" },
+  ]);
+});

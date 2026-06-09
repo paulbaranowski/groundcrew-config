@@ -129,7 +129,8 @@ export function planKeeperCommands(
 ): Array<[string, string]> | undefined {
   const entry = (draft.sources ?? []).find(isPlanKeeper);
   const commands = (entry as { commands?: unknown })?.commands;
-  if (commands === undefined || typeof commands !== "object") return undefined;
+  // typeof null === "object", so guard null explicitly before Object.entries.
+  if (commands === null || typeof commands !== "object") return undefined;
   return Object.entries(commands as Record<string, unknown>).filter(
     (pair): pair is [string, string] => typeof pair[1] === "string",
   );
@@ -159,5 +160,8 @@ export function setCustomSources(
   custom: readonly Source[],
 ): ConfigDraft {
   const managed = (draft.sources ?? []).filter(isManaged);
-  return { ...draft, sources: [...managed, ...custom] };
+  // Drop any managed entries from the incoming payload so a raw-JSON edit can't
+  // duplicate linear / todo-txt / plan-keeper, which are owned by their screens.
+  const unmanaged = custom.filter((s) => !isManaged(s));
+  return { ...draft, sources: [...managed, ...unmanaged] };
 }

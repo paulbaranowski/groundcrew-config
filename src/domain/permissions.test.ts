@@ -60,6 +60,22 @@ test("enabling on an empty entry writes a full claude cmd", () => {
   });
 });
 
+test("enabling rewrites every permission-mode flag, not just the first", () => {
+  // A raw-JSON edit can leave duplicate flags; the last one would otherwise win
+  // and make the toggle lie. Also covers the `--permission-mode=value` form.
+  const models = {
+    default: "claude",
+    definitions: {
+      claude: { cmd: "claude --permission-mode auto --permission-mode=plan" },
+    },
+  } as never;
+  const on = setBypass(models, "claude", true);
+  expect(on?.definitions).toEqual({
+    claude: { cmd: "claude --permission-mode bypassPermissions" },
+  });
+  expect(isBypassEnabled("claude", on?.definitions?.claude)).toBe(true);
+});
+
 test("enabling on a cmd with no permission-mode flag appends it", () => {
   const models = {
     default: "claude",
