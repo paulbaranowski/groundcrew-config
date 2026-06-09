@@ -1,32 +1,24 @@
 import { Box, Text, useInput } from "ink";
+import { linearApiKeyStatus } from "../domain/env.ts";
+import { isLinearDisabled, setLinearEnabled } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 
 interface Props {
   draft: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
+  /** Injected for testability; defaults to the real process env. */
+  env?: Record<string, string | undefined>;
 }
 
-function isDisabled(draft: ConfigDraft): boolean {
-  return (draft.sources ?? []).some(
-    (s) => s.kind === "linear" && s.enabled === false,
-  );
-}
+export function LinearForm({ draft, onChange, onBack, env = process.env }: Props) {
+  const disabled = isLinearDisabled(draft);
+  const key = linearApiKeyStatus(env);
 
-export function LinearForm({ draft, onChange, onBack }: Props) {
-  const disabled = isDisabled(draft);
-
-  useInput((input, key) => {
-    if (key.escape) onBack();
-    if (input === " ") {
-      const others = (draft.sources ?? []).filter(
-        (s) => !(s.kind === "linear" && s.enabled === false),
-      );
-      const sources = disabled
-        ? others
-        : [...others, { kind: "linear", enabled: false } as const];
-      onChange({ ...draft, sources });
-    }
+  useInput((input, key2) => {
+    if (key2.escape) onBack();
+    // Pass the *current* disabled flag as the new `enabled` to flip the state.
+    if (input === " ") onChange(setLinearEnabled(draft, disabled));
   });
 
   return (
@@ -41,10 +33,25 @@ export function LinearForm({ draft, onChange, onBack }: Props) {
         </Text>
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>
-          Space toggles. Disable for shell-only setups with no Linear API key.
-          Status-name overrides live in Ticket Sources.
+        <Text>
+          API key:{" "}
+          {key.set ? (
+            <Text color="green">detected ({key.source})</Text>
+          ) : (
+            <Text color="yellow">not set</Text>
+          )}
         </Text>
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text dimColor>
+          Space toggles the source. The key is read from your environment, not
+          this config.
+        </Text>
+        {key.set ? null : (
+          <Text dimColor>
+            Set it: export GROUNDCREW_LINEAR_API_KEY="lin_api_..."
+          </Text>
+        )}
       </Box>
     </Box>
   );
