@@ -18,7 +18,7 @@ test("renders sections with summaries and a warning badge", () => {
   expect(lastFrame()).toContain("~/dev/groundcrew");
   expect(lastFrame()).toContain("Repositories");
   expect(lastFrame()).toContain("2 repos");
-  expect(lastFrame()).toContain("Ticket Sources");
+  expect(lastFrame()).toContain("Task Sources");
   expect(lastFrame()).toContain("⚠");
 });
 

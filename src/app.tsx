@@ -8,6 +8,7 @@ import {
 } from "./domain/sections.ts";
 import type { ConfigDraft } from "./domain/types.ts";
 import { setByPath } from "./domain/draftPath.ts";
+import { enabledSourceCount } from "./domain/sources.ts";
 import { saveDraft, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
 import { EscapeHatch } from "./screens/EscapeHatch.tsx";
@@ -15,9 +16,8 @@ import { Home } from "./screens/Home.tsx";
 import { QuitGuard } from "./screens/QuitGuard.tsx";
 import { RepositoriesForm } from "./screens/RepositoriesForm.tsx";
 import { SectionForm } from "./screens/SectionForm.tsx";
-import { TicketSourcesMenu } from "./screens/TicketSourcesMenu.tsx";
+import { TaskSourcesMenu } from "./screens/TaskSourcesMenu.tsx";
 import { UsageForm } from "./screens/UsageForm.tsx";
-import { Wizard } from "./screens/Wizard.tsx";
 import { WorkspaceForm } from "./screens/WorkspaceForm.tsx";
 
 interface Props {
@@ -25,10 +25,7 @@ interface Props {
   target: Target;
 }
 
-type Route =
-  | { name: "wizard" }
-  | { name: "home" }
-  | { name: "section"; id: SectionId };
+type Route = { name: "home" } | { name: "section"; id: SectionId };
 
 // Models is edited as raw JSON in $EDITOR (built-in toggles + custom defs); v1
 // ships no bespoke form. Ticket sources have their own hub (Linear/PlanKeeper/Custom).
@@ -40,9 +37,7 @@ export function App({ initialDraft, target }: Props) {
     initialDraft ??
       ({ workspace: { projectDir: "", knownRepositories: [] } } as ConfigDraft),
   );
-  const [route, setRoute] = useState<Route>(
-    initialDraft ? { name: "home" } : { name: "wizard" },
-  );
+  const [route, setRoute] = useState<Route>({ name: "home" });
   const [dirty, setDirty] = useState(false);
   const [valid, setValid] = useState(true);
   const [checked, setChecked] = useState(false);
@@ -52,7 +47,6 @@ export function App({ initialDraft, target }: Props) {
 
   // Debounced round-trip validation whenever the draft changes.
   useEffect(() => {
-    if (route.name === "wizard") return;
     let cancelled = false;
     const timer = setTimeout(() => {
       void validateDraft(draft).then((result) => {
@@ -70,7 +64,7 @@ export function App({ initialDraft, target }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [draft, route.name]);
+  }, [draft]);
 
   function update(next: ConfigDraft): void {
     setDraft(next);
@@ -110,18 +104,12 @@ export function App({ initialDraft, target }: Props) {
     );
   }
 
-  if (route.name === "wizard") {
-    return (
-      <Wizard
-        onComplete={(_scope, completed) => {
-          setDraft(completed);
-          setDirty(true);
-          setRoute({ name: "home" });
-        }}
-        onCancel={() => exit()}
-      />
-    );
-  }
+  const noSources = enabledSourceCount(draft) === 0;
+  // crew run refuses without a task source, but loadConfig accepts empty sources,
+  // so badge it here (separate from loadConfig validity).
+  const homeIssues = noSources
+    ? new Set<SectionId>([...issues, "ticketSources"])
+    : issues;
 
   if (route.name === "home") {
     return (
@@ -133,7 +121,7 @@ export function App({ initialDraft, target }: Props) {
         <Box marginTop={1}>
           <Home
             draft={draft}
-            issues={issues}
+            issues={homeIssues}
             onOpen={(id) => setRoute({ name: "section", id })}
           />
         </Box>
@@ -142,6 +130,7 @@ export function App({ initialDraft, target }: Props) {
           issues={issues.size}
           valid={valid}
           checked={checked}
+          noSources={noSources}
           hint="↑/↓ move · enter edit · s save · q quit"
         />
       </Box>
@@ -156,7 +145,7 @@ export function App({ initialDraft, target }: Props) {
   if (id === "repositories")
     return <RepositoriesForm draft={draft} onChange={update} onBack={back} />;
   if (id === "ticketSources")
-    return <TicketSourcesMenu draft={draft} onChange={update} onBack={back} />;
+    return <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />;
   if (id === "usage")
     return <UsageForm draft={draft} onChange={update} onBack={back} />;
   if (ESCAPE_HATCH.includes(id)) {

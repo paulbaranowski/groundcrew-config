@@ -16,11 +16,20 @@ test("starts on Home when given an existing draft", () => {
   unmount();
 });
 
-test("starts on the Wizard when no draft exists", () => {
+test("starts on Home with no existing config", () => {
   const { lastFrame, unmount } = render(
     <App initialDraft={undefined} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  expect(lastFrame()).toContain("first-run setup");
+  expect(lastFrame()).toContain("crew-config");
+  expect(lastFrame()).toContain("Workspace");
+  unmount();
+});
+
+test("shows the no-task-sources warning on Home", () => {
+  const { lastFrame, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  expect(lastFrame()).toContain("no task sources");
   unmount();
 });
 
@@ -31,7 +40,7 @@ test("enter opens a section, esc returns home", async () => {
   stdin.write("\r"); // open Workspace
   await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
   stdin.write(""); // esc back
-  await vi.waitFor(() => expect(lastFrame()).toContain("Ticket Sources"));
+  await vi.waitFor(() => expect(lastFrame()).toContain("Task Sources"));
   unmount();
 });
 
