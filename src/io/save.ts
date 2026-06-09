@@ -1,0 +1,58 @@
+import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { pruneEmpty } from "../domain/prune.ts";
+import type { ConfigDraft } from "../domain/types.ts";
+import { xdgConfigDir } from "../domain/xdg.ts";
+
+export type Scope = "local" | "global";
+export interface Target {
+  scope: Scope;
+  cwd: string;
+}
+export interface SaveResult {
+  path: string;
+  /** Backup paths of every shadowing config file moved aside (empty if none). */
+  shadowed: string[];
+}
+
+// Loader checks these (any extension) before crew.config.json, so a leftover
+// would shadow what we write. Move it aside.
+const SHADOWING = ["crew.config.ts", "crew.config.mjs", "crew.config.js"];
+
+export function targetPath(target: Target): string {
+  const dir = target.scope === "global" ? xdgConfigDir() : target.cwd;
+  return path.join(dir, "crew.config.json");
+}
+
+export async function saveDraft(
+  target: Target,
+  draft: ConfigDraft,
+): Promise<SaveResult> {
+  const out = targetPath(target);
+  const dir = path.dirname(out);
+  mkdirSync(dir, { recursive: true });
+
+  // Move aside *every* shadowing file: any one of them would be preferred by
+  // groundcrew's loader over the crew.config.json we write.
+  const shadowed: string[] = [];
+  for (const name of SHADOWING) {
+    const candidate = path.join(dir, name);
+    if (existsSync(candidate)) {
+      // Never clobber an existing backup: a prior save's *.bak could hold the
+      // only copy of a hand-written config. Pick the first free suffix.
+      let backup = `${candidate}.bak`;
+      let n = 1;
+      while (existsSync(backup)) backup = `${candidate}.bak.${n++}`;
+      renameSync(candidate, backup);
+      shadowed.push(backup);
+    }
+  }
+
+  const json = JSON.stringify(
+    pruneEmpty(draft as unknown as Record<string, unknown>),
+    undefined,
+    2,
+  );
+  writeFileSync(out, `${json}\n`);
+  return { path: out, shadowed };
+}
