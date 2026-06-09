@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
+
+const CARET_BLINK_MS = 530;
 
 interface Props {
   label: string;
@@ -28,11 +31,26 @@ export function TextField({
     { isActive },
   );
 
+  // Blink a bright caret at the input origin so an empty active field reads as
+  // "type here". The interval is unref'd: it fires while Ink keeps the app alive
+  // but never blocks process/test exit on its own, and is cleared on unmount or
+  // when the field deactivates.
+  const [caretOn, setCaretOn] = useState(true);
+  useEffect(() => {
+    if (!isActive) {
+      setCaretOn(true);
+      return;
+    }
+    const timer = setInterval(() => setCaretOn((on) => !on), CARET_BLINK_MS);
+    timer.unref?.();
+    return () => clearInterval(timer);
+  }, [isActive]);
+
   const hasValue = value.length > 0;
-  // A bright caret marks the input origin so an empty active field reads as
-  // "type here": caret then dim placeholder, rather than a dim caret trailing
-  // the ghost text (which looks like part of the hint).
-  const caret = isActive ? <Text color="cyan">▏</Text> : null;
+  // A space when the caret is "off" keeps the text from shifting as it blinks.
+  const caret = isActive ? (
+    <Text color="cyan">{caretOn ? "▏" : " "}</Text>
+  ) : null;
   return (
     <Box>
       <Text color={isActive ? "cyan" : undefined}>
