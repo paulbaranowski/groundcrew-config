@@ -27,6 +27,19 @@ test("preserves built-in model enable markers (empty object under models.definit
   expect(pruneEmpty(input)).toEqual(input);
 });
 
+test("preserves the usage:{ disabled: true } sentinel through prune", () => {
+  // The sentinel is the linchpin of the usage-disable feature; it must survive
+  // pruning (via restoreModelDefinitions) so the saved config actually opts out.
+  const input = {
+    workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
+    models: {
+      default: "claude",
+      definitions: { claude: { usage: { disabled: true } } },
+    },
+  };
+  expect(pruneEmpty(input)).toEqual(input);
+});
+
 test("preserves populated nested values", () => {
   const input = {
     workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
