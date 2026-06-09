@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import {
   customSourceCount,
-  isLinearDisabled,
+  isLinearEnabled,
   isPlanKeeperEnabled,
+  isTodoTxtEnabled,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { EscapeHatch } from "./EscapeHatch.tsx";
 import { LinearForm } from "./LinearForm.tsx";
 import { PlanKeeperForm } from "./PlanKeeperForm.tsx";
+import { TodoTxtForm } from "./TodoTxtForm.tsx";
 
 interface Props {
   draft: ConfigDraft;
@@ -16,21 +18,35 @@ interface Props {
   onBack: () => void;
 }
 
-type Sub = "hub" | "linear" | "planKeeper" | "custom";
-const ROWS: Array<Exclude<Sub, "hub">> = ["linear", "planKeeper", "custom"];
+type Sub = "hub" | "linear" | "todoTxt" | "planKeeper" | "custom";
+const ROWS: Array<Exclude<Sub, "hub">> = [
+  "linear",
+  "todoTxt",
+  "planKeeper",
+  "custom",
+];
 
-export function TicketSourcesMenu({ draft, onChange, onBack }: Props) {
+export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
   const [sub, setSub] = useState<Sub>("hub");
   const [cursor, setCursor] = useState(0);
+  // Mirror the cursor in a ref so a down+enter burst in one render opens the
+  // latest row (the handler otherwise closes over a stale cursor).
+  const cursorRef = useRef(0);
+
+  function moveCursor(next: number): void {
+    cursorRef.current = next;
+    setCursor(next);
+  }
 
   useInput(
     (_input, key) => {
       if (sub !== "hub") return;
       if (key.escape) onBack();
-      if (key.downArrow) setCursor((c) => Math.min(ROWS.length - 1, c + 1));
-      if (key.upArrow) setCursor((c) => Math.max(0, c - 1));
+      if (key.downArrow)
+        moveCursor(Math.min(ROWS.length - 1, cursorRef.current + 1));
+      if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
       if (key.return) {
-        const next = ROWS[cursor];
+        const next = ROWS[cursorRef.current];
         if (next) setSub(next);
       }
     },
@@ -41,12 +57,14 @@ export function TicketSourcesMenu({ draft, onChange, onBack }: Props) {
 
   if (sub === "linear")
     return <LinearForm draft={draft} onChange={onChange} onBack={back} />;
+  if (sub === "todoTxt")
+    return <TodoTxtForm draft={draft} onChange={onChange} onBack={back} />;
   if (sub === "planKeeper")
     return <PlanKeeperForm draft={draft} onChange={onChange} onBack={back} />;
   if (sub === "custom")
     return (
       <EscapeHatch
-        title="Custom ticket sources"
+        title="Custom task sources"
         value={draft.sources ?? []}
         onChange={(next) =>
           onChange({ ...draft, sources: next as ConfigDraft["sources"] })
@@ -59,7 +77,12 @@ export function TicketSourcesMenu({ draft, onChange, onBack }: Props) {
     {
       id: "linear",
       label: "Linear",
-      status: isLinearDisabled(draft) ? "disabled" : "enabled",
+      status: isLinearEnabled(draft) ? "enabled" : "disabled",
+    },
+    {
+      id: "todoTxt",
+      label: "todo-txt",
+      status: isTodoTxtEnabled(draft) ? "enabled" : "disabled",
     },
     {
       id: "planKeeper",
@@ -75,7 +98,7 @@ export function TicketSourcesMenu({ draft, onChange, onBack }: Props) {
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
-      <Text bold>Ticket Sources</Text>
+      <Text bold>Task Sources</Text>
       <Box marginTop={1} flexDirection="column">
         {rows.map((row, index) => (
           <Box key={row.id}>
