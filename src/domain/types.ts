@@ -15,8 +15,9 @@ export type ConfigDraft = Config;
  * without an ordering dependency.
  */
 export type SectionId =
-  | "workspace" | "models" | "linear" | "ticketSources"
-  | "orchestrator" | "hooks" | "git" | "sandbox" | "prompts" | "advanced";
+  | "workspace" | "repositories" | "models" | "ticketSources"
+  | "orchestrator" | "usage" | "hooks" | "git" | "terminal"
+  | "sandbox" | "prompts" | "advanced";
 
 /** Local isolation/sandbox backends. groundcrew validates these; we list them for the UI. */
 export const RUNNERS = ["auto", "safehouse", "sdx", "none"] as const;

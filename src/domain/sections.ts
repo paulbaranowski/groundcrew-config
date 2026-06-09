@@ -6,17 +6,25 @@ import {
   type ConfigDraft,
   type SectionId,
 } from "./types.ts";
+import {
+  customSourceCount,
+  isLinearDisabled,
+  isPlanKeeperEnabled,
+} from "./sources.ts";
+import { isUsageDisabled } from "./usage.ts";
 
 export type { SectionId };
 
 export const SECTION_ORDER: SectionId[] = [
   "workspace",
+  "repositories",
   "models",
-  "linear",
   "ticketSources",
   "orchestrator",
+  "usage",
   "hooks",
   "git",
+  "terminal",
   "sandbox",
   "prompts",
   "advanced",
@@ -24,12 +32,14 @@ export const SECTION_ORDER: SectionId[] = [
 
 export const SECTION_LABEL: Record<SectionId, string> = {
   workspace: "Workspace",
+  repositories: "Repositories",
   models: "Models",
-  linear: "Linear",
   ticketSources: "Ticket Sources",
   orchestrator: "Orchestrator",
+  usage: "Usage",
   hooks: "Hooks",
   git: "Git",
+  terminal: "Terminal",
   sandbox: "Sandbox",
   prompts: "Prompts",
   advanced: "Advanced",
@@ -123,7 +133,7 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           help: "Initial agent prompt. Supports {{ticket}}, {{title}}, {{description}}, {{worktree}}, {{workspaceContinuationInstruction}}.",
         },
       ];
-    case "advanced":
+    case "terminal":
       return [
         {
           path: "workspaceKind",
@@ -132,6 +142,9 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           options: WORKSPACE_KINDS,
           help: "Terminal session manager. auto = cmux if present, else tmux.",
         },
+      ];
+    case "advanced":
+      return [
         {
           path: "logging.file",
           label: "logging.file",
@@ -150,9 +163,11 @@ function repoCount(draft: ConfigDraft): number {
 
 export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
   switch (id) {
-    case "workspace": {
+    case "workspace":
+      return draft.workspace.projectDir;
+    case "repositories": {
       const n = repoCount(draft);
-      return `${draft.workspace.projectDir} · ${n} repo${n === 1 ? "" : "s"}`;
+      return `${n} repo${n === 1 ? "" : "s"}`;
     }
     case "models": {
       const defs = Object.keys(draft.models?.definitions ?? {});
@@ -160,18 +175,16 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
         ? "none enabled"
         : `default: ${draft.models?.default ?? "?"} · ${defs.join(", ")}`;
     }
-    case "linear": {
-      const off = (draft.sources ?? []).some(
-        (s) => s.kind === "linear" && s.enabled === false,
-      );
-      return off ? "disabled" : "enabled";
-    }
     case "ticketSources": {
-      const shells = (draft.sources ?? []).filter((s) => s.kind === "shell");
-      return shells.length === 0
-        ? "none"
-        : `${shells.length} shell${shells.length === 1 ? "" : "s"}`;
+      const linear = isLinearDisabled(draft) ? "off" : "on";
+      const planKeeper = isPlanKeeperEnabled(draft) ? "on" : "off";
+      const custom = customSourceCount(draft);
+      return `linear ${linear} · plan-keeper ${planKeeper} · ${custom} custom`;
     }
+    case "usage":
+      return isUsageDisabled(draft.models)
+        ? "tracking disabled"
+        : "tracking enabled";
     case "orchestrator": {
       const o = draft.orchestrator ?? {};
       const max =
@@ -196,8 +209,10 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       return draft.prompts?.initial
         ? `custom (${draft.prompts.initial.length} chars)`
         : "default";
-    case "advanced":
+    case "terminal":
       return `workspaceKind: ${draft.workspaceKind ?? "auto"}`;
+    case "advanced":
+      return draft.logging?.file ? `log: ${draft.logging.file}` : "defaults";
     default:
       return "";
   }
