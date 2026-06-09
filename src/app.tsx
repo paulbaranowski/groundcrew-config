@@ -7,12 +7,11 @@ import {
   type SectionId,
 } from "./domain/sections.ts";
 import type { ConfigDraft } from "./domain/types.ts";
-import { setByPath } from "./domain/draftPath.ts";
 import { enabledSourceCount } from "./domain/sources.ts";
 import { saveDraft, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
-import { EscapeHatch } from "./screens/EscapeHatch.tsx";
 import { Home } from "./screens/Home.tsx";
+import { ModelsForm } from "./screens/ModelsForm.tsx";
 import { QuitGuard } from "./screens/QuitGuard.tsx";
 import { RepositoriesForm } from "./screens/RepositoriesForm.tsx";
 import { SectionForm } from "./screens/SectionForm.tsx";
@@ -26,10 +25,6 @@ interface Props {
 }
 
 type Route = { name: "home" } | { name: "section"; id: SectionId };
-
-// Models is edited as raw JSON in $EDITOR (built-in toggles + custom defs); v1
-// ships no bespoke form. Ticket sources have their own hub (Linear/PlanKeeper/Custom).
-const ESCAPE_HATCH: SectionId[] = ["models"];
 
 export function App({ initialDraft, target }: Props) {
   const { exit } = useApp();
@@ -148,24 +143,8 @@ export function App({ initialDraft, target }: Props) {
     return <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />;
   if (id === "usage")
     return <UsageForm draft={draft} onChange={update} onBack={back} />;
-  if (ESCAPE_HATCH.includes(id)) {
-    return (
-      <EscapeHatch
-        title={SECTION_LABEL[id]}
-        value={draft.models ?? {}}
-        onChange={(next) =>
-          update(
-            setByPath(
-              draft as unknown as Record<string, unknown>,
-              "models",
-              next,
-            ) as unknown as ConfigDraft,
-          )
-        }
-        onBack={back}
-      />
-    );
-  }
+  if (id === "models")
+    return <ModelsForm draft={draft} onChange={update} onBack={back} />;
   return (
     <SectionForm
       title={SECTION_LABEL[id]}

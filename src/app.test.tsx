@@ -44,6 +44,23 @@ test("enter opens a section, esc returns home", async () => {
   unmount();
 });
 
+test("opens the Models bypass-permissions form from Home", async () => {
+  const { lastFrame, stdin, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  // Each waitFor yields a tick so ink processes one queued arrow before the
+  // next write. [B is the down-arrow escape sequence.
+  stdin.write("[B"); // down to Repositories (row 2)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
+  stdin.write("[B"); // down to Models (row 3)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Models"));
+  stdin.write("\r");
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("bypass permission prompts"),
+  );
+  unmount();
+});
+
 test("opens Repositories from Home", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
