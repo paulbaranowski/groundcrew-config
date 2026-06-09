@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink";
 import {
   isPlanKeeperEnabled,
+  planKeeperCommands,
   setPlanKeeperEnabled,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
@@ -13,6 +14,12 @@ interface Props {
 
 export function PlanKeeperForm({ draft, onChange, onBack }: Props) {
   const enabled = isPlanKeeperEnabled(draft);
+  const commands = planKeeperCommands(draft);
+  // Pad the integration-command names so their commands line up in a column.
+  const labelWidth = (commands ?? []).reduce(
+    (max, [name]) => Math.max(max, name.length),
+    0,
+  );
 
   useInput((input, key) => {
     if (key.escape) onBack();
@@ -38,6 +45,17 @@ export function PlanKeeperForm({ draft, onChange, onBack }: Props) {
           Install: brew install paulbaranowski/tap/plan-keeper
         </Text>
       </Box>
+      {commands && commands.length > 0 ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text>Commands:</Text>
+          {commands.map(([name, command]) => (
+            <Text key={name} dimColor>
+              {"  "}
+              {name.padEnd(labelWidth)} {command}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
     </Box>
   );
 }

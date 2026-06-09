@@ -1,12 +1,15 @@
 import { expect, test } from "vitest";
 import {
   customSourceCount,
+  customSources,
   enabledSourceCount,
   getTodoTxtField,
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
+  planKeeperCommands,
   planKeeperSource,
+  setCustomSources,
   setLinearEnabled,
   setPlanKeeperEnabled,
   setTodoTxtEnabled,
@@ -70,19 +73,19 @@ test("customSourceCount excludes linear, plan-keeper, and todo-txt", () => {
     sources: [
       { kind: "linear" },
       { kind: "todo-txt" },
-      { kind: "shell", name: "plans" },
+      { kind: "shell", name: "plankeeper" },
       { kind: "shell", name: "jira" },
     ],
   } as never;
   expect(customSourceCount(draft)).toBe(1);
 });
 
-test("planKeeperSource unchanged", () => {
+test("planKeeperSource uses the new 'plankeeper' name", () => {
   const s = planKeeperSource() as {
     name: string;
     commands: Record<string, string>;
   };
-  expect(s.name).toBe("plans");
+  expect(s.name).toBe("plankeeper");
   expect(s.commands.fetch).toBe("plan-keeper crew fetch");
 });
 
@@ -91,4 +94,54 @@ test("isPlanKeeperEnabled / setPlanKeeperEnabled round-trip", () => {
   const on = setPlanKeeperEnabled(base, true);
   expect(isPlanKeeperEnabled(on)).toBe(true);
   expect(setPlanKeeperEnabled(on, false).sources).toEqual([]);
+});
+
+test("a {kind:shell,name:plans} entry is NOT plan-keeper (legacy name dropped)", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "shell", name: "plans" }],
+  } as never;
+  expect(isPlanKeeperEnabled(draft)).toBe(false);
+  expect(customSourceCount(draft)).toBe(1);
+});
+
+test("planKeeperCommands reads the live entry's commands as ordered pairs", () => {
+  expect(planKeeperCommands(base)).toBeUndefined();
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      {
+        kind: "shell",
+        name: "plankeeper",
+        commands: {
+          fetch: "/opt/homebrew/bin/plan-keeper crew fetch",
+          resolveOne: "/opt/homebrew/bin/plan-keeper crew get ${id}",
+        },
+      },
+    ],
+  } as never;
+  expect(planKeeperCommands(draft)).toEqual([
+    ["fetch", "/opt/homebrew/bin/plan-keeper crew fetch"],
+    ["resolveOne", "/opt/homebrew/bin/plan-keeper crew get ${id}"],
+  ]);
+});
+
+test("customSources excludes managed entries; setCustomSources preserves them", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      { kind: "linear" },
+      { kind: "shell", name: "plankeeper" },
+      { kind: "shell", name: "jira" },
+    ],
+  } as never;
+  expect(customSources(draft)).toEqual([{ kind: "shell", name: "jira" }]);
+
+  const next = setCustomSources(draft, [{ kind: "shell", name: "gh" }] as never);
+  // Managed sources (linear, plan-keeper) survive; the custom set is replaced.
+  expect(next.sources).toEqual([
+    { kind: "linear" },
+    { kind: "shell", name: "plankeeper" },
+    { kind: "shell", name: "gh" },
+  ]);
 });

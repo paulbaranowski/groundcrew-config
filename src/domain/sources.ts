@@ -3,7 +3,7 @@ import type { ConfigDraft } from "./types.ts";
 type Source = NonNullable<ConfigDraft["sources"]>[number];
 type TodoTxtField = "todoPath" | "tasksDir";
 
-const PLAN_KEEPER_NAME = "plans";
+const PLAN_KEEPER_NAME = "plankeeper";
 
 function sourceName(source: Source): string {
   return (source as { name?: string }).name ?? source.kind;
@@ -23,6 +23,11 @@ function isTodoTxtKind(source: Source): boolean {
 
 function isPlanKeeper(source: Source): boolean {
   return source.kind === "shell" && sourceName(source) === PLAN_KEEPER_NAME;
+}
+
+/** True for any source the TUI manages with its own screen (Linear, todo-txt, PlanKeeper). */
+function isManaged(source: Source): boolean {
+  return isLinearKind(source) || isTodoTxtKind(source) || isPlanKeeper(source);
 }
 
 export function planKeeperSource(): Source {
@@ -113,14 +118,46 @@ export function setPlanKeeperEnabled(
   return { ...draft, sources };
 }
 
+/**
+ * The integration commands wired up on the live plan-keeper entry (verify,
+ * fetch, resolveOne, …), as ordered [name, command] pairs — or undefined when
+ * plan-keeper isn't configured. Reads the actual entry so absolute paths and
+ * manual edits show through in the PlanKeeper screen.
+ */
+export function planKeeperCommands(
+  draft: ConfigDraft,
+): Array<[string, string]> | undefined {
+  const entry = (draft.sources ?? []).find(isPlanKeeper);
+  const commands = (entry as { commands?: unknown })?.commands;
+  if (commands === undefined || typeof commands !== "object") return undefined;
+  return Object.entries(commands as Record<string, unknown>).filter(
+    (pair): pair is [string, string] => typeof pair[1] === "string",
+  );
+}
+
 /** Sources crew would actually run (anything not opted out with enabled:false). */
 export function enabledSourceCount(draft: ConfigDraft): number {
   return (draft.sources ?? []).filter((s) => !isDisabled(s)).length;
 }
 
 /** Sources with no managed screen (not linear / todo-txt / plan-keeper). */
+export function customSources(draft: ConfigDraft): Source[] {
+  return (draft.sources ?? []).filter((s) => !isManaged(s));
+}
+
 export function customSourceCount(draft: ConfigDraft): number {
-  return (draft.sources ?? []).filter(
-    (s) => !isLinearKind(s) && !isTodoTxtKind(s) && !isPlanKeeper(s),
-  ).length;
+  return customSources(draft).length;
+}
+
+/**
+ * Replace the custom (unmanaged) sources, preserving every managed entry. Lets
+ * the raw-JSON editor show only custom sources without dropping linear /
+ * todo-txt / plan-keeper, which keep their own screens.
+ */
+export function setCustomSources(
+  draft: ConfigDraft,
+  custom: readonly Source[],
+): ConfigDraft {
+  const managed = (draft.sources ?? []).filter(isManaged);
+  return { ...draft, sources: [...managed, ...custom] };
 }

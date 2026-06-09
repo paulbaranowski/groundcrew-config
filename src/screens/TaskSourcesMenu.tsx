@@ -2,9 +2,11 @@ import { useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import {
   customSourceCount,
+  customSources,
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
+  setCustomSources,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { EscapeHatch } from "./EscapeHatch.tsx";
@@ -65,9 +67,9 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
     return (
       <EscapeHatch
         title="Custom task sources"
-        value={draft.sources ?? []}
+        value={customSources(draft)}
         onChange={(next) =>
-          onChange({ ...draft, sources: next as ConfigDraft["sources"] })
+          onChange(setCustomSources(draft, next as NonNullable<ConfigDraft["sources"]>))
         }
         onBack={back}
       />

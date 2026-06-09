@@ -12,7 +12,7 @@ test("shows disabled state and the brew install line", () => {
   expect(lastFrame()).toContain("brew install paulbaranowski/tap/plan-keeper");
 });
 
-test("space enables the plan-keeper source", () => {
+test("space enables the plan-keeper source under the new name", () => {
   const onChange = vi.fn();
   const { stdin } = render(
     <PlanKeeperForm draft={base} onChange={onChange} onBack={() => {}} />,
@@ -20,7 +20,26 @@ test("space enables the plan-keeper source", () => {
   stdin.write(" ");
   expect(onChange).toHaveBeenCalledWith(
     expect.objectContaining({
-      sources: [expect.objectContaining({ kind: "shell", name: "plans" })],
+      sources: [expect.objectContaining({ kind: "shell", name: "plankeeper" })],
     }),
   );
+});
+
+test("displays the integration commands wired up on the live entry", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      {
+        kind: "shell",
+        name: "plankeeper",
+        commands: { fetch: "/opt/homebrew/bin/plan-keeper crew fetch" },
+      },
+    ],
+  } as never;
+  const { lastFrame } = render(
+    <PlanKeeperForm draft={draft} onChange={() => {}} onBack={() => {}} />,
+  );
+  expect(lastFrame()).toContain("Commands:");
+  expect(lastFrame()).toContain("fetch");
+  expect(lastFrame()).toContain("/opt/homebrew/bin/plan-keeper crew fetch");
 });
