@@ -10,6 +10,8 @@ interface Props {
   /** Whether at least one validation has completed. Defaults true; while false
    * the validity indicator is neutral instead of asserting "valid". */
   checked?: boolean;
+  /** True when no enabled task source is configured — `crew run` would refuse. */
+  noSources?: boolean;
 }
 
 export function Footer({
@@ -18,6 +20,7 @@ export function Footer({
   hint,
   valid = true,
   checked = true,
+  noSources = false,
 }: Props) {
   return (
     <Box
@@ -39,6 +42,7 @@ export function Footer({
         ) : (
           <Text color="yellow">⚠ invalid</Text>
         )}
+        {noSources ? <Text color="yellow"> · ⚠ no task sources</Text> : null}
         {dirty ? <Text color="yellow"> · ● unsaved</Text> : null}
       </Text>
       <Text dimColor>{hint}</Text>

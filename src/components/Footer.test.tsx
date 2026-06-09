@@ -26,6 +26,13 @@ test("shows a neutral checking state before the first validation completes", () 
   expect(lastFrame()).toContain("checking");
 });
 
+test("shows a no-task-sources warning when noSources is set", () => {
+  const { lastFrame } = render(
+    <Footer dirty={false} issues={0} noSources hint="enter edit" />,
+  );
+  expect(lastFrame()).toContain("no task sources");
+});
+
 test("shows invalid state when not valid even with no mapped section", () => {
   const { lastFrame } = render(
     <Footer dirty={false} issues={0} valid={false} hint="enter edit" />,
