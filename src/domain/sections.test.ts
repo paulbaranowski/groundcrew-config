@@ -94,14 +94,19 @@ test("sandbox is a select field spec over the runner enum", () => {
   expect(spec[0]?.options).toEqual(["auto", "safehouse", "srt", "sdx", "none"]);
 });
 
-test("ticketSources summary lists linear, plan-keeper and custom counts", () => {
+test("ticketSources summary lists enabled source kinds", () => {
   expect(
     sectionSummary("ticketSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
-      sources: [
-        { kind: "shell", name: "plans" },
-        { kind: "shell", name: "jira" },
-      ],
+      sources: [{ kind: "linear" }, { kind: "todo-txt" }],
     } as never),
-  ).toBe("linear on · plan-keeper on · 1 custom");
+  ).toBe("linear, todo-txt");
+});
+
+test("ticketSources summary warns when no sources are enabled", () => {
+  expect(
+    sectionSummary("ticketSources", {
+      workspace: { projectDir: "~/d", knownRepositories: [] },
+    } as never),
+  ).toBe("none — crew won't run");
 });

@@ -7,9 +7,10 @@ import {
   type SectionId,
 } from "./types.ts";
 import {
-  customSourceCount,
-  isLinearDisabled,
+  enabledSourceCount,
+  isLinearEnabled,
   isPlanKeeperEnabled,
+  isTodoTxtEnabled,
 } from "./sources.ts";
 import { isUsageDisabled } from "./usage.ts";
 
@@ -34,7 +35,7 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   workspace: "Workspace",
   repositories: "Repositories",
   models: "Models",
-  ticketSources: "Ticket Sources",
+  ticketSources: "Task Sources",
   orchestrator: "Orchestrator",
   usage: "Usage",
   hooks: "Hooks",
@@ -176,10 +177,14 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
         : `default: ${draft.models?.default ?? "?"} · ${defs.join(", ")}`;
     }
     case "ticketSources": {
-      const linear = isLinearDisabled(draft) ? "off" : "on";
-      const planKeeper = isPlanKeeperEnabled(draft) ? "on" : "off";
-      const custom = customSourceCount(draft);
-      return `linear ${linear} · plan-keeper ${planKeeper} · ${custom} custom`;
+      if (enabledSourceCount(draft) === 0) return "none — crew won't run";
+      const kinds: string[] = [];
+      if (isLinearEnabled(draft)) kinds.push("linear");
+      if (isTodoTxtEnabled(draft)) kinds.push("todo-txt");
+      if (isPlanKeeperEnabled(draft)) kinds.push("plan-keeper");
+      const custom = (draft.sources ?? []).length - kinds.length;
+      if (custom > 0) kinds.push(`${custom} custom`);
+      return kinds.join(", ");
     }
     case "usage":
       return isUsageDisabled(draft.models)
