@@ -64,9 +64,9 @@ export function setPlanKeeperEnabled(
   return { ...draft, sources };
 }
 
-/** Sources that are neither the built-in Linear entry nor the managed plan-keeper entry. */
+/** Sources that are neither the Linear opt-out sentinel nor the managed plan-keeper entry. */
 export function customSourceCount(draft: ConfigDraft): number {
   return (draft.sources ?? []).filter(
-    (s) => s.kind !== "linear" && !isPlanKeeper(s),
+    (s) => !isLinearOptOut(s) && !isPlanKeeper(s),
   ).length;
 }

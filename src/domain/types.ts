@@ -20,7 +20,7 @@ export type SectionId =
   | "sandbox" | "prompts" | "advanced";
 
 /** Local isolation/sandbox backends. groundcrew validates these; we list them for the UI. */
-export const RUNNERS = ["auto", "safehouse", "sdx", "none"] as const;
+export const RUNNERS = ["auto", "safehouse", "srt", "sdx", "none"] as const;
 export type Runner = (typeof RUNNERS)[number];
 
 /** Terminal session managers. */

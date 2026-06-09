@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { RUNNERS, WORKSPACE_KINDS, type ConfigDraft, type SectionId } from "./types.ts";
 
 test("enum lists match groundcrew's accepted values", () => {
-  expect(RUNNERS).toEqual(["auto", "safehouse", "sdx", "none"]);
+  expect(RUNNERS).toEqual(["auto", "safehouse", "srt", "sdx", "none"]);
   expect(WORKSPACE_KINDS).toEqual(["auto", "cmux", "tmux"]);
 });
 

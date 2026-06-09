@@ -91,7 +91,7 @@ test("orchestrator summary shows ghosted defaults when unset", () => {
 test("sandbox is a select field spec over the runner enum", () => {
   const spec = simpleSectionSpec("sandbox");
   expect(spec[0]?.kind).toBe("select");
-  expect(spec[0]?.options).toEqual(["auto", "safehouse", "sdx", "none"]);
+  expect(spec[0]?.options).toEqual(["auto", "safehouse", "srt", "sdx", "none"]);
 });
 
 test("ticketSources summary lists linear, plan-keeper and custom counts", () => {

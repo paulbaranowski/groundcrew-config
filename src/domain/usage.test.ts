@@ -16,6 +16,27 @@ test("disabled only when every enabled model carries the sentinel", () => {
   expect(isUsageDisabled(off)).toBe(true);
 });
 
+test("disabling from a mixed state opts every model out (overwriting any usage block)", () => {
+  // Documents the intended semantics: "disable usage tracking" replaces each
+  // model's usage with the opt-out sentinel. A model carrying a real codexbar
+  // block is overwritten — groundcrew's usage is a union, so it cannot hold both
+  // codexbar config and the disabled sentinel at once.
+  const models = {
+    default: "claude",
+    definitions: {
+      claude: { usage: { disabled: true } },
+      codex: { cmd: "codex", usage: { codexbar: { provider: "anthropic" } } },
+    },
+  } as never;
+  expect(isUsageDisabled(models)).toBe(false); // mixed → not fully disabled
+  const off = setUsageDisabled(models, true);
+  expect(off?.definitions).toEqual({
+    claude: { usage: { disabled: true } },
+    codex: { cmd: "codex", usage: { disabled: true } },
+  });
+  expect(isUsageDisabled(off)).toBe(true);
+});
+
 test("re-enabling removes only the disabled sentinel, preserving other fields", () => {
   const models = {
     default: "claude",
