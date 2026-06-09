@@ -103,6 +103,18 @@ test("ticketSources summary lists enabled source kinds", () => {
   ).toBe("linear, todo-txt");
 });
 
+test("ticketSources summary does not count disabled managed entries as custom", () => {
+  expect(
+    sectionSummary("ticketSources", {
+      workspace: { projectDir: "~/d", knownRepositories: [] },
+      sources: [
+        { kind: "linear", enabled: false },
+        { kind: "shell", name: "jira" },
+      ],
+    } as never),
+  ).toBe("1 custom");
+});
+
 test("ticketSources summary warns when no sources are enabled", () => {
   expect(
     sectionSummary("ticketSources", {
