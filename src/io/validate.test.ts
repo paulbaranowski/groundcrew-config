@@ -25,6 +25,17 @@ test("mapSection maps usage errors to usage", () => {
   );
 });
 
+test("mapSection maps a prompts.initial error to prompts even when its prose names other sections", () => {
+  // groundcrew lists allowed placeholders in the message, one of which is
+  // {{workspaceContinuationInstruction}}. The badge must follow the key path
+  // (prompts.initial), not a section keyword buried in the prose.
+  expect(
+    mapSection(
+      'groundcrew config: prompts.initial contains unknown placeholder "{{ticket}}". Allowed placeholders: {{task}}, {{worktree}}, {{title}}, {{description}}, {{workspaceContinuationInstruction}}',
+    ),
+  ).toBe("prompts");
+});
+
 test("a complete config validates ok", async () => {
   const result = await validateDraft({
     workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },

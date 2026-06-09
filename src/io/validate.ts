@@ -43,8 +43,14 @@ const SECTION_PREFIXES: Array<[string, SectionId]> = [
 ];
 
 export function mapSection(message: string): SectionId | undefined {
+  // groundcrew errors read "groundcrew config: <key.path> <prose>". The section
+  // identity lives in the key path; match only against it, not the whole
+  // message. Otherwise prose that happens to name a section keyword — e.g. the
+  // allowed-placeholder list "{{workspaceContinuationInstruction}}" in a
+  // prompts.initial error — hijacks the badge (here, mis-routing to workspace).
+  const keyPath = message.replace(/^groundcrew config:\s*/, "").split(/\s/, 1)[0] ?? "";
   for (const [prefix, section] of SECTION_PREFIXES) {
-    if (message.includes(prefix)) return section;
+    if (keyPath.includes(prefix)) return section;
   }
   return undefined;
 }

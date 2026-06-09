@@ -44,7 +44,7 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   terminal: "Terminal",
   sandbox: "Sandbox",
   prompts: "Prompts",
-  advanced: "Advanced",
+  advanced: "Logging",
 };
 
 /** A field in the generic SectionForm. `path` is a dotted path into the draft. */
@@ -132,7 +132,7 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           path: "prompts.initial",
           label: "initial",
           kind: "text",
-          help: "Initial agent prompt. Supports {{ticket}}, {{title}}, {{description}}, {{worktree}}, {{workspaceContinuationInstruction}}.",
+          help: "Initial agent prompt. Supports {{task}}, {{title}}, {{description}}, {{worktree}}, {{workspaceContinuationInstruction}}.",
         },
       ];
     case "terminal":
