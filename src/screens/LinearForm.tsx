@@ -1,6 +1,6 @@
 import { Box, Text, useInput } from "ink";
 import { linearApiKeyStatus } from "../domain/env.ts";
-import { isLinearDisabled, setLinearEnabled } from "../domain/sources.ts";
+import { isLinearEnabled, setLinearEnabled } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 
 interface Props {
@@ -12,13 +12,12 @@ interface Props {
 }
 
 export function LinearForm({ draft, onChange, onBack, env = process.env }: Props) {
-  const disabled = isLinearDisabled(draft);
+  const enabled = isLinearEnabled(draft);
   const key = linearApiKeyStatus(env);
 
   useInput((input, { escape }) => {
     if (escape) onBack();
-    // Pass the *current* disabled flag as the new `enabled` to flip the state.
-    if (input === " ") onChange(setLinearEnabled(draft, disabled));
+    if (input === " ") onChange(setLinearEnabled(draft, !enabled));
   });
 
   return (
@@ -27,8 +26,8 @@ export function LinearForm({ draft, onChange, onBack, env = process.env }: Props
       <Box marginTop={1}>
         <Text>
           Built-in Linear source:{" "}
-          <Text color={disabled ? "yellow" : "green"}>
-            {disabled ? "disabled" : "enabled"}
+          <Text color={enabled ? "green" : "yellow"}>
+            {enabled ? "enabled" : "disabled"}
           </Text>
         </Text>
       </Box>
