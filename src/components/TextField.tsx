@@ -28,18 +28,28 @@ export function TextField({
     { isActive },
   );
 
-  const shown = value.length > 0 ? value : (placeholder ?? "");
-  const dim = value.length === 0;
+  const hasValue = value.length > 0;
+  // A bright caret marks the input origin so an empty active field reads as
+  // "type here": caret then dim placeholder, rather than a dim caret trailing
+  // the ghost text (which looks like part of the hint).
+  const caret = isActive ? <Text color="cyan">▏</Text> : null;
   return (
     <Box>
       <Text color={isActive ? "cyan" : undefined}>
         {isActive ? "› " : "  "}
         {label}{" "}
       </Text>
-      <Text dimColor={dim}>
-        {shown}
-        {isActive ? "▏" : ""}
-      </Text>
+      {hasValue ? (
+        <Text>
+          {value}
+          {caret}
+        </Text>
+      ) : (
+        <Text>
+          {caret}
+          <Text dimColor>{placeholder ?? ""}</Text>
+        </Text>
+      )}
     </Box>
   );
 }
