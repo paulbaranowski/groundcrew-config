@@ -12,9 +12,11 @@ import { saveDraft, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
 import { EscapeHatch } from "./screens/EscapeHatch.tsx";
 import { Home } from "./screens/Home.tsx";
-import { LinearForm } from "./screens/LinearForm.tsx";
 import { QuitGuard } from "./screens/QuitGuard.tsx";
+import { RepositoriesForm } from "./screens/RepositoriesForm.tsx";
 import { SectionForm } from "./screens/SectionForm.tsx";
+import { TicketSourcesMenu } from "./screens/TicketSourcesMenu.tsx";
+import { UsageForm } from "./screens/UsageForm.tsx";
 import { Wizard } from "./screens/Wizard.tsx";
 import { WorkspaceForm } from "./screens/WorkspaceForm.tsx";
 
@@ -28,9 +30,9 @@ type Route =
   | { name: "home" }
   | { name: "section"; id: SectionId };
 
-// Sections edited as raw JSON in $EDITOR: ticket-source adapters and the model
-// definitions (built-in toggles + custom defs). v1 ships no bespoke form for these.
-const ESCAPE_HATCH: SectionId[] = ["ticketSources", "models"];
+// Models is edited as raw JSON in $EDITOR (built-in toggles + custom defs); v1
+// ships no bespoke form. Ticket sources have their own hub (Linear/PlanKeeper/Custom).
+const ESCAPE_HATCH: SectionId[] = ["models"];
 
 export function App({ initialDraft, target }: Props) {
   const { exit } = useApp();
@@ -151,21 +153,22 @@ export function App({ initialDraft, target }: Props) {
 
   if (id === "workspace")
     return <WorkspaceForm draft={draft} onChange={update} onBack={back} />;
-  if (id === "linear")
-    return <LinearForm draft={draft} onChange={update} onBack={back} />;
+  if (id === "repositories")
+    return <RepositoriesForm draft={draft} onChange={update} onBack={back} />;
+  if (id === "ticketSources")
+    return <TicketSourcesMenu draft={draft} onChange={update} onBack={back} />;
+  if (id === "usage")
+    return <UsageForm draft={draft} onChange={update} onBack={back} />;
   if (ESCAPE_HATCH.includes(id)) {
-    const hatchPath = id === "models" ? "models" : "sources";
-    const hatchValue =
-      id === "models" ? (draft.models ?? {}) : (draft.sources ?? []);
     return (
       <EscapeHatch
         title={SECTION_LABEL[id]}
-        value={hatchValue}
+        value={draft.models ?? {}}
         onChange={(next) =>
           update(
             setByPath(
               draft as unknown as Record<string, unknown>,
-              hatchPath,
+              "models",
               next,
             ) as unknown as ConfigDraft,
           )

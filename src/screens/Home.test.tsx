@@ -15,7 +15,9 @@ test("renders sections with summaries and a warning badge", () => {
     <Home draft={draft} issues={new Set(["sandbox"])} onOpen={() => {}} />,
   );
   expect(lastFrame()).toContain("Workspace");
-  expect(lastFrame()).toContain("~/dev/groundcrew · 2 repos");
+  expect(lastFrame()).toContain("~/dev/groundcrew");
+  expect(lastFrame()).toContain("Repositories");
+  expect(lastFrame()).toContain("2 repos");
   expect(lastFrame()).toContain("Ticket Sources");
   expect(lastFrame()).toContain("⚠");
 });

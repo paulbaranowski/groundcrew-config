@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import {
   SECTION_LABEL,
@@ -16,13 +16,21 @@ interface Props {
 
 export function Home({ draft, issues, onOpen }: Props) {
   const [cursor, setCursor] = useState(0);
+  // Mirror the cursor in a ref so an enter that lands in the same render as a
+  // preceding arrow key (before React re-renders) opens the latest row.
+  const cursorRef = useRef(0);
+
+  function moveCursor(next: number): void {
+    cursorRef.current = next;
+    setCursor(next);
+  }
 
   useInput((_input, key) => {
     if (key.downArrow)
-      setCursor((c) => Math.min(SECTION_ORDER.length - 1, c + 1));
-    if (key.upArrow) setCursor((c) => Math.max(0, c - 1));
+      moveCursor(Math.min(SECTION_ORDER.length - 1, cursorRef.current + 1));
+    if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
     if (key.return) {
-      const id = SECTION_ORDER[cursor];
+      const id = SECTION_ORDER[cursorRef.current];
       if (id) onOpen(id);
     }
   });
