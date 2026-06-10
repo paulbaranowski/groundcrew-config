@@ -8,7 +8,8 @@ import {
 } from "./domain/sections.ts";
 import type { ConfigDraft } from "./domain/types.ts";
 import { enabledSourceCount } from "./domain/sources.ts";
-import { saveDraft, type Target } from "./io/save.ts";
+import path from "node:path";
+import { saveDraft, targetPath, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
 import { Home } from "./screens/Home.tsx";
 import { AgentsForm } from "./screens/AgentsForm.tsx";
@@ -47,7 +48,7 @@ export function App({ initialDraft, target }: Props) {
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
-      void validateDraft(draft).then((result) => {
+      void validateDraft(draft, path.dirname(targetPath(target))).then((result) => {
         if (cancelled) return;
         setChecked(true);
         setValid(result.ok);

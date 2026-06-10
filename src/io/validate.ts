@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -63,9 +64,22 @@ export function mapSection(message: string): SectionId | undefined {
 
 export async function validateDraft(
   draft: ConfigDraft,
+  configDir?: string,
 ): Promise<ValidationResult> {
-  const dir = mkdtempSync(path.join(tmpdir(), "cc-validate-"));
-  const file = path.join(dir, "crew.config.json");
+  // Validate in the config's *real* directory when it exists, so config-dir-
+  // relative paths (e.g. prompts.promptFile) resolve exactly as groundcrew will
+  // resolve them at load time. A throwaway temp dir — the old behavior — made
+  // every such relative path fail to resolve, flagging a valid config. Fall
+  // back to a temp dir only for an unsaved config whose directory is not yet on
+  // disk, where a relative path is genuinely unresolvable anyway.
+  const inPlace = configDir !== undefined && existsSync(configDir);
+  const dir = inPlace
+    ? configDir
+    : mkdtempSync(path.join(tmpdir(), "cc-validate-"));
+  // A dotfile sidecar groundcrew reads directly via GROUNDCREW_CONFIG (so it
+  // never shadows the user's own crew.config.json discovery), placed *in* the
+  // config dir — not a subdir — so `path.dirname` matches the real config's.
+  const file = path.join(dir, `.crew.config.validate-${randomUUID()}.json`);
   writeFileSync(
     file,
     JSON.stringify(pruneEmpty(draft as unknown as Record<string, unknown>)),
@@ -79,5 +93,8 @@ export async function validateDraft(
     const message =
       (error as { stderr?: string }).stderr?.trim() || String(error);
     return { ok: false, message, section: mapSection(message) };
+  } finally {
+    rmSync(file, { force: true });
+    if (!inPlace) rmSync(dir, { recursive: true, force: true });
   }
 }
