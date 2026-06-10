@@ -147,7 +147,13 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           label: "runner",
           kind: "select",
           options: RUNNERS,
-          help: "Pick your sandbox. auto = chooses for you (safehouse on macOS, sdx on Linux). safehouse = macOS only. srt = Anthropic sandbox-runtime, fast & no Docker, macOS + Linux/WSL. sdx = Docker Sandboxes, needs Docker, macOS + Linux. none = no sandbox (unsafe).",
+          help: [
+            "• auto — chooses for you (safehouse on macOS, sdx on Linux)",
+            "• safehouse — macOS only",
+            "• srt — Anthropic sandbox-runtime, fast & no Docker, macOS + Linux/WSL",
+            "• sdx — Docker Sandboxes, needs Docker, macOS + Linux",
+            "• none — no sandbox (unsafe)",
+          ].join("\n"),
         },
       ];
     case "prompts":
