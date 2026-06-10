@@ -26,6 +26,12 @@ catch (error) { console.error(error?.message ?? String(error)); process.exit(1);
 // be tested before it, e.g. "workspaceKind" before "workspace" (since
 // "workspaceKind".includes("workspace") is true) and "defaults.hooks" before
 // any bare "hooks" check.
+//
+// "usage" is listed before "agents" on purpose: in groundcrew config there is no
+// top-level `usage` key — usage always lives under
+// `agents.definitions.<name>.usage.*`, which contains both substrings. Routing
+// those errors to the Usage badge (not Agents) points the user at the Usage
+// screen, where the `usage.disabled` toggle that owns this config actually lives.
 const SECTION_PREFIXES: Array<[string, SectionId]> = [
   ["knownRepositories", "repositories"],
   ["workspaceKind", "terminal"],
