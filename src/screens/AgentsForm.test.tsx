@@ -120,6 +120,30 @@ test("custom agents are shown read-only for raw JSON editing", () => {
   expect(f).toContain("raw JSON");
 });
 
+test("enter on an agent row opens its detail editor", async () => {
+  const { lastFrame, stdin } = render(
+    <AgentsForm draft={claudeOnly} onChange={() => {}} onBack={() => {}} />,
+  );
+  stdin.write("\r"); // enter on the focused claude row
+  await vi.waitFor(() => expect(lastFrame()).toContain("Agent: claude"));
+  expect(lastFrame()).toContain("sandbox.agent");
+});
+
+test("saving the detail editor writes the agent definition", async () => {
+  const onChange = vi.fn();
+  const { lastFrame, stdin } = render(
+    <AgentsForm draft={claudeOnly} onChange={onChange} onBack={() => {}} />,
+  );
+  stdin.write("\r"); // open claude detail
+  await vi.waitFor(() => expect(lastFrame()).toContain("Agent: claude"));
+  stdin.write("\r"); // save unchanged (empty def)
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({
+      agents: expect.objectContaining({ definitions: { claude: {} } }),
+    }),
+  );
+});
+
 test("esc returns to the home screen", async () => {
   const onBack = vi.fn();
   const { stdin } = render(
