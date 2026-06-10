@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Box, Text, useInput } from "ink";
 import {
   SECTION_LABEL,
@@ -11,18 +11,23 @@ import type { ConfigDraft } from "../domain/types.ts";
 interface Props {
   draft: ConfigDraft;
   issues: Set<SectionId>;
+  // Selected-row index, owned by App so it survives navigating into a section
+  // and back (Home unmounts while a section is open).
+  cursor: number;
+  onCursorChange: (next: number) => void;
   onOpen: (id: SectionId) => void;
 }
 
-export function Home({ draft, issues, onOpen }: Props) {
-  const [cursor, setCursor] = useState(0);
-  // Mirror the cursor in a ref so an enter that lands in the same render as a
-  // preceding arrow key (before React re-renders) opens the latest row.
-  const cursorRef = useRef(0);
+export function Home({ draft, issues, cursor, onCursorChange, onOpen }: Props) {
+  // Mirror the cursor in a ref so an enter that lands in the same input batch as
+  // a preceding arrow key (before App re-renders) opens the latest row. Kept in
+  // sync each render so an externally-changed cursor stays authoritative.
+  const cursorRef = useRef(cursor);
+  cursorRef.current = cursor;
 
   function moveCursor(next: number): void {
     cursorRef.current = next;
-    setCursor(next);
+    onCursorChange(next);
   }
 
   useInput((_input, key) => {

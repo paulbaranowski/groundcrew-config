@@ -12,7 +12,13 @@ const draft = {
 
 test("renders sections with summaries and a warning badge", () => {
   const { lastFrame } = render(
-    <Home draft={draft} issues={new Set(["sandbox"])} onOpen={() => {}} />,
+    <Home
+      draft={draft}
+      issues={new Set(["sandbox"])}
+      cursor={0}
+      onCursorChange={() => {}}
+      onOpen={() => {}}
+    />,
   );
   expect(lastFrame()).toContain("Workspace");
   expect(lastFrame()).toContain("~/dev/groundcrew");
@@ -25,8 +31,29 @@ test("renders sections with summaries and a warning badge", () => {
 test("enter opens the focused section", () => {
   const onOpen = vi.fn();
   const { stdin } = render(
-    <Home draft={draft} issues={new Set()} onOpen={onOpen} />,
+    <Home
+      draft={draft}
+      issues={new Set()}
+      cursor={0}
+      onCursorChange={() => {}}
+      onOpen={onOpen}
+    />,
   );
   stdin.write("\r");
   expect(onOpen).toHaveBeenCalledWith("workspace");
+});
+
+test("reports cursor moves to the parent", () => {
+  const onCursorChange = vi.fn();
+  const { stdin } = render(
+    <Home
+      draft={draft}
+      issues={new Set()}
+      cursor={0}
+      onCursorChange={onCursorChange}
+      onOpen={() => {}}
+    />,
+  );
+  stdin.write("[B"); // down arrow
+  expect(onCursorChange).toHaveBeenCalledWith(1);
 });

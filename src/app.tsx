@@ -33,6 +33,9 @@ export function App({ initialDraft, target }: Props) {
       ({ workspace: { projectDir: "", knownRepositories: [] } } as ConfigDraft),
   );
   const [route, setRoute] = useState<Route>({ name: "home" });
+  // Home's selected row lives here so it survives opening a section and
+  // returning (Home unmounts while a section is on screen).
+  const [homeCursor, setHomeCursor] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [valid, setValid] = useState(true);
   const [checked, setChecked] = useState(false);
@@ -117,6 +120,8 @@ export function App({ initialDraft, target }: Props) {
           <Home
             draft={draft}
             issues={homeIssues}
+            cursor={homeCursor}
+            onCursorChange={setHomeCursor}
             onOpen={(id) => setRoute({ name: "section", id })}
           />
         </Box>

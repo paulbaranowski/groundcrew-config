@@ -61,6 +61,25 @@ test("opens the Agents bypass-permissions form from Home", async () => {
   unmount();
 });
 
+test("esc restores the Home row that was open", async () => {
+  const DOWN = "[B";
+  const ESC = "";
+  const { lastFrame, stdin, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  stdin.write(DOWN); // down to Repositories (row 2)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
+  stdin.write("\r"); // open Repositories
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("owner/repo names groundcrew"),
+  );
+  stdin.write(ESC); // esc back to Home
+  // The cursor must stay on Repositories, not snap back to Workspace.
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
+  expect(lastFrame()).not.toContain("▸ Workspace");
+  unmount();
+});
+
 test("opens Repositories from Home", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
