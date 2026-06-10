@@ -6,11 +6,10 @@ import {
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
-  setCustomSources,
   shellSourceCount,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
-import { EscapeHatch } from "./EscapeHatch.tsx";
+import { CustomSourcesView } from "./CustomSourcesView.tsx";
 import { LinearForm } from "./LinearForm.tsx";
 import { PlanKeeperForm } from "./PlanKeeperForm.tsx";
 import { ShellSourcesForm } from "./ShellSourcesForm.tsx";
@@ -70,12 +69,9 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
     return <ShellSourcesForm draft={draft} onChange={onChange} onBack={back} />;
   if (sub === "custom")
     return (
-      <EscapeHatch
+      <CustomSourcesView
         title="Custom task sources"
         value={customSources(draft)}
-        onChange={(next) =>
-          onChange(setCustomSources(draft, next as NonNullable<ConfigDraft["sources"]>))
-        }
         onBack={back}
       />
     );
@@ -103,7 +99,7 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
     },
     {
       id: "custom",
-      label: "Custom (raw JSON)",
+      label: "Custom (read-only)",
       status: `${customSourceCount(draft)} source(s)`,
     },
   ];

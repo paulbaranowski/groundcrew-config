@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Box, Text, useInput, useStdin } from "ink";
+import { useState } from "react";
+import { Box, Text, useInput } from "ink";
 import {
   BUILTIN_AGENTS,
   getAgentDef,
@@ -9,9 +9,7 @@ import {
   setAgentEnabled,
 } from "../domain/agents.ts";
 import { isBypassEnabled, setBypass } from "../domain/permissions.ts";
-import { setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
-import { editJson } from "../io/editJson.ts";
 import { AgentSubForm } from "./AgentSubForm.tsx";
 
 interface Props {
@@ -26,18 +24,8 @@ type Row =
   | { kind: "bypass" };
 
 export function AgentsForm({ draft, onChange, onBack }: Props) {
-  const { setRawMode } = useStdin();
   const [cursor, setCursor] = useState(0);
   const [editing, setEditing] = useState<string | undefined>(undefined);
-  const [error, setError] = useState<string | undefined>(undefined);
-  // editJson runs async; guard against the tree unmounting before it resolves.
-  const mountedRef = useRef(true);
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
 
   const agents = draft.agents ?? {};
   const definitions = agents.definitions ?? {};
@@ -78,25 +66,6 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
     if (key.return) {
       const row = rows[focused];
       if (row?.kind === "enable") setEditing(row.name);
-      return;
-    }
-    if (input === "e") {
-      // Release Ink's hold on stdin so $EDITOR owns the terminal.
-      setRawMode(false);
-      void editJson(agents).then((result) => {
-        if (!mountedRef.current) return;
-        setRawMode(true);
-        if (result.ok) {
-          setError(undefined);
-          onChange(
-            setByPath(
-              draft as unknown as Record<string, unknown>,
-              "agents",
-              result.value,
-            ) as unknown as ConfigDraft,
-          );
-        } else setError(result.error);
-      });
       return;
     }
     if (key.downArrow) setCursor(Math.min(rows.length - 1, focused + 1));
@@ -156,14 +125,9 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
         <Box marginTop={1} flexDirection="column">
           {custom.map((name) => (
             <Text key={name} dimColor>
-              {name} — edit via raw JSON
+              {name} — defined in crew.config.json
             </Text>
           ))}
-        </Box>
-      ) : null}
-      {error ? (
-        <Box marginTop={1}>
-          <Text color="red">⚠ {error}</Text>
         </Box>
       ) : null}
       <Box marginTop={1}>
@@ -171,7 +135,7 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
           The AI coding tools groundcrew runs on your tickets (e.g. Claude,
           Codex). Check the ones installed on your machine. "bypass permission
           prompts" lets the agent act without stopping to ask. ↑/↓ move · space
-          toggle · enter edit fields · e edit raw JSON · esc back.
+          toggle · enter edit fields · esc back.
         </Text>
       </Box>
     </Box>
