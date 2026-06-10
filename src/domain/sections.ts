@@ -7,7 +7,6 @@ import {
   type SectionId,
 } from "./types.ts";
 import {
-  customSourceCount,
   enabledSourceCount,
   isLinearEnabled,
   isPlanKeeperEnabled,
@@ -223,8 +222,6 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       if (isPlanKeeperEnabled(draft)) kinds.push("plan-keeper");
       const shell = shellSourceCount(draft);
       if (shell > 0) kinds.push(`${shell} shell`);
-      const custom = customSourceCount(draft);
-      if (custom > 0) kinds.push(`${custom} custom`);
       return kinds.join(", ");
     }
     case "usage":

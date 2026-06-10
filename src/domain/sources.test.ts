@@ -13,7 +13,6 @@ import {
   planKeeperSource,
   applyShellFields,
   readShellFields,
-  setCustomSources,
   setLinearEnabled,
   setLinearField,
   setLinearStatuses,
@@ -263,9 +262,9 @@ test("planKeeperCommands reads the live entry's commands as ordered pairs", () =
   ]);
 });
 
-test("customSources excludes managed entries; setCustomSources preserves them", () => {
+test("customSources excludes managed entries", () => {
   // `webhook` stands in for an unmanaged (non-linear/todo-txt/shell) kind — the
-  // only thing left in the raw-JSON custom bucket now that shell is managed.
+  // only thing that falls outside the managed buckets now that shell is managed.
   const draft = {
     workspace: { projectDir: "~/d", knownRepositories: [] },
     sources: [
@@ -276,15 +275,7 @@ test("customSources excludes managed entries; setCustomSources preserves them", 
     ],
   } as never;
   expect(customSources(draft)).toEqual([{ kind: "webhook" }]);
-
-  const next = setCustomSources(draft, [{ kind: "webhook", url: "x" }] as never);
-  // Managed sources (linear, plan-keeper, shell) survive; the custom set is replaced.
-  expect(next.sources).toEqual([
-    { kind: "linear" },
-    { kind: "shell", name: "plankeeper" },
-    { kind: "shell", name: "jira" },
-    { kind: "webhook", url: "x" },
-  ]);
+  expect(customSourceCount(draft)).toBe(1);
 });
 
 test("planKeeperCommands returns undefined for a null commands payload", () => {
@@ -294,20 +285,4 @@ test("planKeeperCommands returns undefined for a null commands payload", () => {
     sources: [{ kind: "shell", name: "plankeeper", commands: null }],
   } as never;
   expect(planKeeperCommands(draft)).toBeUndefined();
-});
-
-test("setCustomSources drops managed entries from the incoming custom payload", () => {
-  const draft = {
-    workspace: { projectDir: "~/d", knownRepositories: [] },
-    sources: [{ kind: "linear" }, { kind: "webhook" }],
-  } as never;
-  // A raw-JSON edit that re-adds a managed entry must not duplicate it.
-  const next = setCustomSources(draft, [
-    { kind: "linear" },
-    { kind: "webhook", v: 2 },
-  ] as never);
-  expect(next.sources).toEqual([
-    { kind: "linear" },
-    { kind: "webhook", v: 2 },
-  ]);
 });

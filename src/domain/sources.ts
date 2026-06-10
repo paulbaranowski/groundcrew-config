@@ -339,19 +339,3 @@ export function customSources(draft: ConfigDraft): Source[] {
 export function customSourceCount(draft: ConfigDraft): number {
   return customSources(draft).length;
 }
-
-/**
- * Replace the custom (unmanaged) sources, preserving every managed entry. Lets
- * the raw-JSON editor show only custom sources without dropping linear /
- * todo-txt / plan-keeper, which keep their own screens.
- */
-export function setCustomSources(
-  draft: ConfigDraft,
-  custom: readonly Source[],
-): ConfigDraft {
-  const managed = (draft.sources ?? []).filter(isManaged);
-  // Drop any managed entries from the incoming payload so a raw-JSON edit can't
-  // duplicate linear / todo-txt / plan-keeper, which are owned by their screens.
-  const unmanaged = custom.filter((s) => !isManaged(s));
-  return { ...draft, sources: [...managed, ...unmanaged] };
-}

@@ -63,21 +63,21 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
         <TextField
           label="workdir"
           value={workdir}
-          placeholder="subdir within the worktree (optional)"
+          placeholder="subdir within the worktree to start working from (optional)"
           isActive={active === 2}
           onChange={setWorkdir}
         />
         <TextField
           label="provision.create"
           value={provisionCreate}
-          placeholder="shell template run instead of `git worktree add`"
+          placeholder="replaces `git worktree add`; vars: ${repo} ${branch} ${dir} ${baseRef} ${task}"
           isActive={active === 3}
           onChange={setProvisionCreate}
         />
         <TextField
           label="provision.remove"
           value={provisionRemove}
-          placeholder="shell template run instead of `git worktree remove`"
+          placeholder="replaces `git worktree remove`; vars: ${repo} ${branch} ${dir} ${baseRef} ${task}"
           isActive={active === 4}
           onChange={setProvisionRemove}
         />
