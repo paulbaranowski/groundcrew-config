@@ -133,7 +133,13 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           path: "prompts.initial",
           label: "initial",
           kind: "text",
-          help: "Initial agent prompt. Supports {{task}}, {{title}}, {{description}}, {{worktree}}, {{workspaceContinuationInstruction}}.",
+          help: "Inline initial agent prompt. Mutually exclusive with promptFile. Supports {{task}}, {{title}}, {{description}}, {{worktree}}, {{workspaceContinuationInstruction}}.",
+        },
+        {
+          path: "prompts.promptFile",
+          label: "promptFile",
+          kind: "text",
+          help: "Path to a file whose contents become the initial prompt. Resolved relative to the config dir; ~ expands. Mutually exclusive with initial.",
         },
       ];
     case "terminal":
@@ -214,10 +220,13 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       return `${draft.git?.remote ?? GIT_DEFAULTS.remote} · ${draft.git?.defaultBranch ?? GIT_DEFAULTS.defaultBranch}`;
     case "sandbox":
       return `runner: ${draft.local?.runner ?? "auto"}`;
-    case "prompts":
-      return draft.prompts?.initial
-        ? `custom (${draft.prompts.initial.length} chars)`
+    case "prompts": {
+      const prompts = draft.prompts ?? {};
+      if (prompts.promptFile) return `file: ${prompts.promptFile}`;
+      return prompts.initial
+        ? `custom (${prompts.initial.length} chars)`
         : "default";
+    }
     case "terminal":
       return `workspaceKind: ${draft.workspaceKind ?? "auto"}`;
     case "advanced":

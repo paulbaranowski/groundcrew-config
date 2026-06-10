@@ -80,6 +80,31 @@ test("advanced no longer includes workspaceKind", () => {
   expect(spec.some((f) => f.path === "logging.file")).toBe(true);
 });
 
+test("prompts is an initial + promptFile spec", () => {
+  const spec = simpleSectionSpec("prompts");
+  expect(spec.map((f) => f.path)).toEqual([
+    "prompts.initial",
+    "prompts.promptFile",
+  ]);
+});
+
+test("prompts summary prefers promptFile over initial", () => {
+  const base = { workspace: { projectDir: "~/d", knownRepositories: [] } };
+  expect(
+    sectionSummary("prompts", {
+      ...base,
+      prompts: { promptFile: "./prompt.md" },
+    } as never),
+  ).toBe("file: ./prompt.md");
+  expect(
+    sectionSummary("prompts", {
+      ...base,
+      prompts: { initial: "hello" },
+    } as never),
+  ).toBe("custom (5 chars)");
+  expect(sectionSummary("prompts", base as never)).toBe("default");
+});
+
 test("orchestrator summary shows ghosted defaults when unset", () => {
   expect(
     sectionSummary("orchestrator", {

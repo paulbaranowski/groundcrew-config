@@ -20,13 +20,13 @@ crew-config ./path/to/crew.config.json
 - Reads any existing `crew.config.ts`/`.js`/`.json` to pre-fill, and always saves
   minimal `crew.config.json`. A shadowing `crew.config.ts`/`.js`/`.mjs` is moved to `*.bak`.
 - Every save is validated by groundcrew's own loader, so "valid" means "crew accepts it".
-- Custom ticket adapters and model definitions are edited as raw JSON in `$EDITOR`.
+- Custom ticket adapters and agent definitions are edited as raw JSON in `$EDITOR`.
 
 ### Sections
 
 - **Workspace** — project/worktree directories.
-- **Repositories** — the repos groundcrew may work on (`owner/repo`, with an optional per-repo directory override).
-- **Models** — enabled agent models (raw JSON).
+- **Repositories** — the repos groundcrew may work on (`owner/repo`, with an optional per-repo directory override). The repo editor also covers `workdir` (a project subdirectory within the worktree) and `provision` (scripted `create`/`remove` worktree templates — both required, and mutually exclusive with the directory override).
+- **Agents** — enabled agents (raw JSON).
 - **Task Sources** — a hub (groundcrew needs at least one enabled source to run):
   - **Linear** — enable/disable (groundcrew 4.24+ no longer enables Linear implicitly). The API key is read from `GROUNDCREW_LINEAR_API_KEY` / `LINEAR_API_KEY` in your environment, _not_ this file; the screen shows whether it's set.
   - **todo-txt** — enable/disable a zero-credentials local-file source, with editable `todoPath` / `tasksDir`.
@@ -34,7 +34,8 @@ crew-config ./path/to/crew.config.json
   - **Custom** — any other shell adapters, as raw JSON.
 - **Orchestrator** — concurrency + polling + session-limit %.
 - **Usage** — disable per-model usage tracking (groundcrew's opt-out from session-usage / codexbar gating).
-- **Hooks / Git / Terminal / Sandbox / Prompts / Advanced** — the rest of `crew.config.json` (Terminal = `workspaceKind`).
+- **Prompts** — the initial agent prompt, set inline (`initial`) or loaded from a file (`promptFile`); the two are mutually exclusive.
+- **Hooks / Git / Terminal / Sandbox / Advanced** — the rest of `crew.config.json` (Terminal = `workspaceKind`, which now includes `zellij`).
 
 ## Develop
 

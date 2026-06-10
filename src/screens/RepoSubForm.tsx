@@ -10,19 +10,34 @@ interface Props {
   onCancel: () => void;
 }
 
+const FIELD_COUNT = 5;
+
 export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
   const [name, setName] = useState(entry.name);
   const [override, setOverride] = useState(entry.projectDirOverride ?? "");
+  const [workdir, setWorkdir] = useState(entry.workdir ?? "");
+  const [provisionCreate, setProvisionCreate] = useState(
+    entry.provision?.create ?? "",
+  );
+  const [provisionRemove, setProvisionRemove] = useState(
+    entry.provision?.remove ?? "",
+  );
   const [active, setActive] = useState(0);
 
   useInput((_input, key) => {
     if (key.escape) onCancel();
-    if (key.downArrow) setActive((a) => Math.min(1, a + 1));
+    if (key.downArrow) setActive((a) => Math.min(FIELD_COUNT - 1, a + 1));
     if (key.upArrow) setActive((a) => Math.max(0, a - 1));
     if (key.return) {
+      const hasProvision =
+        provisionCreate.trim().length > 0 || provisionRemove.trim().length > 0;
       onSave({
         name,
         projectDirOverride: override.length === 0 ? undefined : override,
+        workdir: workdir.length === 0 ? undefined : workdir,
+        provision: hasProvision
+          ? { create: provisionCreate, remove: provisionRemove }
+          : undefined,
       });
     }
   });
@@ -45,10 +60,37 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
           isActive={active === 1}
           onChange={setOverride}
         />
+        <TextField
+          label="workdir"
+          value={workdir}
+          placeholder="subdir within the worktree (optional)"
+          isActive={active === 2}
+          onChange={setWorkdir}
+        />
+        <TextField
+          label="provision.create"
+          value={provisionCreate}
+          placeholder="shell template run instead of `git worktree add`"
+          isActive={active === 3}
+          onChange={setProvisionCreate}
+        />
+        <TextField
+          label="provision.remove"
+          value={provisionRemove}
+          placeholder="shell template run instead of `git worktree remove`"
+          isActive={active === 4}
+          onChange={setProvisionRemove}
+        />
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
           Repo located at: {base}/{name}
+        </Text>
+      </Box>
+      <Box>
+        <Text dimColor>
+          provision is scripted worktree provisioning: it needs both templates
+          and cannot combine with projectDirOverride.
         </Text>
       </Box>
     </Box>

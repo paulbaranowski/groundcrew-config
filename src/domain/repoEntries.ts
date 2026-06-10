@@ -1,8 +1,23 @@
 import type { ConfigDraft, KnownRepo } from "./types.ts";
 
+/**
+ * A repo's scripted provisioning templates. groundcrew requires *both* `create`
+ * and `remove`; we keep them together so the editor round-trips them as a unit
+ * and the loader reports a half-filled pair (rather than us silently dropping
+ * one).
+ */
+export interface ProvisionEntry {
+  create: string;
+  remove: string;
+}
+
 export interface RepoEntry {
   name: string;
   projectDirOverride: string | undefined;
+  /** Project subdirectory within the worktree (relative, no `..`). */
+  workdir?: string | undefined;
+  /** Scripted provisioning templates; mutually exclusive with `projectDirOverride`. */
+  provision?: ProvisionEntry | undefined;
 }
 
 type RepoUnion = ConfigDraft["workspace"]["knownRepositories"][number];
@@ -13,7 +28,14 @@ export function normalizeRepos(
   return (repos ?? []).map((entry) =>
     typeof entry === "string"
       ? { name: entry, projectDirOverride: undefined }
-      : { name: entry.name, projectDirOverride: entry.projectDirOverride },
+      : {
+          name: entry.name,
+          projectDirOverride: entry.projectDirOverride,
+          workdir: entry.workdir,
+          provision: entry.provision
+            ? { create: entry.provision.create, remove: entry.provision.remove }
+            : undefined,
+        },
   );
 }
 
@@ -21,10 +43,24 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
   return entries.map((entry): RepoUnion => {
     const name = entry.name.trim();
     const override = entry.projectDirOverride?.trim();
-    if (override === undefined || override.length === 0) {
+    const workdir = entry.workdir?.trim();
+    const create = entry.provision?.create.trim() ?? "";
+    const remove = entry.provision?.remove.trim() ?? "";
+    const hasOverride = override !== undefined && override.length > 0;
+    const hasWorkdir = workdir !== undefined && workdir.length > 0;
+    const hasProvision = create.length > 0 || remove.length > 0;
+    // The bare string is the minimal form: emit it only when no per-repo option
+    // is set, so an untouched repo never bloats into the object form.
+    if (!hasOverride && !hasWorkdir && !hasProvision) {
       return name;
     }
-    const repo: KnownRepo = { name, projectDirOverride: override };
+    const repo: KnownRepo = { name };
+    if (hasOverride) repo.projectDirOverride = override;
+    if (hasWorkdir) repo.workdir = workdir;
+    // Keep both keys even when one is blank: `pruneEmpty` strips the blank one
+    // and groundcrew's loader then reports the both-required error against this
+    // entry, instead of us silently discarding the half the user did type.
+    if (hasProvision) repo.provision = { create, remove };
     return repo;
   });
 }

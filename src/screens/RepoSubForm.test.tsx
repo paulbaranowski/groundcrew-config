@@ -28,5 +28,31 @@ test("enter saves the current entry", () => {
   expect(onSave).toHaveBeenCalledWith({
     name: "org/repo",
     projectDirOverride: undefined,
+    workdir: undefined,
+    provision: undefined,
+  });
+});
+
+test("enter preserves an existing workdir and provision unchanged", () => {
+  const onSave = vi.fn();
+  const { stdin } = render(
+    <RepoSubForm
+      entry={{
+        name: "org/repo",
+        projectDirOverride: undefined,
+        workdir: "service",
+        provision: { create: "graft add", remove: "graft rm" },
+      }}
+      projectDir="~/dev/groundcrew"
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  stdin.write("\r");
+  expect(onSave).toHaveBeenCalledWith({
+    name: "org/repo",
+    projectDirOverride: undefined,
+    workdir: "service",
+    provision: { create: "graft add", remove: "graft rm" },
   });
 });
