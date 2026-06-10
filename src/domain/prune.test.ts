@@ -16,23 +16,23 @@ test("keeps workspace even if it became empty after prune", () => {
   expect(pruneEmpty({ workspace: {} })).toEqual({ workspace: {} });
 });
 
-test("preserves built-in model enable markers (empty object under models.definitions)", () => {
-  // `definitions: { claude: {} }` enables the built-in claude model; the empty
+test("preserves built-in agent enable markers (empty object under agents.definitions)", () => {
+  // `definitions: { claude: {} }` enables the built-in claude agent; the empty
   // object is meaningful and must survive pruning, else the saved config has a
-  // default model with no matching definition and groundcrew rejects it.
+  // default agent with no matching definition and groundcrew rejects it.
   const input = {
     workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
-    models: { default: "claude", definitions: { claude: {} } },
+    agents: { default: "claude", definitions: { claude: {} } },
   };
   expect(pruneEmpty(input)).toEqual(input);
 });
 
 test("preserves the usage:{ disabled: true } sentinel through prune", () => {
   // The sentinel is the linchpin of the usage-disable feature; it must survive
-  // pruning (via restoreModelDefinitions) so the saved config actually opts out.
+  // pruning (via restoreAgentDefinitions) so the saved config actually opts out.
   const input = {
     workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
-    models: {
+    agents: {
       default: "claude",
       definitions: { claude: { usage: { disabled: true } } },
     },

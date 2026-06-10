@@ -9,13 +9,13 @@ interface Props {
 }
 
 export function UsageForm({ draft, onChange, onBack }: Props) {
-  const disabled = isUsageDisabled(draft.models);
-  const hasModels = Object.keys(draft.models?.definitions ?? {}).length > 0;
+  const disabled = isUsageDisabled(draft.agents);
+  const hasAgents = Object.keys(draft.agents?.definitions ?? {}).length > 0;
 
   useInput((input, key) => {
     if (key.escape) onBack();
-    if (input === " " && hasModels) {
-      onChange({ ...draft, models: setUsageDisabled(draft.models, !disabled) });
+    if (input === " " && hasAgents) {
+      onChange({ ...draft, agents: setUsageDisabled(draft.agents, !disabled) });
     }
   });
 
@@ -32,13 +32,13 @@ export function UsageForm({ draft, onChange, onBack }: Props) {
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          Disabling sets usage:&#123; disabled: true &#125; on every enabled model
+          Disabling sets usage:&#123; disabled: true &#125; on every enabled agent
           (groundcrew's only opt-out from session-usage / codexbar gating). Space
           toggles.
         </Text>
-        {hasModels ? null : (
+        {hasAgents ? null : (
           <Text dimColor>
-            (no enabled models to gate — add one under Models)
+            (no enabled agents to gate — add one under Agents)
           </Text>
         )}
       </Box>

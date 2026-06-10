@@ -32,7 +32,7 @@ const SECTION_PREFIXES: Array<[string, SectionId]> = [
   ["defaults.hooks", "hooks"],
   ["workspace", "workspace"],
   ["usage", "usage"],
-  ["models", "models"],
+  ["agents", "agents"],
   ["linear", "ticketSources"],
   ["sources", "ticketSources"],
   ["orchestrator", "orchestrator"],

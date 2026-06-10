@@ -47,31 +47,31 @@ export function pruneEmpty(
     }
     pruned.workspace = prunedWorkspace;
   }
-  restoreModelDefinitions(draft, pruned);
+  restoreAgentDefinitions(draft, pruned);
   return pruned;
 }
 
 /**
- * A `models.definitions[name] = {}` empty object enables a built-in model — the
- * generic prune would drop it and leave `models.default` dangling. Re-attach
+ * An `agents.definitions[name] = {}` empty object enables a built-in agent — the
+ * generic prune would drop it and leave `agents.default` dangling. Re-attach
  * any definition keys the prune removed so enable-markers survive.
  */
-function restoreModelDefinitions(
+function restoreAgentDefinitions(
   draft: Record<string, unknown>,
   pruned: Record<string, unknown>,
 ): void {
-  const models = draft.models;
-  if (!isPlainObject(models) || !isPlainObject(models.definitions)) return;
+  const agents = draft.agents;
+  if (!isPlainObject(agents) || !isPlainObject(agents.definitions)) return;
 
-  const prunedModels = isPlainObject(pruned.models) ? pruned.models : {};
-  const prunedDefinitions = isPlainObject(prunedModels.definitions)
-    ? prunedModels.definitions
+  const prunedAgents = isPlainObject(pruned.agents) ? pruned.agents : {};
+  const prunedDefinitions = isPlainObject(prunedAgents.definitions)
+    ? prunedAgents.definitions
     : {};
-  for (const [name, definition] of Object.entries(models.definitions)) {
+  for (const [name, definition] of Object.entries(agents.definitions)) {
     if (!(name in prunedDefinitions)) {
       prunedDefinitions[name] = pruneValue(definition);
     }
   }
-  prunedModels.definitions = prunedDefinitions;
-  pruned.models = prunedModels;
+  prunedAgents.definitions = prunedDefinitions;
+  pruned.agents = prunedAgents;
 }

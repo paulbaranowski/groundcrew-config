@@ -1,6 +1,6 @@
 import type { ConfigDraft } from "./types.ts";
 
-type Models = ConfigDraft["models"];
+type Agents = ConfigDraft["agents"];
 type Def = Record<string, unknown>;
 
 // groundcrew's built-in `claude` preset cmd. An empty `claude: {}` entry inherits
@@ -34,30 +34,30 @@ function applyPermissionMode(cmd: string, mode: string): string {
   return `${stripped} --permission-mode ${mode}`.trim();
 }
 
-/** True when this model launches the `claude` binary (the only agent we toggle). */
-export function isClaudeModel(name: string, def: unknown): boolean {
+/** True when this agent launches the `claude` binary (the only agent we toggle). */
+export function isClaudeAgent(name: string, def: unknown): boolean {
   const cmd = effectiveCmd(name, (def ?? {}) as Def);
   return cmd !== undefined && agentBinary(cmd) === "claude";
 }
 
-/** True when the model's effective cmd runs Claude in bypassPermissions mode. */
+/** True when the agent's effective cmd runs Claude in bypassPermissions mode. */
 export function isBypassEnabled(name: string, def: unknown): boolean {
   const cmd = effectiveCmd(name, (def ?? {}) as Def);
   if (cmd === undefined) return false;
   return /--permission-mode\s+bypassPermissions\b/.test(cmd);
 }
 
-/** Toggle bypassPermissions on one model by rewriting its cmd's permission mode. */
+/** Toggle bypassPermissions on one agent by rewriting its cmd's permission mode. */
 export function setBypass(
-  models: Models,
+  agents: Agents,
   name: string,
   enabled: boolean,
-): Models {
-  const definitions = { ...(models?.definitions ?? {}) } as Record<string, Def>;
+): Agents {
+  const definitions = { ...(agents?.definitions ?? {}) } as Record<string, Def>;
   const def = { ...(definitions[name] ?? {}) };
   const base = effectiveCmd(name, def) ?? CLAUDE_DEFAULT_CMD;
   const mode = enabled ? "bypassPermissions" : "auto";
   def.cmd = applyPermissionMode(base, mode);
   definitions[name] = def;
-  return { ...models, definitions } as Models;
+  return { ...agents, definitions } as Agents;
 }

@@ -15,7 +15,7 @@ export type ConfigDraft = Config;
  * without an ordering dependency.
  */
 export type SectionId =
-  | "workspace" | "repositories" | "models" | "ticketSources"
+  | "workspace" | "repositories" | "agents" | "ticketSources"
   | "orchestrator" | "usage" | "hooks" | "git" | "terminal"
   | "sandbox" | "prompts" | "advanced";
 
@@ -27,8 +27,8 @@ export type Runner = (typeof RUNNERS)[number];
 export const WORKSPACE_KINDS = ["auto", "cmux", "tmux"] as const;
 export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
 
-/** Built-in agent model presets that enable with `{}`. */
-export const BUILT_IN_MODELS = ["claude", "codex"] as const;
+/** Built-in agent presets that enable with `{}`. */
+export const BUILT_IN_AGENTS = ["claude", "codex"] as const;
 
 /** Orchestrator defaults groundcrew applies; shown as ghost values in the UI. */
 export const ORCHESTRATOR_DEFAULTS = {

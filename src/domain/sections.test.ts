@@ -9,7 +9,7 @@ test("section order is the Home list order", () => {
   expect(SECTION_ORDER).toEqual([
     "workspace",
     "repositories",
-    "models",
+    "agents",
     "ticketSources",
     "orchestrator",
     "usage",
@@ -54,7 +54,7 @@ test("usage summary reflects tracking state", () => {
   expect(
     sectionSummary("usage", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
-      models: {
+      agents: {
         default: "claude",
         definitions: { claude: { usage: { disabled: true } } },
       },
@@ -63,7 +63,7 @@ test("usage summary reflects tracking state", () => {
   expect(
     sectionSummary("usage", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
-      models: { default: "claude", definitions: { claude: {} } },
+      agents: { default: "claude", definitions: { claude: {} } },
     } as never),
   ).toBe("tracking enabled");
 });
