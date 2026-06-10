@@ -75,6 +75,8 @@ test("getAgentDef returns the entry or an empty object", () => {
   expect(getAgentDef(agents, "claude")).toEqual({ cmd: "x" });
   expect(getAgentDef(agents, "codex")).toEqual({});
   expect(getAgentDef(undefined, "claude")).toEqual({});
+  // A stray array (e.g. from a raw-JSON edit) is not a definition.
+  expect(getAgentDef({ definitions: { claude: [] } } as never, "claude")).toEqual({});
 });
 
 test("setAgentDef enables a previously-absent agent by writing its def", () => {

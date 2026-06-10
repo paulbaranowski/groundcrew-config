@@ -70,7 +70,7 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
       ) : null}
       <Box marginTop={1}>
         <Text dimColor>
-          ↑/↓ move · type to edit · enter save · esc cancel. ${"{id}"} is
+          ↑/↓ move · type to edit · enter save · esc cancel. {"${id}"} is
           substituted per task. timeouts/env stay in Custom JSON.
         </Text>
       </Box>

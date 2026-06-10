@@ -33,7 +33,11 @@ export function setAgentEnabled(
 /** The raw definition object for `name` (an empty object when none exists). */
 export function getAgentDef(agents: Agents, name: string): Def {
   const def = (agents?.definitions ?? {})[name];
-  return def !== null && typeof def === "object" ? (def as Def) : {};
+  // Exclude arrays — `typeof [] === "object"` — so a stray array from a raw-JSON
+  // edit can't leak through as a definition (matches isObject elsewhere).
+  return def !== null && typeof def === "object" && !Array.isArray(def)
+    ? (def as Def)
+    : {};
 }
 
 /** Replace `name`'s definition, enabling it if it was absent. */
