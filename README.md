@@ -20,7 +20,7 @@ crew-config ./path/to/crew.config.json
 - Reads any existing `crew.config.ts`/`.js`/`.json` to pre-fill, and always saves
   minimal `crew.config.json`. A shadowing `crew.config.ts`/`.js`/`.mjs` is moved to `*.bak`.
 - Every save is validated by groundcrew's own loader, so "valid" means "crew accepts it".
-- Custom shell task sources and non-built-in agent definitions are shown read-only; author them by hand in `crew.config.json`. The TUI preserves them untouched on save.
+- Unmanaged shell task sources have no screen, and non-built-in agent definitions are listed read-only; author both by hand in `crew.config.json`. The TUI preserves them untouched on save.
 
 ### Sections
 
@@ -31,7 +31,7 @@ crew-config ./path/to/crew.config.json
   - **Linear** — enable/disable (groundcrew 4.24+ no longer enables Linear implicitly). The API key is read from `GROUNDCREW_LINEAR_API_KEY` / `LINEAR_API_KEY` in your environment, _not_ this file; the screen shows whether it's set.
   - **todo-txt** — enable/disable a zero-credentials local-file source, with editable `todoPath` / `tasksDir`.
   - **PlanKeeper** — enable/disable. Install with `brew install paulbaranowski/tap/plan-keeper`; enabling adds the `plan-keeper crew …` shell source.
-  - **Custom** — any other shell adapters, shown read-only (authored by hand in `crew.config.json`).
+  - **Shell sources** — managed shell adapters. Any other (unmanaged) shell sources are authored by hand in `crew.config.json`; the TUI preserves them on save but no longer surfaces a screen for them.
 - **Orchestrator** — concurrency + polling + session-limit %.
 - **Usage** — disable per-model usage tracking (groundcrew's opt-out from session-usage / codexbar gating). Tracking requires the [codexbar](https://codexbar.app/) menu-bar app on Mac (`brew install --cask steipete/tap/codexbar`); groundcrew reads usage via its bundled `codexbar` CLI.
 - **Prompts** — the initial agent prompt, set inline (`initial`) or loaded from a file (`promptFile`); the two are mutually exclusive.

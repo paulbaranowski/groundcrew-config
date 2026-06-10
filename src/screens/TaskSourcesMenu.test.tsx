@@ -5,7 +5,7 @@ import { TaskSourcesMenu } from "./TaskSourcesMenu.tsx";
 const draft = { workspace: { projectDir: "~/d", knownRepositories: [] } } as never;
 const ESC = "";
 
-test("lists Linear, todo-txt, PlanKeeper and Custom", () => {
+test("lists Linear, todo-txt, PlanKeeper and Shell sources", () => {
   const { lastFrame } = render(
     <TaskSourcesMenu draft={draft} onChange={() => {}} onBack={() => {}} />,
   );
@@ -13,7 +13,8 @@ test("lists Linear, todo-txt, PlanKeeper and Custom", () => {
   expect(lastFrame()).toContain("Linear");
   expect(lastFrame()).toContain("todo-txt");
   expect(lastFrame()).toContain("PlanKeeper");
-  expect(lastFrame()).toContain("Custom");
+  expect(lastFrame()).toContain("Shell sources");
+  expect(lastFrame()).not.toContain("Custom");
 });
 
 test("lists the Shell sources row with its source count", () => {
