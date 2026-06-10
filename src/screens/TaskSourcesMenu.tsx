@@ -7,11 +7,13 @@ import {
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
   setCustomSources,
+  shellSourceCount,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { EscapeHatch } from "./EscapeHatch.tsx";
 import { LinearForm } from "./LinearForm.tsx";
 import { PlanKeeperForm } from "./PlanKeeperForm.tsx";
+import { ShellSourcesForm } from "./ShellSourcesForm.tsx";
 import { TodoTxtForm } from "./TodoTxtForm.tsx";
 
 interface Props {
@@ -20,11 +22,12 @@ interface Props {
   onBack: () => void;
 }
 
-type Sub = "hub" | "linear" | "todoTxt" | "planKeeper" | "custom";
+type Sub = "hub" | "linear" | "todoTxt" | "planKeeper" | "shell" | "custom";
 const ROWS: Array<Exclude<Sub, "hub">> = [
   "linear",
   "todoTxt",
   "planKeeper",
+  "shell",
   "custom",
 ];
 
@@ -63,6 +66,8 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
     return <TodoTxtForm draft={draft} onChange={onChange} onBack={back} />;
   if (sub === "planKeeper")
     return <PlanKeeperForm draft={draft} onChange={onChange} onBack={back} />;
+  if (sub === "shell")
+    return <ShellSourcesForm draft={draft} onChange={onChange} onBack={back} />;
   if (sub === "custom")
     return (
       <EscapeHatch
@@ -90,6 +95,11 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
       id: "planKeeper",
       label: "PlanKeeper",
       status: isPlanKeeperEnabled(draft) ? "enabled" : "disabled",
+    },
+    {
+      id: "shell",
+      label: "Shell sources",
+      status: `${shellSourceCount(draft)} source(s)`,
     },
     {
       id: "custom",

@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput, useStdin } from "ink";
-import { BUILTIN_AGENTS, isAgentEnabled, setAgentEnabled } from "../domain/agents.ts";
+import {
+  BUILTIN_AGENTS,
+  getAgentDef,
+  isAgentEnabled,
+  runnerRequiresSandbox,
+  setAgentDef,
+  setAgentEnabled,
+} from "../domain/agents.ts";
 import { isBypassEnabled, setBypass } from "../domain/permissions.ts";
 import { setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { editJson } from "../io/editJson.ts";
+import { AgentSubForm } from "./AgentSubForm.tsx";
 
 interface Props {
   draft: ConfigDraft;
@@ -20,6 +28,7 @@ type Row =
 export function AgentsForm({ draft, onChange, onBack }: Props) {
   const { setRawMode } = useStdin();
   const [cursor, setCursor] = useState(0);
+  const [editing, setEditing] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   // editJson runs async; guard against the tree unmounting before it resolves.
   const mountedRef = useRef(true);
@@ -33,6 +42,7 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
   const agents = draft.agents ?? {};
   const definitions = agents.definitions ?? {};
   const claudeOn = isAgentEnabled(agents, "claude");
+  const sandboxRequired = runnerRequiresSandbox(draft.local?.runner);
 
   // claude → (bypass when claude on) → codex. The bypass row is a child of claude.
   const rows: Row[] = [];
@@ -59,9 +69,15 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
     }
   }
 
-  useInput((input, key) => {
+  useInput(
+    (input, key) => {
     if (key.escape) {
       onBack();
+      return;
+    }
+    if (key.return) {
+      const row = rows[focused];
+      if (row?.kind === "enable") setEditing(row.name);
       return;
     }
     if (input === "e") {
@@ -89,7 +105,24 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
       const row = rows[focused];
       if (row) toggle(row);
     }
-  });
+    },
+    { isActive: editing === undefined },
+  );
+
+  if (editing !== undefined) {
+    return (
+      <AgentSubForm
+        name={editing}
+        def={getAgentDef(agents, editing)}
+        sandboxRequired={sandboxRequired}
+        onSave={(def) => {
+          onChange({ ...draft, agents: setAgentDef(agents, editing, def) });
+          setEditing(undefined);
+        }}
+        onCancel={() => setEditing(undefined)}
+      />
+    );
+  }
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
@@ -134,7 +167,9 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>↑/↓ move · space toggle · e edit raw JSON · esc back</Text>
+        <Text dimColor>
+          ↑/↓ move · space toggle · enter edit fields · e edit raw JSON · esc back
+        </Text>
       </Box>
     </Box>
   );

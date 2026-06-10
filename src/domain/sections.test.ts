@@ -71,7 +71,7 @@ test("usage summary reflects tracking state", () => {
 test("terminal is a select spec over the workspaceKind enum", () => {
   const spec = simpleSectionSpec("terminal");
   expect(spec[0]?.kind).toBe("select");
-  expect(spec[0]?.options).toEqual(["auto", "cmux", "tmux"]);
+  expect(spec[0]?.options).toEqual(["auto", "cmux", "tmux", "zellij"]);
 });
 
 test("advanced no longer includes workspaceKind", () => {
@@ -103,7 +103,7 @@ test("ticketSources summary lists enabled source kinds", () => {
   ).toBe("linear, todo-txt");
 });
 
-test("ticketSources summary does not count disabled managed entries as custom", () => {
+test("ticketSources summary lists generic shell sources under the shell bucket", () => {
   expect(
     sectionSummary("ticketSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
@@ -112,7 +112,7 @@ test("ticketSources summary does not count disabled managed entries as custom", 
         { kind: "shell", name: "jira" },
       ],
     } as never),
-  ).toBe("1 custom");
+  ).toBe("1 shell");
 });
 
 test("ticketSources summary warns when no sources are enabled", () => {

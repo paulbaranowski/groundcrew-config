@@ -16,6 +16,22 @@ test("shows disabled and enables on space", () => {
   );
 });
 
+test("shows all editable fields when enabled", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "todo-txt" }],
+  } as never;
+  const { lastFrame } = render(
+    <TodoTxtForm draft={draft} onChange={() => {}} onBack={() => {}} />,
+  );
+  const f = lastFrame() ?? "";
+  expect(f).toContain("todoPath");
+  expect(f).toContain("tasksDir");
+  expect(f).toContain("defaultRepository");
+  expect(f).toContain("idPrefix");
+  expect(f).toContain("timezone");
+});
+
 test("typing into todoPath writes the field on the todo-txt entry", () => {
   const onChange = vi.fn();
   const draft = {

@@ -3,7 +3,7 @@ import { RUNNERS, WORKSPACE_KINDS, type ConfigDraft, type SectionId } from "./ty
 
 test("enum lists match groundcrew's accepted values", () => {
   expect(RUNNERS).toEqual(["auto", "safehouse", "srt", "sdx", "none"]);
-  expect(WORKSPACE_KINDS).toEqual(["auto", "cmux", "tmux"]);
+  expect(WORKSPACE_KINDS).toEqual(["auto", "cmux", "tmux", "zellij"]);
 });
 
 test("SectionId is assignable for a known section", () => {

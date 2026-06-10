@@ -3,17 +3,26 @@ import {
   customSourceCount,
   customSources,
   enabledSourceCount,
+  getLinearField,
+  getLinearStatuses,
   getTodoTxtField,
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
   planKeeperCommands,
   planKeeperSource,
+  applyShellFields,
+  readShellFields,
   setCustomSources,
   setLinearEnabled,
+  setLinearField,
+  setLinearStatuses,
   setPlanKeeperEnabled,
+  setShellSources,
   setTodoTxtEnabled,
   setTodoTxtField,
+  shellSourceCount,
+  shellSources,
   todoTxtSource,
 } from "./sources.ts";
 
@@ -37,6 +46,40 @@ test("a loaded {kind:linear,enabled:false} reads as disabled", () => {
   expect(isLinearEnabled(draft)).toBe(false);
 });
 
+test("linear team/name get/set patch the linear entry", () => {
+  let draft = setLinearEnabled(base, true);
+  draft = setLinearField(draft, "team", "ENG");
+  draft = setLinearField(draft, "name", "linear-eng");
+  expect(draft.sources).toEqual([
+    { kind: "linear", team: "ENG", name: "linear-eng" },
+  ]);
+  expect(getLinearField(draft, "team")).toBe("ENG");
+  draft = setLinearField(draft, "team", "");
+  expect(getLinearField(draft, "team")).toBeUndefined();
+});
+
+test("linear status overrides parse comma lists and drop blanks", () => {
+  let draft = setLinearEnabled(base, true);
+  draft = setLinearStatuses(draft, "inProgress", "Doing, In Progress ,");
+  draft = setLinearStatuses(draft, "inReview", "Code Review");
+  expect(draft.sources).toEqual([
+    {
+      kind: "linear",
+      statuses: { inProgress: ["Doing", "In Progress"], inReview: ["Code Review"] },
+    },
+  ]);
+  expect(getLinearStatuses(draft, "inProgress")).toBe("Doing, In Progress");
+});
+
+test("clearing both linear status overrides removes the statuses object", () => {
+  let draft = setLinearEnabled(base, true);
+  draft = setLinearStatuses(draft, "inProgress", "Doing");
+  draft = setLinearStatuses(draft, "inReview", "Review");
+  draft = setLinearStatuses(draft, "inProgress", "");
+  draft = setLinearStatuses(draft, "inReview", "  ");
+  expect(draft.sources).toEqual([{ kind: "linear" }]);
+});
+
 test("todo-txt enable adds {kind:todo-txt}; disable removes it", () => {
   expect(isTodoTxtEnabled(base)).toBe(false);
   const on = setTodoTxtEnabled(base, true);
@@ -54,6 +97,23 @@ test("todo-txt field get/set on the todo-txt entry", () => {
   expect(getTodoTxtField(draft, "todoPath")).toBeUndefined();
 });
 
+test("todo-txt get/set covers defaultRepository, idPrefix, and timezone", () => {
+  let draft = setTodoTxtEnabled(base, true);
+  draft = setTodoTxtField(draft, "defaultRepository", "a/b");
+  draft = setTodoTxtField(draft, "idPrefix", "ACME");
+  draft = setTodoTxtField(draft, "timezone", "America/New_York");
+  expect(draft.sources).toEqual([
+    {
+      kind: "todo-txt",
+      defaultRepository: "a/b",
+      idPrefix: "ACME",
+      timezone: "America/New_York",
+    },
+  ]);
+  draft = setTodoTxtField(draft, "idPrefix", "");
+  expect(getTodoTxtField(draft, "idPrefix")).toBeUndefined();
+});
+
 test("enabledSourceCount counts non-disabled entries", () => {
   const draft = {
     workspace: { projectDir: "~/d", knownRepositories: [] },
@@ -67,7 +127,7 @@ test("enabledSourceCount counts non-disabled entries", () => {
   expect(enabledSourceCount(base)).toBe(0);
 });
 
-test("customSourceCount excludes linear, plan-keeper, and todo-txt", () => {
+test("a generic shell source is managed (shell bucket), not custom", () => {
   const draft = {
     workspace: { projectDir: "~/d", knownRepositories: [] },
     sources: [
@@ -77,7 +137,10 @@ test("customSourceCount excludes linear, plan-keeper, and todo-txt", () => {
       { kind: "shell", name: "jira" },
     ],
   } as never;
-  expect(customSourceCount(draft)).toBe(1);
+  // jira is a generic shell source; plankeeper has its own screen.
+  expect(shellSourceCount(draft)).toBe(1);
+  // The raw-JSON custom bucket is now only for non-shell, unmanaged kinds.
+  expect(customSourceCount(draft)).toBe(0);
 });
 
 test("planKeeperSource uses the new 'plankeeper' name", () => {
@@ -102,7 +165,61 @@ test("a {kind:shell,name:plans} entry is NOT plan-keeper (legacy name dropped)",
     sources: [{ kind: "shell", name: "plans" }],
   } as never;
   expect(isPlanKeeperEnabled(draft)).toBe(false);
-  expect(customSourceCount(draft)).toBe(1);
+  // A non-plankeeper shell is a generic shell source, not a raw-JSON custom one.
+  expect(customSourceCount(draft)).toBe(0);
+  expect(shellSourceCount(draft)).toBe(1);
+});
+
+test("shellSources / setShellSources manage generic shell entries only", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      { kind: "linear" },
+      { kind: "shell", name: "plankeeper" },
+      { kind: "shell", name: "jira", commands: { listTasks: "jira ls" } },
+    ],
+  } as never;
+  expect(shellSources(draft).map((s) => (s as { name: string }).name)).toEqual([
+    "jira",
+  ]);
+  // Replacing the generic shells leaves linear + plankeeper untouched.
+  const next = setShellSources(draft, [
+    { kind: "shell", name: "gitlab", commands: { listTasks: "glab ls" } },
+  ] as never);
+  expect(next.sources).toEqual([
+    { kind: "linear" },
+    { kind: "shell", name: "plankeeper" },
+    { kind: "shell", name: "gitlab", commands: { listTasks: "glab ls" } },
+  ]);
+});
+
+test("readShellFields / applyShellFields round-trip preferred command names", () => {
+  const fields = readShellFields({
+    kind: "shell",
+    name: "jira",
+    commands: { fetch: "jira ls", resolveOne: "jira get ${id}" },
+    cwd: "~/jira",
+  } as never);
+  // Legacy aliases surface in the preferred fields…
+  expect(fields.listTasks).toBe("jira ls");
+  expect(fields.getTask).toBe("jira get ${id}");
+
+  const built = applyShellFields(
+    { kind: "shell", name: "jira", commands: { fetch: "jira ls" }, timeouts: { fetch: 60_000 } } as never,
+    { ...fields, markInProgress: "jira start ${id}" },
+  );
+  // …and apply writes preferred names, drops the aliases, preserves timeouts.
+  expect(built).toEqual({
+    kind: "shell",
+    name: "jira",
+    commands: {
+      listTasks: "jira ls",
+      getTask: "jira get ${id}",
+      markInProgress: "jira start ${id}",
+    },
+    cwd: "~/jira",
+    timeouts: { fetch: 60_000 },
+  });
 });
 
 test("planKeeperCommands reads the live entry's commands as ordered pairs", () => {
@@ -127,22 +244,26 @@ test("planKeeperCommands reads the live entry's commands as ordered pairs", () =
 });
 
 test("customSources excludes managed entries; setCustomSources preserves them", () => {
+  // `webhook` stands in for an unmanaged (non-linear/todo-txt/shell) kind — the
+  // only thing left in the raw-JSON custom bucket now that shell is managed.
   const draft = {
     workspace: { projectDir: "~/d", knownRepositories: [] },
     sources: [
       { kind: "linear" },
       { kind: "shell", name: "plankeeper" },
       { kind: "shell", name: "jira" },
+      { kind: "webhook" },
     ],
   } as never;
-  expect(customSources(draft)).toEqual([{ kind: "shell", name: "jira" }]);
+  expect(customSources(draft)).toEqual([{ kind: "webhook" }]);
 
-  const next = setCustomSources(draft, [{ kind: "shell", name: "gh" }] as never);
-  // Managed sources (linear, plan-keeper) survive; the custom set is replaced.
+  const next = setCustomSources(draft, [{ kind: "webhook", url: "x" }] as never);
+  // Managed sources (linear, plan-keeper, shell) survive; the custom set is replaced.
   expect(next.sources).toEqual([
     { kind: "linear" },
     { kind: "shell", name: "plankeeper" },
-    { kind: "shell", name: "gh" },
+    { kind: "shell", name: "jira" },
+    { kind: "webhook", url: "x" },
   ]);
 });
 
@@ -158,15 +279,15 @@ test("planKeeperCommands returns undefined for a null commands payload", () => {
 test("setCustomSources drops managed entries from the incoming custom payload", () => {
   const draft = {
     workspace: { projectDir: "~/d", knownRepositories: [] },
-    sources: [{ kind: "linear" }, { kind: "shell", name: "jira" }],
+    sources: [{ kind: "linear" }, { kind: "webhook" }],
   } as never;
   // A raw-JSON edit that re-adds a managed entry must not duplicate it.
   const next = setCustomSources(draft, [
     { kind: "linear" },
-    { kind: "shell", name: "gh" },
+    { kind: "webhook", v: 2 },
   ] as never);
   expect(next.sources).toEqual([
     { kind: "linear" },
-    { kind: "shell", name: "gh" },
+    { kind: "webhook", v: 2 },
   ]);
 });

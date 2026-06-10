@@ -24,7 +24,7 @@ export const RUNNERS = ["auto", "safehouse", "srt", "sdx", "none"] as const;
 export type Runner = (typeof RUNNERS)[number];
 
 /** Terminal session managers. */
-export const WORKSPACE_KINDS = ["auto", "cmux", "tmux"] as const;
+export const WORKSPACE_KINDS = ["auto", "cmux", "tmux", "zellij"] as const;
 export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
 
 /** Built-in agent presets that enable with `{}`. */

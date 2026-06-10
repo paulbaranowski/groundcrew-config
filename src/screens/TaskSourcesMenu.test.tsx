@@ -16,6 +16,18 @@ test("lists Linear, todo-txt, PlanKeeper and Custom", () => {
   expect(lastFrame()).toContain("Custom");
 });
 
+test("lists the Shell sources row with its source count", () => {
+  const draftWithShell = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "shell", name: "jira", commands: { listTasks: "jira ls" } }],
+  } as never;
+  const { lastFrame } = render(
+    <TaskSourcesMenu draft={draftWithShell} onChange={() => {}} onBack={() => {}} />,
+  );
+  expect(lastFrame()).toContain("Shell sources");
+  expect(lastFrame()).toContain("1 source(s)");
+});
+
 test("enter opens todo-txt; esc returns to the hub", async () => {
   const { lastFrame, stdin } = render(
     <TaskSourcesMenu draft={draft} onChange={() => {}} onBack={() => {}} />,

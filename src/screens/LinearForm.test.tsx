@@ -2,6 +2,7 @@ import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { LinearForm } from "./LinearForm.tsx";
 
+const DOWN = `${String.fromCharCode(27)}[B`;
 const base = { workspace: { projectDir: "~/d", knownRepositories: [] } } as never;
 
 test("shows disabled by default and enables on space", () => {
@@ -28,6 +29,30 @@ test("space on an enabled Linear removes the entry", () => {
   stdin.write(" ");
   expect(onChange).toHaveBeenCalledWith(
     expect.objectContaining({ sources: [] }),
+  );
+});
+
+test("shows team/name/status fields when enabled and edits the entry", async () => {
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "linear" }],
+  } as never;
+  const { lastFrame, stdin } = render(
+    <LinearForm draft={draft} env={{}} onChange={onChange} onBack={() => {}} />,
+  );
+  const f = lastFrame() ?? "";
+  expect(f).toContain("team");
+  expect(f).toContain("statuses.inProgress");
+  expect(f).toContain("statuses.inReview");
+
+  // Down off the enable row onto the `team` field, then type — Space must NOT
+  // toggle the source here, it must reach the field.
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("› team"));
+  stdin.write("E");
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({ sources: [{ kind: "linear", team: "E" }] }),
   );
 });
 

@@ -11,9 +11,17 @@ interface Props {
   isActive: boolean;
   onActivate: (index: number) => void; // index === items.length means "add"
   onDelete: (index: number) => void;
+  /** Label for the trailing add row. */
+  addLabel?: string;
 }
 
-export function ListField({ items, isActive, onActivate, onDelete }: Props) {
+export function ListField({
+  items,
+  isActive,
+  onActivate,
+  onDelete,
+  addLabel = "+ add repository…",
+}: Props) {
   const [cursor, setCursor] = useState(0);
   // Mirror the cursor in a ref so a burst of keypresses delivered in one render
   // (each useInput call shares a stale `cursor` closure until React re-renders)
@@ -53,7 +61,7 @@ export function ListField({ items, isActive, onActivate, onDelete }: Props) {
         color={isActive && cursor === items.length ? "cyan" : undefined}
         dimColor
       >
-        {isActive && cursor === items.length ? "▸ " : "  "}+ add repository…
+        {isActive && cursor === items.length ? "▸ " : "  "}{addLabel}
       </Text>
     </Box>
   );

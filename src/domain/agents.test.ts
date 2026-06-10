@@ -1,5 +1,14 @@
 import { expect, test } from "vitest";
-import { BUILTIN_AGENTS, isAgentEnabled, setAgentEnabled } from "./agents.ts";
+import {
+  applyAgentFields,
+  BUILTIN_AGENTS,
+  getAgentDef,
+  isAgentEnabled,
+  readAgentFields,
+  runnerRequiresSandbox,
+  setAgentDef,
+  setAgentEnabled,
+} from "./agents.ts";
 
 test("BUILTIN_AGENTS lists claude then codex", () => {
   expect(BUILTIN_AGENTS).toEqual(["claude", "codex"]);
@@ -59,4 +68,81 @@ test("enabling an already-enabled agent leaves its definition untouched", () => 
 test("enabling from an undefined agents object yields a definitions map", () => {
   const next = setAgentEnabled(undefined, "claude", true);
   expect(next?.definitions).toEqual({ claude: {} });
+});
+
+test("getAgentDef returns the entry or an empty object", () => {
+  const agents = { definitions: { claude: { cmd: "x" } } } as never;
+  expect(getAgentDef(agents, "claude")).toEqual({ cmd: "x" });
+  expect(getAgentDef(agents, "codex")).toEqual({});
+  expect(getAgentDef(undefined, "claude")).toEqual({});
+});
+
+test("setAgentDef enables a previously-absent agent by writing its def", () => {
+  const next = setAgentDef(undefined, "cursor", { cmd: "cursor-agent", color: "#999" });
+  expect(next?.definitions).toEqual({
+    cursor: { cmd: "cursor-agent", color: "#999" },
+  });
+});
+
+test("readAgentFields flattens cmd/color/preLaunch, env list, and sandbox.agent", () => {
+  expect(
+    readAgentFields({
+      cmd: "claude",
+      color: "#C15F3C",
+      preLaunch: "export T=$(mint)",
+      preLaunchEnv: ["T", "U"],
+      sandbox: { agent: "claude" },
+    }),
+  ).toEqual({
+    cmd: "claude",
+    color: "#C15F3C",
+    preLaunch: "export T=$(mint)",
+    preLaunchEnv: "T, U",
+    sandboxAgent: "claude",
+  });
+  // Missing fields read as empty strings.
+  expect(readAgentFields({})).toEqual({
+    cmd: "",
+    color: "",
+    preLaunch: "",
+    preLaunchEnv: "",
+    sandboxAgent: "",
+  });
+});
+
+test("applyAgentFields parses the env list and nests sandbox.agent", () => {
+  const def = applyAgentFields(
+    {},
+    {
+      cmd: "claude --permission-mode auto",
+      color: "#C15F3C",
+      preLaunch: "export T=$(mint)",
+      preLaunchEnv: "T , U,",
+      sandboxAgent: "claude",
+    },
+  );
+  expect(def).toEqual({
+    cmd: "claude --permission-mode auto",
+    color: "#C15F3C",
+    preLaunch: "export T=$(mint)",
+    preLaunchEnv: ["T", "U"],
+    sandbox: { agent: "claude" },
+  });
+});
+
+test("applyAgentFields clears emptied keys and drops the sandbox block", () => {
+  const def = applyAgentFields(
+    { cmd: "old", preLaunchEnv: ["X"], sandbox: { agent: "claude" } },
+    { cmd: "", color: "", preLaunch: "", preLaunchEnv: " ", sandboxAgent: "" },
+  );
+  expect(def).toEqual({});
+});
+
+test("runnerRequiresSandbox: sdx always, auto only on linux", () => {
+  expect(runnerRequiresSandbox("sdx", "darwin")).toBe(true);
+  expect(runnerRequiresSandbox("auto", "linux")).toBe(true);
+  expect(runnerRequiresSandbox(undefined, "linux")).toBe(true);
+  expect(runnerRequiresSandbox("auto", "darwin")).toBe(false);
+  expect(runnerRequiresSandbox("safehouse", "linux")).toBe(false);
+  expect(runnerRequiresSandbox("none", "linux")).toBe(false);
 });
