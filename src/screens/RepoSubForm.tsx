@@ -89,8 +89,9 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
       </Box>
       <Box>
         <Text dimColor>
-          provision is scripted worktree provisioning: it needs both templates
-          and cannot combine with projectDirOverride.
+          Settings for one repository. "name" is its folder name; everything else
+          is an optional override. provision is scripted worktree setup — it needs
+          both templates and can't combine with projectDirOverride.
         </Text>
       </Box>
     </Box>

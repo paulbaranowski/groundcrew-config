@@ -8,6 +8,8 @@ import type { ConfigDraft } from "../domain/types.ts";
 
 interface Props {
   title: string;
+  /** Plain-English purpose line shown above the focused field's help. */
+  description: string;
   spec: FieldSpec[];
   draft: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
@@ -18,7 +20,14 @@ function asString(value: unknown): string {
   return value === undefined ? "" : String(value);
 }
 
-export function SectionForm({ title, spec, draft, onChange, onBack }: Props) {
+export function SectionForm({
+  title,
+  description,
+  spec,
+  draft,
+  onChange,
+  onBack,
+}: Props) {
   const [active, setActive] = useState(0);
 
   useInput((_input, key) => {
@@ -78,11 +87,10 @@ export function SectionForm({ title, spec, draft, onChange, onBack }: Props) {
           ),
         )}
       </Box>
-      {focused ? (
-        <Box marginTop={1}>
-          <Text dimColor>{focused.help}</Text>
-        </Box>
-      ) : null}
+      <Box marginTop={1} flexDirection="column">
+        <Text dimColor>{description}</Text>
+        {focused ? <Text dimColor>{focused.help}</Text> : null}
+      </Box>
     </Box>
   );
 }

@@ -48,6 +48,37 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   advanced: "Logging",
 };
 
+/**
+ * Plain-English, one-line purpose for each section, written for someone who has
+ * never used groundcrew. Shown at the top of each screen's help block. The
+ * spec-driven sections (SectionForm) read theirs from here directly; the bespoke
+ * screens carry their own (longer) copy inline.
+ */
+export const SECTION_DESCRIPTION: Record<SectionId, string> = {
+  workspace:
+    "Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a \"git worktree\") created under worktreeDir. Add the repos themselves in the Repositories section.",
+  repositories:
+    "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir).",
+  agents:
+    "The AI coding tools groundcrew runs on your tickets (e.g. Claude, Codex). Check the ones installed on your machine. \"bypass permission prompts\" lets the agent act without stopping to ask.",
+  ticketSources:
+    "Where groundcrew gets its to-do list. Turn on one or more sources of tickets for it to work through.",
+  orchestrator:
+    "Controls how many tasks groundcrew runs at once and how often it checks for new ones.",
+  usage:
+    "Usage tracking lets groundcrew watch your AI subscription's usage so it won't launch agents when you're near your limits. Disabling opts every enabled agent out.",
+  hooks:
+    "A shell command run right after each worktree is created (e.g. install dependencies). A repo's own config overrides this.",
+  git: "Git settings groundcrew uses when creating branches and worktrees.",
+  terminal:
+    "Which terminal multiplexer hosts the running agents (tmux, cmux, or zellij).",
+  sandbox:
+    "How strictly each agent is isolated from the rest of your machine while it runs.",
+  prompts:
+    "The instructions groundcrew gives the agent at the start of every task.",
+  advanced: "Where groundcrew writes its log file.",
+};
+
 /** A field in the generic SectionForm. `path` is a dotted path into the draft. */
 export interface FieldSpec {
   path: string;

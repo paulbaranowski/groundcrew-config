@@ -64,8 +64,8 @@ export function TodoTxtForm({ draft, onChange, onBack }: Props) {
       ) : null}
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          Zero-credentials local-file task source. Space toggles. ↑/↓ moves
-          between fields.
+          Use a plain todo.txt file on your computer as the task list — no
+          accounts or API keys needed. Space toggles. ↑/↓ moves between fields.
         </Text>
       </Box>
     </Box>

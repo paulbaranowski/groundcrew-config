@@ -53,8 +53,9 @@ export function WorkspaceForm({ draft, onChange, onBack }: Props) {
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          projectDir is groundcrew's base folder; worktrees go under worktreeDir
-          (defaults to projectDir). Repos are configured in the Repositories
+          Where groundcrew keeps your code. projectDir is the folder that holds
+          your repos; each task runs in a throwaway copy (a "git worktree")
+          created under worktreeDir. Add the repos themselves in the Repositories
           section.
         </Text>
       </Box>

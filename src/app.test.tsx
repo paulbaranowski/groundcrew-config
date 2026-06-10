@@ -71,7 +71,7 @@ test("esc restores the Home row that was open", async () => {
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
   stdin.write("\r"); // open Repositories
   await vi.waitFor(() =>
-    expect(lastFrame()).toContain("owner/repo names groundcrew"),
+    expect(lastFrame()).toContain("repos groundcrew is allowed to work on"),
   );
   stdin.write(ESC); // esc back to Home
   // The cursor must stay on Repositories, not snap back to Workspace.
@@ -88,7 +88,7 @@ test("opens Repositories from Home", async () => {
   await vi.waitFor(() => expect(lastFrame()).toContain("Repositories"));
   stdin.write("\r");
   await vi.waitFor(() =>
-    expect(lastFrame()).toContain("owner/repo names groundcrew"),
+    expect(lastFrame()).toContain("repos groundcrew is allowed to work on"),
   );
   unmount();
 });

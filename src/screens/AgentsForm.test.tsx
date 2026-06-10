@@ -30,12 +30,14 @@ test("shows the bypass sub-option only when claude is enabled", () => {
   const on = render(
     <AgentsForm draft={claudeOnly} onChange={() => {}} onBack={() => {}} />,
   );
-  expect(on.lastFrame()).toContain("bypass permission prompts");
+  // Match the toggle row's checkbox marker, not the bare phrase — the help text
+  // now also mentions "bypass permission prompts".
+  expect(on.lastFrame()).toContain("] bypass permission prompts");
 
   const off = render(
     <AgentsForm draft={draftWith({ codex: {} })} onChange={() => {}} onBack={() => {}} />,
   );
-  expect(off.lastFrame()).not.toContain("bypass permission prompts");
+  expect(off.lastFrame()).not.toContain("] bypass permission prompts");
 });
 
 test("shows the bypass box checked when claude already bypasses", () => {

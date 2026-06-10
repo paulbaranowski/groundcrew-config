@@ -32,9 +32,13 @@ export function UsageForm({ draft, onChange, onBack }: Props) {
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          Disabling sets usage:&#123; disabled: true &#125; on every enabled agent
-          (groundcrew's only opt-out from session-usage / codexbar gating). Space
-          toggles.
+          Usage tracking lets groundcrew watch your AI subscription's usage so it
+          won't launch agents when you're near your limits. Disabling opts every
+          enabled agent out. Space toggles.
+        </Text>
+        <Text dimColor>
+          Needs the codexbar menu-bar app on Mac (groundcrew reads usage via its
+          codexbar CLI). Install: brew install --cask steipete/tap/codexbar
         </Text>
         {hasAgents ? null : (
           <Text dimColor>

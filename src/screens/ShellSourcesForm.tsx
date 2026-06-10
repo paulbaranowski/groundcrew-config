@@ -70,9 +70,9 @@ export function ShellSourcesForm({ draft, onChange, onBack }: Props) {
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          Wire any external tracker (Jira, etc.) via command templates that
-          emit/consume ShellIssue JSON. ↑/↓ move · enter edit · d delete · esc
-          back.
+          Connect any other tracker (Jira, GitHub Issues, …) by giving groundcrew
+          shell commands that list and update its tasks. ↑/↓ move · enter edit · d
+          delete · esc back.
         </Text>
       </Box>
     </Box>

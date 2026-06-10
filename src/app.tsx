@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { Footer } from "./components/Footer.tsx";
 import {
+  SECTION_DESCRIPTION,
   SECTION_LABEL,
   simpleSectionSpec,
   type SectionId,
@@ -118,6 +119,13 @@ export function App({ initialDraft, target }: Props) {
           <Text dimColor>{savedAt ?? target.scope}</Text>
         </Box>
         <Box marginTop={1}>
+          <Text dimColor>
+            groundcrew picks up your tickets and runs AI coding agents on them
+            automatically — each in its own isolated copy of your repo — then
+            opens a PR. Set it up below.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
           <Home
             draft={draft}
             issues={homeIssues}
@@ -154,6 +162,7 @@ export function App({ initialDraft, target }: Props) {
   return (
     <SectionForm
       title={SECTION_LABEL[id]}
+      description={SECTION_DESCRIPTION[id]}
       spec={simpleSectionSpec(id)}
       draft={draft}
       onChange={update}

@@ -244,8 +244,10 @@ export function enabledSourceCount(draft: ConfigDraft): number {
 /** The shell lifecycle commands the builder edits, in display order. */
 export const SHELL_COMMAND_FIELDS = [
   "verify",
+  "validate",
   "listTasks",
   "getTask",
+  "createTask",
   "markInProgress",
   "markInReview",
   "markDone",
@@ -293,8 +295,10 @@ export function readShellFields(source: Source | undefined): ShellFields {
   return {
     name: asString(s.name),
     verify: asString(c.verify),
+    validate: asString(c.validate),
     listTasks: asString(c.listTasks) || asString(c.fetch),
     getTask: asString(c.getTask) || asString(c.resolveOne),
+    createTask: asString(c.createTask),
     markInProgress: asString(c.markInProgress),
     markInReview: asString(c.markInReview),
     markDone: asString(c.markDone),

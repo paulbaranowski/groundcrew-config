@@ -222,6 +222,26 @@ test("readShellFields / applyShellFields round-trip preferred command names", ()
   });
 });
 
+test("readShellFields / applyShellFields round-trip createTask and validate", () => {
+  const fields = readShellFields({
+    kind: "shell",
+    name: "jira",
+    commands: {
+      listTasks: "jira ls",
+      createTask: "jira new ${title}",
+      validate: "jira lint",
+    },
+  } as never);
+  expect(fields.createTask).toBe("jira new ${title}");
+  expect(fields.validate).toBe("jira lint");
+
+  const built = applyShellFields(undefined, fields) as {
+    commands: Record<string, string>;
+  };
+  expect(built.commands.createTask).toBe("jira new ${title}");
+  expect(built.commands.validate).toBe("jira lint");
+});
+
 test("planKeeperCommands reads the live entry's commands as ordered pairs", () => {
   expect(planKeeperCommands(base)).toBeUndefined();
   const draft = {

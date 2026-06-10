@@ -39,7 +39,8 @@ export function PlanKeeperForm({ draft, onChange, onBack }: Props) {
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          Feeds plans from ~/plans into groundcrew as tickets. Space toggles.
+          Feeds saved plans from ~/plans in as tasks (via the plan-keeper tool).
+          Space toggles.
         </Text>
         <Text dimColor>
           Install: brew install paulbaranowski/tap/plan-keeper

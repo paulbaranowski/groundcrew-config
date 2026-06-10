@@ -42,7 +42,10 @@ export function EscapeHatch({ title, value, onChange, onBack }: Props) {
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>{title}</Text>
       <Box marginTop={1}>
-        <Text dimColor>Advanced section — edited as raw JSON in $EDITOR.</Text>
+        <Text dimColor>
+          Advanced: define task sources by hand as raw JSON, for anything the
+          forms don't cover. Edited in $EDITOR.
+        </Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
         {JSON.stringify(value, undefined, 2)

@@ -100,9 +100,9 @@ export function LinearForm({ draft, onChange, onBack, env = process.env }: Props
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          ↑/↓ move · space toggles the source (on the top row). team/name and
-          custom inProgress/inReview status names are optional overrides. The key
-          is read from your environment, not this config.
+          Pull tickets from Linear. Space toggles the source (top row). team/name
+          and the inProgress/inReview status names are optional overrides. Your
+          API key is read from the environment, not stored here.
         </Text>
         {key.set ? null : (
           <Text dimColor>
