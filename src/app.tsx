@@ -11,7 +11,7 @@ import { enabledSourceCount } from "./domain/sources.ts";
 import { saveDraft, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
 import { Home } from "./screens/Home.tsx";
-import { ModelsForm } from "./screens/ModelsForm.tsx";
+import { AgentsForm } from "./screens/AgentsForm.tsx";
 import { QuitGuard } from "./screens/QuitGuard.tsx";
 import { RepositoriesForm } from "./screens/RepositoriesForm.tsx";
 import { SectionForm } from "./screens/SectionForm.tsx";
@@ -143,8 +143,8 @@ export function App({ initialDraft, target }: Props) {
     return <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />;
   if (id === "usage")
     return <UsageForm draft={draft} onChange={update} onBack={back} />;
-  if (id === "models")
-    return <ModelsForm draft={draft} onChange={update} onBack={back} />;
+  if (id === "agents")
+    return <AgentsForm draft={draft} onChange={update} onBack={back} />;
   return (
     <SectionForm
       title={SECTION_LABEL[id]}

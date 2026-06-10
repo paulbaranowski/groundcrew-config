@@ -20,7 +20,7 @@ export type { SectionId };
 export const SECTION_ORDER: SectionId[] = [
   "workspace",
   "repositories",
-  "models",
+  "agents",
   "ticketSources",
   "orchestrator",
   "usage",
@@ -35,7 +35,7 @@ export const SECTION_ORDER: SectionId[] = [
 export const SECTION_LABEL: Record<SectionId, string> = {
   workspace: "Workspace",
   repositories: "Repositories",
-  models: "Models",
+  agents: "Agents",
   ticketSources: "Task Sources",
   orchestrator: "Orchestrator",
   usage: "Usage",
@@ -171,11 +171,11 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       const n = repoCount(draft);
       return `${n} repo${n === 1 ? "" : "s"}`;
     }
-    case "models": {
-      const defs = Object.keys(draft.models?.definitions ?? {});
+    case "agents": {
+      const defs = Object.keys(draft.agents?.definitions ?? {});
       return defs.length === 0
         ? "none enabled"
-        : `default: ${draft.models?.default ?? "?"} · ${defs.join(", ")}`;
+        : `default: ${draft.agents?.default ?? "?"} · ${defs.join(", ")}`;
     }
     case "ticketSources": {
       if (enabledSourceCount(draft) === 0) return "none — crew won't run";
@@ -188,7 +188,7 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       return kinds.join(", ");
     }
     case "usage":
-      return isUsageDisabled(draft.models)
+      return isUsageDisabled(draft.agents)
         ? "tracking disabled"
         : "tracking enabled";
     case "orchestrator": {

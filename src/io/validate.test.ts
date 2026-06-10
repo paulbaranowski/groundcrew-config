@@ -20,7 +20,7 @@ test("mapSection maps workspaceKind errors to terminal", () => {
 });
 
 test("mapSection maps usage errors to usage", () => {
-  expect(mapSection("models.definitions.claude.usage is invalid")).toBe(
+  expect(mapSection("agents.definitions.claude.usage is invalid")).toBe(
     "usage",
   );
 });
@@ -39,7 +39,7 @@ test("mapSection maps a prompts.initial error to prompts even when its prose nam
 test("a complete config validates ok", async () => {
   const result = await validateDraft({
     workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
-    models: { default: "claude", definitions: { claude: {} } },
+    agents: { default: "claude", definitions: { claude: {} } },
   } as never);
   expect(result.ok).toBe(true);
 });

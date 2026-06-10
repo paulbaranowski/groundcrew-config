@@ -4,7 +4,7 @@ import { App } from "./app.tsx";
 
 const draft = {
   workspace: { projectDir: "~/dev/groundcrew", knownRepositories: ["a/b"] },
-  models: { default: "claude", definitions: { claude: {} } },
+  agents: { default: "claude", definitions: { claude: {} } },
 } as never;
 
 test("starts on Home when given an existing draft", () => {
@@ -44,7 +44,7 @@ test("enter opens a section, esc returns home", async () => {
   unmount();
 });
 
-test("opens the Models bypass-permissions form from Home", async () => {
+test("opens the Agents bypass-permissions form from Home", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
@@ -52,8 +52,8 @@ test("opens the Models bypass-permissions form from Home", async () => {
   // next write. [B is the down-arrow escape sequence.
   stdin.write("[B"); // down to Repositories (row 2)
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
-  stdin.write("[B"); // down to Models (row 3)
-  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Models"));
+  stdin.write("[B"); // down to Agents (row 3)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Agents"));
   stdin.write("\r");
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("bypass permission prompts"),

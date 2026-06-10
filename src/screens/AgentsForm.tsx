@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput, useStdin } from "ink";
-import { BUILTIN_MODELS, isModelEnabled, setModelEnabled } from "../domain/models.ts";
+import { BUILTIN_AGENTS, isAgentEnabled, setAgentEnabled } from "../domain/agents.ts";
 import { isBypassEnabled, setBypass } from "../domain/permissions.ts";
 import { setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
@@ -12,12 +12,12 @@ interface Props {
   onBack: () => void;
 }
 
-// A focusable row: enable a built-in model, or toggle claude's bypass sub-option.
+// A focusable row: enable a built-in agent, or toggle claude's bypass sub-option.
 type Row =
-  | { kind: "enable"; name: (typeof BUILTIN_MODELS)[number] }
+  | { kind: "enable"; name: (typeof BUILTIN_AGENTS)[number] }
   | { kind: "bypass" };
 
-export function ModelsForm({ draft, onChange, onBack }: Props) {
+export function AgentsForm({ draft, onChange, onBack }: Props) {
   const { setRawMode } = useStdin();
   const [cursor, setCursor] = useState(0);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -30,9 +30,9 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
     [],
   );
 
-  const models = draft.models ?? {};
-  const definitions = models.definitions ?? {};
-  const claudeOn = isModelEnabled(models, "claude");
+  const agents = draft.agents ?? {};
+  const definitions = agents.definitions ?? {};
+  const claudeOn = isAgentEnabled(agents, "claude");
 
   // claude → (bypass when claude on) → codex. The bypass row is a child of claude.
   const rows: Row[] = [];
@@ -42,19 +42,19 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
   const focused = Math.min(cursor, rows.length - 1);
 
   const custom = Object.keys(definitions).filter(
-    (name) => !BUILTIN_MODELS.includes(name as never),
+    (name) => !BUILTIN_AGENTS.includes(name as never),
   );
 
   function toggle(row: Row): void {
     if (row.kind === "enable") {
       onChange({
         ...draft,
-        models: setModelEnabled(models, row.name, !isModelEnabled(models, row.name)),
+        agents: setAgentEnabled(agents, row.name, !isAgentEnabled(agents, row.name)),
       });
     } else {
       onChange({
         ...draft,
-        models: setBypass(models, "claude", !isBypassEnabled("claude", definitions.claude)),
+        agents: setBypass(agents, "claude", !isBypassEnabled("claude", definitions.claude)),
       });
     }
   }
@@ -67,7 +67,7 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
     if (input === "e") {
       // Release Ink's hold on stdin so $EDITOR owns the terminal.
       setRawMode(false);
-      void editJson(models).then((result) => {
+      void editJson(agents).then((result) => {
         if (!mountedRef.current) return;
         setRawMode(true);
         if (result.ok) {
@@ -75,7 +75,7 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
           onChange(
             setByPath(
               draft as unknown as Record<string, unknown>,
-              "models",
+              "agents",
               result.value,
             ) as unknown as ConfigDraft,
           );
@@ -93,13 +93,13 @@ export function ModelsForm({ draft, onChange, onBack }: Props) {
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
-      <Text bold>Models</Text>
+      <Text bold>Agents</Text>
       <Box marginTop={1} flexDirection="column">
         {rows.map((row, index) => {
           const active = index === focused;
           const marker = active ? "▸ " : "  ";
           if (row.kind === "enable") {
-            const on = isModelEnabled(models, row.name);
+            const on = isAgentEnabled(agents, row.name);
             return (
               <Text key={row.name} color={active ? "cyan" : undefined}>
                 {marker}

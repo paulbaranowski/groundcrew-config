@@ -7,7 +7,7 @@ const draft = {
     projectDir: "~/dev/groundcrew",
     knownRepositories: ["a/b", "c/d"],
   },
-  models: { default: "claude", definitions: { claude: {} } },
+  agents: { default: "claude", definitions: { claude: {} } },
 } as never;
 
 test("renders sections with summaries and a warning badge", () => {

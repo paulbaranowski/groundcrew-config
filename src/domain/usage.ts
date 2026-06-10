@@ -1,6 +1,6 @@
 import type { ConfigDraft } from "./types.ts";
 
-type Models = ConfigDraft["models"];
+type Agents = ConfigDraft["agents"];
 
 function isDisabledSentinel(value: unknown): boolean {
   return (
@@ -10,9 +10,9 @@ function isDisabledSentinel(value: unknown): boolean {
   );
 }
 
-/** True when there is at least one enabled model and every one opts out of usage. */
-export function isUsageDisabled(models: Models): boolean {
-  const definitions = models?.definitions ?? {};
+/** True when there is at least one enabled agent and every one opts out of usage. */
+export function isUsageDisabled(agents: Agents): boolean {
+  const definitions = agents?.definitions ?? {};
   const entries = Object.values(definitions);
   if (entries.length === 0) return false;
   return entries.every((def) =>
@@ -20,9 +20,9 @@ export function isUsageDisabled(models: Models): boolean {
   );
 }
 
-/** Set/clear `usage: { disabled: true }` on every enabled model definition. */
-export function setUsageDisabled(models: Models, disabled: boolean): Models {
-  const definitions = models?.definitions ?? {};
+/** Set/clear `usage: { disabled: true }` on every enabled agent definition. */
+export function setUsageDisabled(agents: Agents, disabled: boolean): Agents {
+  const definitions = agents?.definitions ?? {};
   const next: Record<string, unknown> = {};
   for (const [name, def] of Object.entries(definitions)) {
     const entry = { ...(def as Record<string, unknown>) };
@@ -33,5 +33,5 @@ export function setUsageDisabled(models: Models, disabled: boolean): Models {
     }
     next[name] = entry;
   }
-  return { ...models, definitions: next } as Models;
+  return { ...agents, definitions: next } as Agents;
 }
