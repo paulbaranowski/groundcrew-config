@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  SECTION_LABEL,
   SECTION_ORDER,
   sectionSummary,
   simpleSectionSpec,
@@ -65,7 +66,7 @@ test("usage summary reflects tracking state", () => {
       workspace: { projectDir: "~/d", knownRepositories: [] },
       agents: { default: "claude", definitions: { claude: {} } },
     } as never),
-  ).toBe("tracking enabled");
+  ).toBe("tracking enabled · limit 85%");
 });
 
 test("terminal is a select spec over the workspaceKind enum", () => {
@@ -110,7 +111,26 @@ test("orchestrator summary shows ghosted defaults when unset", () => {
     sectionSummary("orchestrator", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
     } as never),
-  ).toBe("max 4 · poll 120s · limit 85%");
+  ).toBe("max 4 · poll 120s");
+});
+
+test("the session limit moved out of the orchestrator spec into Usage Limits", () => {
+  const spec = simpleSectionSpec("orchestrator");
+  expect(spec.map((f) => f.label)).toEqual([
+    "maximumInProgress",
+    "pollIntervalMilliseconds",
+  ]);
+  expect(SECTION_LABEL.usage).toBe("Usage Limits");
+});
+
+test("usage summary shows the configured session limit when tracking is on", () => {
+  expect(
+    sectionSummary("usage", {
+      workspace: { projectDir: "~/d", knownRepositories: [] },
+      agents: { default: "claude", definitions: { claude: {} } },
+      orchestrator: { sessionLimitPercentage: 50 },
+    } as never),
+  ).toBe("tracking enabled · limit 50%");
 });
 
 test("sandbox is a select field spec over the runner enum", () => {

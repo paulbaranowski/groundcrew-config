@@ -39,6 +39,10 @@ const SECTION_PREFIXES: Array<[string, SectionId]> = [
   ["defaults.hooks", "hooks"],
   ["workspace", "workspace"],
   ["usage", "usage"],
+  // The session limit is edited on the Usage Limits screen even though it lives
+  // under `orchestrator.*` in the file — route its errors to that badge. Must
+  // precede the bare "orchestrator" entry below (most-specific-first).
+  ["orchestrator.sessionLimitPercentage", "usage"],
   ["agents", "agents"],
   ["linear", "ticketSources"],
   ["sources", "ticketSources"],

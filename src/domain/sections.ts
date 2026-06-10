@@ -38,7 +38,7 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   agents: "Agents",
   ticketSources: "Task Sources",
   orchestrator: "Orchestrator",
-  usage: "Usage",
+  usage: "Usage Limits",
   hooks: "Hooks",
   git: "Git",
   terminal: "Terminal",
@@ -65,14 +65,14 @@ export const SECTION_DESCRIPTION: Record<SectionId, string> = {
   orchestrator:
     "Controls how many tasks groundcrew runs at once and how often it checks for new ones.",
   usage:
-    "Usage tracking lets groundcrew watch your AI subscription's usage so it won't launch agents when you're near your limits. Disabling opts every enabled agent out.",
+    "Usage tracking lets groundcrew watch your AI subscription's usage so it won't launch agents when you're near your limits. Disabling opts every enabled agent out. The session limit % is the usage ceiling above which it stops launching new agents.",
   hooks:
     "A shell command run right after each worktree is created (e.g. install dependencies). A repo's own config overrides this.",
   git: "Git settings groundcrew uses when creating branches and worktrees.",
   terminal:
     "Which terminal multiplexer hosts the running agents (tmux, cmux, or zellij).",
   sandbox:
-    "How strictly each agent is isolated from the rest of your machine while it runs.",
+    "Pick the sandbox that isolates each agent from the rest of your machine while it runs.",
   prompts:
     "The instructions groundcrew gives the agent at the start of every task.",
   advanced: "Where groundcrew writes its log file.",
@@ -106,13 +106,6 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           kind: "number",
           help: "How often to poll for tickets (ms).",
           placeholder: String(ORCHESTRATOR_DEFAULTS.pollIntervalMilliseconds),
-        },
-        {
-          path: "orchestrator.sessionLimitPercentage",
-          label: "sessionLimitPercentage",
-          kind: "number",
-          help: "Stop launching above this session-usage %.",
-          placeholder: String(ORCHESTRATOR_DEFAULTS.sessionLimitPercentage),
         },
       ];
     case "hooks":
@@ -154,7 +147,7 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           label: "runner",
           kind: "select",
           options: RUNNERS,
-          help: "Local isolation backend. auto = safehouse (macOS) / sdx (Linux). none = unsandboxed.",
+          help: "Pick your sandbox. auto = chooses for you (safehouse on macOS, sdx on Linux). safehouse = macOS only. srt = Anthropic sandbox-runtime, fast & no Docker, macOS + Linux/WSL. sdx = Docker Sandboxes, needs Docker, macOS + Linux. none = no sandbox (unsafe).",
         },
       ];
     case "prompts":
@@ -224,10 +217,13 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       if (shell > 0) kinds.push(`${shell} shell`);
       return kinds.join(", ");
     }
-    case "usage":
-      return isUsageDisabled(draft.agents)
-        ? "tracking disabled"
-        : "tracking enabled";
+    case "usage": {
+      if (isUsageDisabled(draft.agents)) return "tracking disabled";
+      const limit =
+        draft.orchestrator?.sessionLimitPercentage ??
+        ORCHESTRATOR_DEFAULTS.sessionLimitPercentage;
+      return `tracking enabled · limit ${limit}%`;
+    }
     case "orchestrator": {
       const o = draft.orchestrator ?? {};
       const max =
@@ -235,10 +231,7 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       const poll =
         (o.pollIntervalMilliseconds ??
           ORCHESTRATOR_DEFAULTS.pollIntervalMilliseconds) / 1000;
-      const limit =
-        o.sessionLimitPercentage ??
-        ORCHESTRATOR_DEFAULTS.sessionLimitPercentage;
-      return `max ${max} · poll ${poll}s · limit ${limit}%`;
+      return `max ${max} · poll ${poll}s`;
     }
     case "hooks":
       return draft.defaults?.hooks?.prepareWorktree

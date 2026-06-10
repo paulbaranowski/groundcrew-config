@@ -32,8 +32,8 @@ crew-config ./path/to/crew.config.json
   - **todo-txt** — enable/disable a zero-credentials local-file source, with editable `todoPath` / `tasksDir`.
   - **PlanKeeper** — enable/disable. Install with `brew install paulbaranowski/tap/plan-keeper`; enabling adds the `plan-keeper crew …` shell source.
   - **Shell sources** — managed shell adapters. Any other (unmanaged) shell sources are authored by hand in `crew.config.json`; the TUI preserves them on save but no longer surfaces a screen for them.
-- **Orchestrator** — concurrency + polling + session-limit %.
-- **Usage** — disable per-model usage tracking (groundcrew's opt-out from session-usage / codexbar gating). Tracking requires the [codexbar](https://codexbar.app/) menu-bar app on Mac (`brew install --cask steipete/tap/codexbar`); groundcrew reads usage via its bundled `codexbar` CLI.
+- **Orchestrator** — concurrency + polling (`maximumInProgress`, `pollIntervalMilliseconds`).
+- **Usage Limits** — toggle per-agent usage tracking and set the session-usage ceiling (`sessionLimitPercentage`) above which groundcrew stops launching. Tracking requires the [codexbar](https://codexbar.app/) menu-bar app on Mac (`brew install --cask steipete/tap/codexbar`); groundcrew reads usage via its bundled `codexbar` CLI. (The limit is still stored as `orchestrator.sessionLimitPercentage` in the file.)
 - **Prompts** — the initial agent prompt, set inline (`initial`) or loaded from a file (`promptFile`); the two are mutually exclusive.
 - **Hooks / Git / Terminal / Sandbox / Advanced** — the rest of `crew.config.json` (Terminal = `workspaceKind`, which now includes `zellij`).
 

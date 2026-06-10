@@ -28,6 +28,19 @@ test("mapSection maps usage errors to usage", () => {
   );
 });
 
+test("mapSection routes the session limit to usage, other orchestrator keys to orchestrator", () => {
+  // sessionLimitPercentage is edited on the Usage Limits screen, so its error
+  // badge follows the field, not its orchestrator.* config path.
+  expect(
+    mapSection(
+      "groundcrew config: orchestrator.sessionLimitPercentage must be a finite number in (0, 100]",
+    ),
+  ).toBe("usage");
+  expect(
+    mapSection("groundcrew config: orchestrator.maximumInProgress must be an integer ≥ 1"),
+  ).toBe("orchestrator");
+});
+
 test("mapSection maps a prompts.initial error to prompts even when its prose names other sections", () => {
   // groundcrew lists allowed placeholders in the message, one of which is
   // {{workspaceContinuationInstruction}}. The badge must follow the key path
