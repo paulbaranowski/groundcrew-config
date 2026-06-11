@@ -7,6 +7,12 @@ import {
   type SectionId,
 } from "../domain/sections.ts";
 import type { ConfigDraft } from "../domain/types.ts";
+import { ScrollableList, visibleRows } from "../components/ScrollableList.tsx";
+import { useFullscreen } from "../hooks/useFullscreen.ts";
+
+// Rows reserved above/below the section list: the crew-config header, the intro
+// blurb, spacing, and the pinned footer.
+const HOME_CHROME_ROWS = 9;
 
 interface Props {
   draft: ConfigDraft;
@@ -24,6 +30,8 @@ export function Home({ draft, issues, cursor, onCursorChange, onOpen }: Props) {
   // sync each render so an externally-changed cursor stays authoritative.
   const cursorRef = useRef(cursor);
   cursorRef.current = cursor;
+  const { rows: terminalRows } = useFullscreen();
+  const maxVisible = visibleRows(terminalRows, HOME_CHROME_ROWS);
 
   function moveCursor(next: number): void {
     cursorRef.current = next;
@@ -40,25 +48,31 @@ export function Home({ draft, issues, cursor, onCursorChange, onOpen }: Props) {
     }
   });
 
+  function renderRow(index: number) {
+    const id = SECTION_ORDER[index]!;
+    const bad = issues.has(id);
+    return (
+      <Box key={id}>
+        <Text color={cursor === index ? "cyan" : undefined}>
+          {cursor === index ? "▸ " : "  "}
+        </Text>
+        <Box width={16}>
+          <Text color={cursor === index ? "cyan" : undefined}>
+            {SECTION_LABEL[id]}
+          </Text>
+        </Box>
+        <Text color={bad ? "yellow" : "green"}>{bad ? "⚠" : "✓"} </Text>
+        <Text dimColor>{sectionSummary(id, draft)}</Text>
+      </Box>
+    );
+  }
+
   return (
-    <Box flexDirection="column">
-      {SECTION_ORDER.map((id, index) => {
-        const bad = issues.has(id);
-        return (
-          <Box key={id}>
-            <Text color={cursor === index ? "cyan" : undefined}>
-              {cursor === index ? "▸ " : "  "}
-            </Text>
-            <Box width={16}>
-              <Text color={cursor === index ? "cyan" : undefined}>
-                {SECTION_LABEL[id]}
-              </Text>
-            </Box>
-            <Text color={bad ? "yellow" : "green"}>{bad ? "⚠" : "✓"} </Text>
-            <Text dimColor>{sectionSummary(id, draft)}</Text>
-          </Box>
-        );
-      })}
-    </Box>
+    <ScrollableList
+      count={SECTION_ORDER.length}
+      cursor={cursor}
+      maxVisible={maxVisible}
+      renderRow={renderRow}
+    />
   );
 }
