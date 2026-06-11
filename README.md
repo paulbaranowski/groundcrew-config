@@ -5,7 +5,7 @@ Interactive TUI to create and update [groundcrew](https://www.npmjs.com/package/
 ## Install
 
 ```bash
-npm install -g @clipboard-health/groundcrew-config
+brew install paulbaranowski/tap/crew-config
 ```
 
 ## Use
