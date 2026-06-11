@@ -9,6 +9,16 @@ export interface ListItem {
   error: string | undefined;
 }
 
+/**
+ * A single-key shortcut on the focused row (e.g. `c` to duplicate). Fired only
+ * when the cursor is on a real item, never the trailing add row. Keys must not
+ * collide with the built-in `↑/↓/enter/d` bindings.
+ */
+export interface ItemAction {
+  key: string;
+  onPress: (index: number) => void;
+}
+
 // Rows consumed by surrounding chrome when a ListField is on screen: the form's
 // outer border + title + help block, this field's own border, and the pinned
 // footer. Conservative — overshooting just scrolls a row or two earlier.
@@ -20,6 +30,8 @@ interface Props {
   onDelete: (index: number) => void;
   /** Label for the trailing add row. */
   addLabel?: string;
+  /** Single-key shortcuts fired only when the cursor is on a real item. */
+  itemActions?: ItemAction[];
 }
 
 export function ListField({
@@ -28,6 +40,7 @@ export function ListField({
   onActivate,
   onDelete,
   addLabel = "+ add repository…",
+  itemActions,
 }: Props) {
   const [cursor, setCursor] = useState(0);
   // Mirror the cursor in a ref so a burst of keypresses delivered in one render
@@ -50,6 +63,11 @@ export function ListField({
       if (key.return) onActivate(cursorRef.current);
       if (input === "d" && cursorRef.current < items.length)
         onDelete(cursorRef.current);
+      // Item actions act on the focused real item only — never the add row.
+      if (cursorRef.current < items.length) {
+        const action = itemActions?.find((a) => a.key === input);
+        if (action) action.onPress(cursorRef.current);
+      }
     },
     { isActive },
   );

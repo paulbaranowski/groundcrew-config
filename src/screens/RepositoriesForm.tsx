@@ -3,6 +3,7 @@ import { Box, Text, useInput } from "ink";
 import { ListField, type ListItem } from "../components/ListField.tsx";
 import {
   denormalizeRepos,
+  duplicateEntry,
   normalizeRepos,
   repoErrors,
   type RepoEntry,
@@ -38,6 +39,21 @@ export function RepositoriesForm({ draft, onChange, onBack }: Props) {
         denormalizeRepos(next),
       ) as unknown as ConfigDraft,
     );
+  }
+
+  // Copy a repo (name + every per-repo override) into a uniquely-named entry
+  // right after the original, then open it in the sub-form for review/rename.
+  function duplicateAt(index: number): void {
+    const source = entries[index];
+    if (source === undefined) return;
+    const copy = duplicateEntry(
+      source,
+      entries.map((entry) => entry.name),
+    );
+    const next = [...entries];
+    next.splice(index + 1, 0, copy);
+    commitEntries(next);
+    setEditing(index + 1);
   }
 
   if (editing !== undefined) {
@@ -81,13 +97,14 @@ export function RepositoriesForm({ draft, onChange, onBack }: Props) {
           onDelete={(index) =>
             commitEntries(entries.filter((_, i) => i !== index))
           }
+          itemActions={[{ key: "c", onPress: duplicateAt }]}
         />
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
           The repos groundcrew is allowed to work on, listed by their local
           folder name (each must already exist under your projectDir). ↑/↓ move ·
-          enter edit · d delete · esc back.
+          enter edit · c duplicate · d delete · esc back.
         </Text>
       </Box>
     </Box>
