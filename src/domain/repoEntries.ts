@@ -66,6 +66,44 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
 }
 
 /**
+ * A repo name not already in `existing`: the base when free, otherwise the
+ * first free `base-copy`, `base-copy-2`, `base-copy-3`, … so duplicating an
+ * entry never collides with a sibling (which `repoErrors` would flag).
+ */
+export function uniqueRepoName(
+  base: string,
+  existing: readonly string[],
+): string {
+  const taken = new Set(existing);
+  if (!taken.has(base)) return base;
+  const first = `${base}-copy`;
+  if (!taken.has(first)) return first;
+  for (let n = 2; ; n++) {
+    const candidate = `${base}-copy-${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * A deep copy of `entry` (including its nested `provision` pair) under a name
+ * unique against `existingNames`. The copy shares no mutable structure with the
+ * source, so editing one in the sub-form never bleeds into the other.
+ */
+export function duplicateEntry(
+  entry: RepoEntry,
+  existingNames: readonly string[],
+): RepoEntry {
+  return {
+    name: uniqueRepoName(entry.name, existingNames),
+    projectDirOverride: entry.projectDirOverride,
+    workdir: entry.workdir,
+    provision: entry.provision
+      ? { create: entry.provision.create, remove: entry.provision.remove }
+      : undefined,
+  };
+}
+
+/**
  * Per-entry error string (or undefined). Index-aligned with `entries`.
  * The first occurrence of a name is clean; only later repeats are flagged as
  * duplicates, so the user sees the error on the entry they just added.

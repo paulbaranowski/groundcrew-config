@@ -51,3 +51,56 @@ test("d deletes the focused entry", () => {
   stdin.write("d");
   expect(onDelete).toHaveBeenCalledWith(0);
 });
+
+test("an itemAction fires onPress with the cursor index when on a real item", async () => {
+  const onPress = vi.fn();
+  const { stdin, lastFrame } = render(
+    <ListField
+      items={items}
+      isActive
+      onActivate={() => {}}
+      onDelete={() => {}}
+      itemActions={[{ key: "c", onPress }]}
+    />,
+  );
+  stdin.write("\x1b[B"); // down to c/d
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ c/d"));
+  stdin.write("c");
+  expect(onPress).toHaveBeenCalledWith(1);
+});
+
+test("a built-in key wins: a colliding 'd' itemAction never double-fires", () => {
+  const onDelete = vi.fn();
+  const onPress = vi.fn();
+  const { stdin } = render(
+    <ListField
+      items={items}
+      isActive
+      onActivate={() => {}}
+      onDelete={onDelete}
+      itemActions={[{ key: "d", onPress }]}
+    />,
+  );
+  stdin.write("d");
+  expect(onDelete).toHaveBeenCalledWith(0);
+  expect(onPress).not.toHaveBeenCalled();
+});
+
+test("an itemAction does NOT fire on the trailing add row", async () => {
+  const onPress = vi.fn();
+  const { stdin, lastFrame } = render(
+    <ListField
+      items={items}
+      isActive
+      onActivate={() => {}}
+      onDelete={() => {}}
+      itemActions={[{ key: "c", onPress }]}
+    />,
+  );
+  stdin.write("\x1b[B"); // down to c/d
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ c/d"));
+  stdin.write("\x1b[B"); // down to the + add row
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ + add"));
+  stdin.write("c");
+  expect(onPress).not.toHaveBeenCalled();
+});
