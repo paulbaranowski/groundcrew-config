@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { TextField } from "../components/TextField.tsx";
+import { useEditGuard } from "../hooks/useEditGuard.ts";
+import { SaveGuard } from "./SaveGuard.tsx";
 import {
   applyAgentFields,
   readAgentFields,
@@ -29,13 +31,31 @@ const ROWS: Array<{ key: keyof AgentFields; label: string; placeholder: string }
 export function AgentSubForm({ name, def, sandboxRequired, onSave, onCancel }: Props) {
   const [fields, setFields] = useState<AgentFields>(() => readAgentFields(def));
   const [active, setActive] = useState(0);
+  const guard = useEditGuard();
 
-  useInput((_input, key) => {
-    if (key.escape) onCancel();
-    if (key.downArrow) setActive((a) => Math.min(ROWS.length - 1, a + 1));
-    if (key.upArrow) setActive((a) => Math.max(0, a - 1));
-    if (key.return) onSave(applyAgentFields(def, fields));
-  });
+  useInput(
+    (_input, key) => {
+      if (key.escape) {
+        guard.requestCancel(onCancel);
+        return;
+      }
+      if (key.downArrow) setActive((a) => Math.min(ROWS.length - 1, a + 1));
+      if (key.upArrow) setActive((a) => Math.max(0, a - 1));
+      if (key.return) onSave(applyAgentFields(def, fields));
+    },
+    { isActive: !guard.guarding },
+  );
+
+  if (guard.guarding) {
+    return (
+      <SaveGuard
+        label="agent"
+        onSave={() => onSave(applyAgentFields(def, fields))}
+        onDiscard={onCancel}
+        onCancel={guard.keepEditing}
+      />
+    );
+  }
 
   const sandboxMissing = sandboxRequired && fields.sandboxAgent.trim().length === 0;
 
@@ -54,7 +74,10 @@ export function AgentSubForm({ name, def, sandboxRequired, onSave, onCancel }: P
                 : rowField.placeholder
             }
             isActive={active === index}
-            onChange={(v) => setFields((f) => ({ ...f, [rowField.key]: v }))}
+            onChange={(v) => {
+              guard.markDirty();
+              setFields((f) => ({ ...f, [rowField.key]: v }));
+            }}
           />
         ))}
       </Box>

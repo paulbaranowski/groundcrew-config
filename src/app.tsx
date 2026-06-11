@@ -140,7 +140,7 @@ export function App({ initialDraft, target }: Props) {
   // crew run refuses without a task source, but loadConfig accepts empty sources,
   // so badge it here (separate from loadConfig validity).
   const homeIssues = noSources
-    ? new Set<SectionId>([...issues, "ticketSources"])
+    ? new Set<SectionId>([...issues, "taskSources"])
     : issues;
 
   if (route.name === "home") {
@@ -165,7 +165,7 @@ export function App({ initialDraft, target }: Props) {
         </Box>
         <Box marginTop={1}>
           <Text dimColor>
-            groundcrew picks up your tickets and runs AI coding agents on them
+            groundcrew picks up your tasks and runs AI coding agents on them
             automatically — each in its own isolated copy of your repo — then
             opens a PR. Set it up below.
           </Text>
@@ -191,7 +191,7 @@ export function App({ initialDraft, target }: Props) {
       <WorkspaceForm draft={draft} onChange={update} onBack={back} />
     ) : id === "repositories" ? (
       <RepositoriesForm draft={draft} onChange={update} onBack={back} />
-    ) : id === "ticketSources" ? (
+    ) : id === "taskSources" ? (
       <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />
     ) : id === "usage" ? (
       <UsageForm draft={draft} onChange={update} onBack={back} />

@@ -44,8 +44,8 @@ const SECTION_PREFIXES: Array<[string, SectionId]> = [
   // precede the bare "orchestrator" entry below (most-specific-first).
   ["orchestrator.sessionLimitPercentage", "usage"],
   ["agents", "agents"],
-  ["linear", "ticketSources"],
-  ["sources", "ticketSources"],
+  ["linear", "taskSources"],
+  ["sources", "taskSources"],
   ["orchestrator", "orchestrator"],
   ["git", "git"],
   ["local", "sandbox"],

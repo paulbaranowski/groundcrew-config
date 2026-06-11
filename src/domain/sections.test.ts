@@ -11,7 +11,7 @@ test("section order is the Home list order", () => {
     "workspace",
     "repositories",
     "agents",
-    "ticketSources",
+    "taskSources",
     "orchestrator",
     "usage",
     "hooks",
@@ -146,18 +146,18 @@ test("sandbox is a select field spec over the runner enum", () => {
   expect(spec[0]?.options).toEqual(["auto", "safehouse", "srt", "sdx", "none"]);
 });
 
-test("ticketSources summary lists enabled source kinds", () => {
+test("taskSources summary lists enabled source kinds", () => {
   expect(
-    sectionSummary("ticketSources", {
+    sectionSummary("taskSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
       sources: [{ kind: "linear" }, { kind: "todo-txt" }],
     } as never),
   ).toBe("linear, todo-txt");
 });
 
-test("ticketSources summary lists generic shell sources under the shell bucket", () => {
+test("taskSources summary lists generic shell sources under the shell bucket", () => {
   expect(
-    sectionSummary("ticketSources", {
+    sectionSummary("taskSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
       sources: [
         { kind: "linear", enabled: false },
@@ -167,9 +167,9 @@ test("ticketSources summary lists generic shell sources under the shell bucket",
   ).toBe("1 shell");
 });
 
-test("ticketSources summary warns when no sources are enabled", () => {
+test("taskSources summary warns when no sources are enabled", () => {
   expect(
-    sectionSummary("ticketSources", {
+    sectionSummary("taskSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
     } as never),
   ).toBe("none — crew won't run");

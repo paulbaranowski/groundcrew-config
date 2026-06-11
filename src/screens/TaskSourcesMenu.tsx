@@ -108,7 +108,7 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
       <Box marginTop={1}>
         <Text dimColor>
           Where groundcrew gets its to-do list. Turn on one or more sources of
-          tickets for it to work through. ↑/↓ move · enter open · esc back.
+          tasks for it to work through. ↑/↓ move · enter open · esc back.
         </Text>
       </Box>
     </Box>

@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 import { ShellSourceSubForm } from "./ShellSourceSubForm.tsx";
 
 const ESC = String.fromCharCode(27);
+const DOWN = `${ESC}[B`;
 
 test("seeds fields from an existing source and lists the lifecycle commands", () => {
   const { lastFrame } = render(
@@ -56,4 +57,78 @@ test("esc cancels", async () => {
   );
   stdin.write(ESC);
   await vi.waitFor(() => expect(onCancel).toHaveBeenCalled());
+});
+
+test("shows the env variable count from the source", () => {
+  const { lastFrame } = render(
+    <ShellSourceSubForm
+      source={
+        {
+          kind: "shell",
+          name: "jira",
+          commands: { listTasks: "jira ls" },
+          env: { JIRA_TOKEN: "secret" },
+        } as never
+      }
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  expect(lastFrame()).toContain("env");
+  expect(lastFrame()).toContain("1 variable");
+});
+
+test("save round-trips an existing env untouched", () => {
+  const onSave = vi.fn();
+  const { stdin } = render(
+    <ShellSourceSubForm
+      source={
+        {
+          kind: "shell",
+          name: "jira",
+          commands: { listTasks: "jira ls" },
+          env: { JIRA_TOKEN: "secret" },
+        } as never
+      }
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  stdin.write("\r"); // enter on the name row saves
+  expect(onSave).toHaveBeenCalledWith({
+    kind: "shell",
+    name: "jira",
+    commands: { listTasks: "jira ls" },
+    env: { JIRA_TOKEN: "secret" },
+  });
+});
+
+test("esc after an edit pops the save guard", async () => {
+  const onCancel = vi.fn();
+  const { lastFrame, stdin } = render(
+    <ShellSourceSubForm
+      source={{ kind: "shell", name: "jira", commands: { listTasks: "jira ls" } } as never}
+      onSave={() => {}}
+      onCancel={onCancel}
+    />,
+  );
+  stdin.write("2"); // edit the name field
+  await vi.waitFor(() => expect(lastFrame()).toContain("jira2"));
+  stdin.write(ESC);
+  await vi.waitFor(() => expect(lastFrame()).toContain("Unsaved shell source"));
+  expect(onCancel).not.toHaveBeenCalled();
+});
+
+test("entering the env row opens the env editor", async () => {
+  const { lastFrame, stdin } = render(
+    <ShellSourceSubForm
+      source={{ kind: "shell", name: "jira", commands: { listTasks: "jira ls" } } as never}
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  // 10 text rows precede the env row; step down to it, then enter.
+  for (let i = 0; i < 10; i++) stdin.write(DOWN);
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Environment variables"));
 });

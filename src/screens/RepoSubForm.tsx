@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { TextField } from "../components/TextField.tsx";
+import { useEditGuard } from "../hooks/useEditGuard.ts";
+import { SaveGuard } from "./SaveGuard.tsx";
 import type { RepoEntry } from "../domain/repoEntries.ts";
 
 interface Props {
@@ -23,24 +25,44 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
     entry.provision?.remove ?? "",
   );
   const [active, setActive] = useState(0);
+  const guard = useEditGuard();
 
-  useInput((_input, key) => {
-    if (key.escape) onCancel();
-    if (key.downArrow) setActive((a) => Math.min(FIELD_COUNT - 1, a + 1));
-    if (key.upArrow) setActive((a) => Math.max(0, a - 1));
-    if (key.return) {
-      const hasProvision =
-        provisionCreate.trim().length > 0 || provisionRemove.trim().length > 0;
-      onSave({
-        name,
-        projectDirOverride: override.length === 0 ? undefined : override,
-        workdir: workdir.length === 0 ? undefined : workdir,
-        provision: hasProvision
-          ? { create: provisionCreate, remove: provisionRemove }
-          : undefined,
-      });
-    }
-  });
+  function buildEntry(): RepoEntry {
+    const hasProvision =
+      provisionCreate.trim().length > 0 || provisionRemove.trim().length > 0;
+    return {
+      name,
+      projectDirOverride: override.length === 0 ? undefined : override,
+      workdir: workdir.length === 0 ? undefined : workdir,
+      provision: hasProvision
+        ? { create: provisionCreate, remove: provisionRemove }
+        : undefined,
+    };
+  }
+
+  useInput(
+    (_input, key) => {
+      if (key.escape) {
+        guard.requestCancel(onCancel);
+        return;
+      }
+      if (key.downArrow) setActive((a) => Math.min(FIELD_COUNT - 1, a + 1));
+      if (key.upArrow) setActive((a) => Math.max(0, a - 1));
+      if (key.return) onSave(buildEntry());
+    },
+    { isActive: !guard.guarding },
+  );
+
+  if (guard.guarding) {
+    return (
+      <SaveGuard
+        label="repository"
+        onSave={() => onSave(buildEntry())}
+        onDiscard={onCancel}
+        onCancel={guard.keepEditing}
+      />
+    );
+  }
 
   const base = override.length === 0 ? projectDir : override;
   return (
@@ -51,35 +73,35 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
           label="name"
           value={name}
           isActive={active === 0}
-          onChange={setName}
+          onChange={guard.track(setName)}
         />
         <TextField
           label="projectDirOverride"
           value={override}
           placeholder={`${projectDir}  (default)`}
           isActive={active === 1}
-          onChange={setOverride}
+          onChange={guard.track(setOverride)}
         />
         <TextField
           label="workdir"
           value={workdir}
           placeholder="subdir within the worktree to start working from (optional)"
           isActive={active === 2}
-          onChange={setWorkdir}
+          onChange={guard.track(setWorkdir)}
         />
         <TextField
           label="provision.create"
           value={provisionCreate}
           placeholder="replaces `git worktree add`; vars: ${repo} ${branch} ${dir} ${baseRef} ${task}"
           isActive={active === 3}
-          onChange={setProvisionCreate}
+          onChange={guard.track(setProvisionCreate)}
         />
         <TextField
           label="provision.remove"
           value={provisionRemove}
           placeholder="replaces `git worktree remove`; vars: ${repo} ${branch} ${dir} ${baseRef} ${task}"
           isActive={active === 4}
-          onChange={setProvisionRemove}
+          onChange={guard.track(setProvisionRemove)}
         />
       </Box>
       <Box marginTop={1}>

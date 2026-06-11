@@ -21,7 +21,7 @@ export const SECTION_ORDER: SectionId[] = [
   "workspace",
   "repositories",
   "agents",
-  "ticketSources",
+  "taskSources",
   "orchestrator",
   "usage",
   "hooks",
@@ -36,7 +36,7 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   workspace: "Workspace",
   repositories: "Repositories",
   agents: "Agents",
-  ticketSources: "Task Sources",
+  taskSources: "Task Sources",
   orchestrator: "Orchestrator",
   usage: "Usage Limits",
   hooks: "Hooks",
@@ -59,9 +59,9 @@ export const SECTION_DESCRIPTION: Record<SectionId, string> = {
   repositories:
     "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir).",
   agents:
-    "The AI coding tools groundcrew runs on your tickets (e.g. Claude, Codex). Check the ones installed on your machine. \"bypass permission prompts\" lets the agent act without stopping to ask.",
-  ticketSources:
-    "Where groundcrew gets its to-do list. Turn on one or more sources of tickets for it to work through.",
+    "The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex). Check the ones installed on your machine. \"bypass permission prompts\" lets the agent act without stopping to ask.",
+  taskSources:
+    "Where groundcrew gets its to-do list. Turn on one or more sources of tasks for it to work through.",
   orchestrator:
     "Controls how many tasks groundcrew runs at once and how often it checks for new ones.",
   usage:
@@ -97,14 +97,14 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           path: "orchestrator.maximumInProgress",
           label: "maximumInProgress",
           kind: "number",
-          help: "Max tickets in progress at once.",
+          help: "Max tasks in progress at once.",
           placeholder: String(ORCHESTRATOR_DEFAULTS.maximumInProgress),
         },
         {
           path: "orchestrator.pollIntervalMilliseconds",
           label: "pollIntervalMilliseconds",
           kind: "number",
-          help: "How often to poll for tickets (ms).",
+          help: "How often to poll for tasks (ms).",
           placeholder: String(ORCHESTRATOR_DEFAULTS.pollIntervalMilliseconds),
         },
       ];
@@ -213,7 +213,7 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
         ? "none enabled"
         : `default: ${draft.agents?.default ?? "?"} · ${defs.join(", ")}`;
     }
-    case "ticketSources": {
+    case "taskSources": {
       if (enabledSourceCount(draft) === 0) return "none — crew won't run";
       const kinds: string[] = [];
       if (isLinearEnabled(draft)) kinds.push("linear");
