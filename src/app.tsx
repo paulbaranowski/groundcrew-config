@@ -72,8 +72,13 @@ export function App({ initialDraft, target }: Props) {
   const [valid, setValid] = useState(true);
   const [checked, setChecked] = useState(false);
   const [issues, setIssues] = useState<Set<SectionId>>(new Set());
-  const [savedAt, setSavedAt] = useState<string | undefined>(undefined);
+  const [saved, setSaved] = useState(false);
+  const [shadowed, setShadowed] = useState<string[]>([]);
   const [quitting, setQuitting] = useState(false);
+
+  // Absolute path of the file we read from / write to, shown on Home so the
+  // user always knows which config they're editing (not just its scope).
+  const configPath = targetPath(target);
 
   // Debounced round-trip validation whenever the draft changes.
   useEffect(() => {
@@ -99,16 +104,14 @@ export function App({ initialDraft, target }: Props) {
   function update(next: ConfigDraft): void {
     setDraft(next);
     setDirty(true);
+    setSaved(false);
   }
 
   async function save(): Promise<void> {
     const result = await saveDraft(target, draft);
     setDirty(false);
-    setSavedAt(
-      result.shadowed.length > 0
-        ? `${result.path} (moved ${result.shadowed.join(", ")})`
-        : result.path,
-    );
+    setSaved(true);
+    setShadowed(result.shadowed);
   }
 
   // Global quit handling on Home.
@@ -161,7 +164,17 @@ export function App({ initialDraft, target }: Props) {
       >
         <Box justifyContent="space-between">
           <Text bold>crew-config</Text>
-          <Text dimColor>{savedAt ?? target.scope}</Text>
+          <Text dimColor>{target.scope}</Text>
+        </Box>
+        <Box>
+          <Text dimColor>
+            editing{" "}
+            <Text color={saved ? "green" : undefined}>{configPath}</Text>
+            {saved ? <Text color="green"> ✓ saved</Text> : null}
+            {saved && shadowed.length > 0 ? (
+              <Text dimColor> (moved {shadowed.join(", ")})</Text>
+            ) : null}
+          </Text>
         </Box>
         <Box marginTop={1}>
           <Text dimColor>
