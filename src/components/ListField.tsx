@@ -11,8 +11,9 @@ export interface ListItem {
 
 /**
  * A single-key shortcut on the focused row (e.g. `c` to duplicate). Fired only
- * when the cursor is on a real item, never the trailing add row. Keys must not
- * collide with the built-in `↑/↓/enter/d` bindings.
+ * when the cursor is on a real item, never the trailing add row. Built-in keys
+ * (`↑/↓/enter/d`) take precedence: a colliding itemAction key is ignored rather
+ * than double-firing alongside the built-in handler.
  */
 export interface ItemAction {
   key: string;
@@ -61,8 +62,12 @@ export function ListField({
       if (key.downArrow) moveCursor(Math.min(rows - 1, cursorRef.current + 1));
       if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
       if (key.return) onActivate(cursorRef.current);
-      if (input === "d" && cursorRef.current < items.length)
+      if (input === "d" && cursorRef.current < items.length) {
+        // Built-in delete wins: short-circuit so a `{key:"d"}` itemAction can't
+        // also fire for the same keystroke.
         onDelete(cursorRef.current);
+        return;
+      }
       // Item actions act on the focused real item only — never the add row.
       if (cursorRef.current < items.length) {
         const action = itemActions?.find((a) => a.key === input);

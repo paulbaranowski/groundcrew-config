@@ -69,6 +69,23 @@ test("an itemAction fires onPress with the cursor index when on a real item", as
   expect(onPress).toHaveBeenCalledWith(1);
 });
 
+test("a built-in key wins: a colliding 'd' itemAction never double-fires", () => {
+  const onDelete = vi.fn();
+  const onPress = vi.fn();
+  const { stdin } = render(
+    <ListField
+      items={items}
+      isActive
+      onActivate={() => {}}
+      onDelete={onDelete}
+      itemActions={[{ key: "d", onPress }]}
+    />,
+  );
+  stdin.write("d");
+  expect(onDelete).toHaveBeenCalledWith(0);
+  expect(onPress).not.toHaveBeenCalled();
+});
+
 test("an itemAction does NOT fire on the trailing add row", async () => {
   const onPress = vi.fn();
   const { stdin, lastFrame } = render(
