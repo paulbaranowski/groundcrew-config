@@ -3,7 +3,7 @@ import { expect, test, vi } from "vitest";
 import { ShellSourceSubForm } from "./ShellSourceSubForm.tsx";
 
 const ESC = String.fromCharCode(27);
-const DOWN = "[B";
+const DOWN = `${ESC}[B`;
 
 test("seeds fields from an existing source and lists the lifecycle commands", () => {
   const { lastFrame } = render(
