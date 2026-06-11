@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export interface EditGuard {
   /** True while the SaveGuard popup is showing. Gate the editor's own `useInput` on `!guarding`. */
@@ -21,19 +21,28 @@ export interface EditGuard {
  * esc exits it on the first press — no popup for a no-op edit.
  */
 export function useEditGuard(): EditGuard {
-  const [dirty, setDirty] = useState(false);
+  // `dirty` is a ref, not state: nothing renders from it, and `requestCancel`
+  // runs inside a `useInput` handler that must observe an edit made earlier in
+  // the same tick. A state value would still read `false` until React re-renders,
+  // so a fast type-then-esc could skip the guard and discard the edit — exactly
+  // the data loss this hook exists to prevent. `guarding` stays state (it flips
+  // what renders). This mirrors `ShellSourceSubForm`'s `activeRef` trick.
+  const dirtyRef = useRef(false);
   const [guarding, setGuarding] = useState(false);
+  const markDirty = (): void => {
+    dirtyRef.current = true;
+  };
   return {
     guarding,
     track:
       <T>(set: (value: T) => void) =>
       (value: T) => {
-        setDirty(true);
+        markDirty();
         set(value);
       },
-    markDirty: () => setDirty(true),
+    markDirty,
     requestCancel: (onCancel: () => void) => {
-      if (dirty) setGuarding(true);
+      if (dirtyRef.current) setGuarding(true);
       else onCancel();
     },
     keepEditing: () => setGuarding(false),
