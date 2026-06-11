@@ -17,8 +17,15 @@ const CONFIG_BASENAMES = [
 ];
 
 export function locate(argv: string[], cwd: string): Located {
+  // Reject unknown flags before resolving anything. With global as the default
+  // scope, a silently-ignored typo (e.g. `--locl`) would write to the wrong
+  // config; erroring also makes the removal of `--global` visible.
+  const unknown = argv.find((a) => a.startsWith("-") && a !== "--local");
+  if (unknown !== undefined) {
+    throw new Error(`unknown flag: ${unknown}`);
+  }
   const explicit = argv.find((a) => !a.startsWith("-"));
-  const scope = argv.includes("--global") ? "global" : "local";
+  const scope = argv.includes("--local") ? "local" : "global";
   const target: Target = { scope, cwd };
   if (explicit !== undefined) {
     return { target, path: path.resolve(cwd, explicit) };

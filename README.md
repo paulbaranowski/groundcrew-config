@@ -11,8 +11,8 @@ npm install -g @clipboard-health/groundcrew-config
 ## Use
 
 ```bash
-crew-config            # edit ./crew.config.json (or create one via the wizard)
-crew-config --global   # edit ~/.config/groundcrew/crew.config.json
+crew-config            # edit the global ~/.config/groundcrew/crew.config.json
+crew-config --local    # edit ./crew.config.json in the current project
 crew-config ./path/to/crew.config.json
 ```
 
