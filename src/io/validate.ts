@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -76,7 +76,13 @@ export async function validateDraft(
   // every such relative path fail to resolve, flagging a valid config. Fall
   // back to a temp dir only for an unsaved config whose directory is not yet on
   // disk, where a relative path is genuinely unresolvable anyway.
-  const inPlace = configDir !== undefined && existsSync(configDir);
+  // existsSync alone is true for a file too; a file path here would make the
+  // writeFileSync below throw ENOTDIR. Require an actual directory, else fall
+  // back to the temp dir (same as a not-yet-on-disk config dir).
+  const inPlace =
+    configDir !== undefined &&
+    existsSync(configDir) &&
+    statSync(configDir).isDirectory();
   const dir = inPlace
     ? configDir
     : mkdtempSync(path.join(tmpdir(), "cc-validate-"));

@@ -104,6 +104,13 @@ test("prompts summary prefers promptFile over initial", () => {
     } as never),
   ).toBe("custom (5 chars)");
   expect(sectionSummary("prompts", base as never)).toBe("default");
+  // With both set, promptFile wins (the summary's documented precedence).
+  expect(
+    sectionSummary("prompts", {
+      ...base,
+      prompts: { promptFile: "./prompt.md", initial: "hello" },
+    } as never),
+  ).toBe("file: ./prompt.md");
 });
 
 test("orchestrator summary shows ghosted defaults when unset", () => {

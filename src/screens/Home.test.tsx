@@ -2,6 +2,8 @@ import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { Home } from "./Home.tsx";
 
+const DOWN = "\x1b[B"; // down-arrow escape sequence
+
 const draft = {
   workspace: {
     projectDir: "~/dev/groundcrew",
@@ -54,6 +56,6 @@ test("reports cursor moves to the parent", () => {
       onOpen={() => {}}
     />,
   );
-  stdin.write("[B"); // down arrow
+  stdin.write(DOWN);
   expect(onCursorChange).toHaveBeenCalledWith(1);
 });
