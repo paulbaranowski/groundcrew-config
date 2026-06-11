@@ -28,14 +28,32 @@ async function runSignalCase(signal) {
   await sleep(1000); // let Ink mount and enter the alt screen
 
   // Signal only the node process (not the `script` wrapper), so `script` stays
-  // alive to relay node's restore bytes back through the pipe.
-  const pids = execSync("pgrep -f 'dist/cli.js'").toString().trim().split("\n");
-  for (const pid of pids) {
+  // alive to relay node's restore bytes back through the pipe. Target the direct
+  // child of THIS spawned `script` rather than a host-wide `pgrep -f`, which
+  // could match unrelated `node dist/cli.js` processes elsewhere.
+  const childPids = execSync(`pgrep -P ${child.pid}`)
+    .toString()
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  const nodePid = childPids.find((pid) => {
     const cmd = execSync(`ps -o command= -p ${pid}`).toString().trim();
-    if (cmd.startsWith("node")) process.kill(Number(pid), signal);
-  }
+    return cmd.startsWith("node") && cmd.includes("dist/cli.js");
+  });
+  if (!nodePid) throw new Error("Could not find spawned dist/cli.js PID");
+  process.kill(Number(nodePid), signal);
 
-  await new Promise((resolve) => child.on("exit", resolve));
+  // Bounded wait so a node that never gets signaled can't wedge the run.
+  await Promise.race([
+    new Promise((resolve, reject) => {
+      child.once("exit", resolve);
+      child.once("error", reject);
+    }),
+    sleep(3000).then(() => {
+      child.kill("SIGKILL");
+      throw new Error("Timed out waiting for the script wrapper to exit");
+    }),
+  ]);
   await sleep(150);
   return {
     name: signal,

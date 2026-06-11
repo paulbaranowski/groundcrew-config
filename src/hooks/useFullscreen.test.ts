@@ -120,13 +120,28 @@ test("a process 'exit' event restores the terminal", () => {
   expect(stdout.all).toContain("\x1b[?1049l");
 });
 
-test("a signal restores the terminal and exits with the conventional code", () => {
+test.each([
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+  ["SIGHUP", 129],
+])("%s restores the terminal and exits with the conventional code", (signal, code) => {
   const stdout = fakeStdout(true);
   const proc = fakeProcess();
   installFullscreen(createFullscreen(stdout), proc);
-  proc.emit("SIGINT");
+  proc.emit(signal);
   expect(stdout.all).toContain("\x1b[?1049l");
-  expect(proc.exitCodes).toContain(130);
+  expect(proc.exitCodes).toContain(code);
+});
+
+test("an unhandled rejection restores the terminal before exiting non-zero", () => {
+  const stdout = fakeStdout(true);
+  const proc = fakeProcess();
+  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  installFullscreen(createFullscreen(stdout), proc);
+  proc.emit("unhandledRejection", new Error("rejected") as never);
+  expect(stdout.all).toContain("\x1b[?1049l");
+  expect(proc.exitCodes).toContain(1);
+  errorSpy.mockRestore();
 });
 
 test("an uncaught error restores the terminal before exiting non-zero", () => {

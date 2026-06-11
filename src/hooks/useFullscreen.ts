@@ -86,8 +86,6 @@ export function installFullscreen(
   controller: FullscreenController,
   proc: FullscreenProcess = process,
 ): () => void {
-  controller.enter();
-
   const restore = (): void => controller.exit();
 
   const onSignal = (signal: string): void => {
@@ -110,6 +108,10 @@ export function installFullscreen(
   for (const [signal, listener] of signalListeners) proc.on(signal, listener);
   proc.on("uncaughtException", onFatalError);
   proc.on("unhandledRejection", onFatalError);
+
+  // Enter only after every restore path is wired, so a fatal event during
+  // startup can never strand the terminal in the alt screen.
+  controller.enter();
 
   return () => {
     restore();
