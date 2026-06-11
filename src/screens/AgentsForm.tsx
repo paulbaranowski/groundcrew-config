@@ -132,7 +132,7 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
       ) : null}
       <Box marginTop={1}>
         <Text dimColor>
-          The AI coding tools groundcrew runs on your tickets (e.g. Claude,
+          The AI coding tools groundcrew runs on your tasks (e.g. Claude,
           Codex). Check the ones installed on your machine. "bypass permission
           prompts" lets the agent act without stopping to ask. ↑/↓ move · space
           toggle · enter edit fields · esc back.

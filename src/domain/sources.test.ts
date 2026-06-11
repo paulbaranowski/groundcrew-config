@@ -12,6 +12,7 @@ import {
   planKeeperCommands,
   planKeeperSource,
   applyShellFields,
+  readShellEnv,
   readShellFields,
   setLinearEnabled,
   setLinearField,
@@ -285,4 +286,65 @@ test("planKeeperCommands returns undefined for a null commands payload", () => {
     sources: [{ kind: "shell", name: "plankeeper", commands: null }],
   } as never;
   expect(planKeeperCommands(draft)).toBeUndefined();
+});
+
+test("readShellEnv reads the env map as ordered entries; non-object → []", () => {
+  expect(
+    readShellEnv({
+      kind: "shell",
+      name: "jira",
+      env: { JIRA_HOST: "jira.example.com", JIRA_TOKEN: "secret" },
+    } as never),
+  ).toEqual([
+    { key: "JIRA_HOST", value: "jira.example.com" },
+    { key: "JIRA_TOKEN", value: "secret" },
+  ]);
+  expect(readShellEnv(undefined)).toEqual([]);
+  // typeof null === "object", so a null env must not reach Object.entries.
+  expect(readShellEnv({ kind: "shell", env: null } as never)).toEqual([]);
+});
+
+test("readShellFields surfaces env and applyShellFields writes it back", () => {
+  const fields = readShellFields({
+    kind: "shell",
+    name: "jira",
+    commands: { listTasks: "jira ls" },
+    env: { JIRA_HOST: "jira.example.com" },
+  } as never);
+  expect(fields.env).toEqual([{ key: "JIRA_HOST", value: "jira.example.com" }]);
+
+  const built = applyShellFields(undefined, {
+    ...fields,
+    env: [
+      { key: "JIRA_HOST", value: "jira.example.com" },
+      { key: "JIRA_TOKEN", value: "secret" },
+    ],
+  }) as { env?: Record<string, string> };
+  expect(built.env).toEqual({
+    JIRA_HOST: "jira.example.com",
+    JIRA_TOKEN: "secret",
+  });
+});
+
+test("applyShellFields drops blank-key env entries, last write wins, empty → no env key", () => {
+  const fields = readShellFields(undefined);
+  // A blank key is dropped; a duplicate key keeps the later value.
+  const built = applyShellFields(undefined, {
+    ...fields,
+    name: "jira",
+    listTasks: "jira ls",
+    env: [
+      { key: "  ", value: "ignored" },
+      { key: "A", value: "first" },
+      { key: "A", value: "second" },
+    ],
+  }) as { env?: Record<string, string> };
+  expect(built.env).toEqual({ A: "second" });
+
+  // An all-blank/empty list removes the env key entirely (prune-friendly).
+  const cleared = applyShellFields(
+    { kind: "shell", name: "jira", env: { A: "x" } } as never,
+    { ...fields, name: "jira", listTasks: "jira ls", env: [] },
+  ) as Record<string, unknown>;
+  expect("env" in cleared).toBe(false);
 });

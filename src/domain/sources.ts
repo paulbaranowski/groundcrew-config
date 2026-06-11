@@ -254,10 +254,24 @@ export const SHELL_COMMAND_FIELDS = [
 ] as const;
 type ShellCommandField = (typeof SHELL_COMMAND_FIELDS)[number];
 
-/** The shell source builder's editable fields, as plain strings. */
+/**
+ * One environment-variable assignment passed to every command for a shell
+ * source. Modelled as an ordered list (not a `Record`) so the editor keeps a
+ * stable row order and can hold a half-typed entry whose key is still blank.
+ */
+export interface EnvEntry {
+  key: string;
+  value: string;
+}
+
+/** The shell source builder's editable string fields. */
+export type ShellTextField = ShellCommandField | "name" | "cwd";
+
+/** The shell source builder's editable fields: plain strings plus the env list. */
 export interface ShellFields extends Record<ShellCommandField, string> {
   name: string;
   cwd: string;
+  env: EnvEntry[];
 }
 
 export function shellSources(draft: ConfigDraft): Source[] {
@@ -286,8 +300,23 @@ function asString(value: unknown): string {
 }
 
 /**
- * Flatten a shell source into the builder's string fields. The preferred
- * command names win, falling back to the legacy `fetch`/`resolveOne` aliases.
+ * Read a shell source's `env` map into the editor's ordered entry list. groundcrew
+ * types `env` as `Record<string,string>`; non-string values (or a non-object) are
+ * dropped rather than coerced.
+ */
+export function readShellEnv(source: Source | undefined): EnvEntry[] {
+  const raw = (source as { env?: unknown } | undefined)?.env;
+  // typeof null === "object", so guard null explicitly before Object.entries.
+  if (raw === null || typeof raw !== "object") return [];
+  return Object.entries(raw as Record<string, unknown>)
+    .filter((pair): pair is [string, string] => typeof pair[1] === "string")
+    .map(([key, value]) => ({ key, value }));
+}
+
+/**
+ * Flatten a shell source into the builder's editable fields. The preferred
+ * command names win, falling back to the legacy `fetch`/`resolveOne` aliases;
+ * `env` is read into an ordered entry list.
  */
 export function readShellFields(source: Source | undefined): ShellFields {
   const s = (source ?? {}) as Record<string, unknown>;
@@ -303,13 +332,16 @@ export function readShellFields(source: Source | undefined): ShellFields {
     markInReview: asString(c.markInReview),
     markDone: asString(c.markDone),
     cwd: asString(s.cwd),
+    env: readShellEnv(source),
   };
 }
 
 /**
  * Build a shell source from edited fields, merged onto `base` so unmanaged keys
- * (timeouts, env) survive an edit. The builder writes the preferred command
+ * (e.g. timeouts) survive an edit. The builder writes the preferred command
  * names and drops the legacy `fetch`/`resolveOne` aliases to avoid ambiguity.
+ * `env` is rebuilt from `fields.env`: entries with a blank key are dropped, a
+ * later entry wins on a duplicate key, and an empty map removes the `env` key.
  */
 export function applyShellFields(
   base: Source | undefined,
@@ -328,6 +360,13 @@ export function applyShellFields(
   src.commands = commands;
   if (fields.cwd.trim().length === 0) delete src.cwd;
   else src.cwd = fields.cwd;
+  const env: Record<string, string> = {};
+  for (const entry of fields.env) {
+    const key = entry.key.trim();
+    if (key.length > 0) env[key] = entry.value;
+  }
+  if (Object.keys(env).length === 0) delete src.env;
+  else src.env = env;
   return src as unknown as Source;
 }
 

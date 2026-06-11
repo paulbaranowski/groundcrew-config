@@ -100,7 +100,7 @@ export function LinearForm({ draft, onChange, onBack, env = process.env }: Props
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          Pull tickets from Linear. Space toggles the source (top row). team/name
+          Pull tasks from Linear. Space toggles the source (top row). team/name
           and the inProgress/inReview status names are optional overrides. Your
           API key is read from the environment, not stored here.
         </Text>
