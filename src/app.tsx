@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { Footer } from "./components/Footer.tsx";
+import { useFullscreen } from "./hooks/useFullscreen.ts";
 import {
   SECTION_DESCRIPTION,
   SECTION_LABEL,
@@ -28,8 +29,37 @@ interface Props {
 
 type Route = { name: "home" } | { name: "section"; id: SectionId };
 
+/**
+ * Full-screen shell: sizes to the terminal so every screen occupies the same
+ * box, with the body flex-growing and an optional footer pinned to the bottom
+ * row regardless of how tall the content is. Hoisted to module scope so its
+ * identity is stable — defining it inside App would remount the route subtree
+ * (and drop input focus) on every render.
+ */
+function Screen({
+  rows,
+  columns,
+  footer,
+  children,
+}: {
+  rows: number;
+  columns: number;
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Box width={columns} height={rows} flexDirection="column">
+      <Box flexGrow={1} flexDirection="column">
+        {children}
+      </Box>
+      {footer}
+    </Box>
+  );
+}
+
 export function App({ initialDraft, target }: Props) {
   const { exit } = useApp();
+  const { rows, columns } = useFullscreen();
   const [draft, setDraft] = useState<ConfigDraft>(
     initialDraft ??
       ({ workspace: { projectDir: "", knownRepositories: [] } } as ConfigDraft),
@@ -96,11 +126,13 @@ export function App({ initialDraft, target }: Props) {
 
   if (quitting) {
     return (
-      <QuitGuard
-        onSaveQuit={() => void save().then(() => exit())}
-        onDiscard={() => exit()}
-        onCancel={() => setQuitting(false)}
-      />
+      <Screen rows={rows} columns={columns}>
+        <QuitGuard
+          onSaveQuit={() => void save().then(() => exit())}
+          onDiscard={() => exit()}
+          onCancel={() => setQuitting(false)}
+        />
+      </Screen>
     );
   }
 
@@ -113,7 +145,20 @@ export function App({ initialDraft, target }: Props) {
 
   if (route.name === "home") {
     return (
-      <Box flexDirection="column">
+      <Screen
+        rows={rows}
+        columns={columns}
+        footer={
+          <Footer
+            dirty={dirty}
+            issues={issues.size}
+            valid={valid}
+            checked={checked}
+            noSources={noSources}
+            hint="↑/↓ move · enter edit · s save · q quit"
+          />
+        }
+      >
         <Box justifyContent="space-between">
           <Text bold>crew-config</Text>
           <Text dimColor>{savedAt ?? target.scope}</Text>
@@ -134,39 +179,38 @@ export function App({ initialDraft, target }: Props) {
             onOpen={(id) => setRoute({ name: "section", id })}
           />
         </Box>
-        <Footer
-          dirty={dirty}
-          issues={issues.size}
-          valid={valid}
-          checked={checked}
-          noSources={noSources}
-          hint="↑/↓ move · enter edit · s save · q quit"
-        />
-      </Box>
+      </Screen>
     );
   }
 
   const id = route.id;
   const back = () => setRoute({ name: "home" });
 
-  if (id === "workspace")
-    return <WorkspaceForm draft={draft} onChange={update} onBack={back} />;
-  if (id === "repositories")
-    return <RepositoriesForm draft={draft} onChange={update} onBack={back} />;
-  if (id === "ticketSources")
-    return <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />;
-  if (id === "usage")
-    return <UsageForm draft={draft} onChange={update} onBack={back} />;
-  if (id === "agents")
-    return <AgentsForm draft={draft} onChange={update} onBack={back} />;
+  const form =
+    id === "workspace" ? (
+      <WorkspaceForm draft={draft} onChange={update} onBack={back} />
+    ) : id === "repositories" ? (
+      <RepositoriesForm draft={draft} onChange={update} onBack={back} />
+    ) : id === "ticketSources" ? (
+      <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />
+    ) : id === "usage" ? (
+      <UsageForm draft={draft} onChange={update} onBack={back} />
+    ) : id === "agents" ? (
+      <AgentsForm draft={draft} onChange={update} onBack={back} />
+    ) : (
+      <SectionForm
+        title={SECTION_LABEL[id]}
+        description={SECTION_DESCRIPTION[id]}
+        spec={simpleSectionSpec(id)}
+        draft={draft}
+        onChange={update}
+        onBack={back}
+      />
+    );
+
   return (
-    <SectionForm
-      title={SECTION_LABEL[id]}
-      description={SECTION_DESCRIPTION[id]}
-      spec={simpleSectionSpec(id)}
-      draft={draft}
-      onChange={update}
-      onBack={back}
-    />
+    <Screen rows={rows} columns={columns}>
+      {form}
+    </Screen>
   );
 }

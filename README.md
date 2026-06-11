@@ -37,6 +37,20 @@ crew-config ./path/to/crew.config.json
 - **Prompts** — the initial agent prompt, set inline (`initial`) or loaded from a file (`promptFile`); the two are mutually exclusive.
 - **Hooks / Git / Terminal / Sandbox / Advanced** — the rest of `crew.config.json` (Terminal = `workspaceKind`, which now includes `zellij`).
 
+## Full-screen
+
+`crew-config` runs as a full-screen TUI (like `vim`/`lazygit`): it takes over the
+alternate screen on launch and restores your previous terminal contents and
+scrollback on exit — quitting leaves no leftover render. The status/keybinding
+footer is pinned to the bottom row, the layout stays stable as you move between
+screens, and long lists (repositories, shell sources, the Home menu) scroll
+within the viewport with `↑ N more` / `↓ N more` markers instead of overflowing.
+
+The terminal is restored on every exit path — `q`, Ctrl-C, `kill`, or an
+unexpected error — so you never land in a stranded alt screen. When stdout is not
+a TTY (piped output or CI) the full-screen behavior is disabled and no escape
+sequences are emitted.
+
 ## Develop
 
 ```bash
@@ -45,3 +59,8 @@ npm run dev      # run against ./crew.config.json
 npm test
 npm run verify   # typecheck + test + build
 ```
+
+`node scripts/verify-teardown.mjs` (after `npm run build`) checks that the built
+CLI restores the terminal on SIGINT/SIGTERM/SIGHUP by driving it under a
+pseudo-terminal. It's a manual check — not part of `npm test` — for use after
+touching the full-screen/teardown code in `src/hooks/useFullscreen.ts`.

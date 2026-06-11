@@ -1,11 +1,18 @@
 import { useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { useFullscreen } from "../hooks/useFullscreen.ts";
+import { ScrollableList, visibleRows } from "./ScrollableList.tsx";
 
 export interface ListItem {
   label: string;
   note: string | undefined;
   error: string | undefined;
 }
+
+// Rows consumed by surrounding chrome when a ListField is on screen: the form's
+// outer border + title + help block, this field's own border, and the pinned
+// footer. Conservative — overshooting just scrolls a row or two earlier.
+const LIST_CHROME_ROWS = 11;
 interface Props {
   items: ListItem[];
   isActive: boolean;
@@ -27,7 +34,9 @@ export function ListField({
   // (each useInput call shares a stale `cursor` closure until React re-renders)
   // still reads and advances from the latest position.
   const cursorRef = useRef(0);
+  const { rows: terminalRows } = useFullscreen();
   const rows = items.length + 1; // +1 for the add row
+  const maxVisible = visibleRows(terminalRows, LIST_CHROME_ROWS);
 
   function moveCursor(next: number): void {
     cursorRef.current = next;
@@ -45,24 +54,42 @@ export function ListField({
     { isActive },
   );
 
+  // Render one row by absolute index; the final index (=== items.length) is the
+  // trailing "add" row. Windowed by ScrollableList so long lists never overflow.
+  function renderRow(index: number) {
+    if (index === items.length) {
+      return (
+        <Text
+          key="add"
+          color={isActive && cursor === items.length ? "cyan" : undefined}
+          dimColor
+        >
+          {isActive && cursor === items.length ? "▸ " : "  "}
+          {addLabel}
+        </Text>
+      );
+    }
+    const item = items[index]!;
+    return (
+      <Box key={index}>
+        <Text color={isActive && cursor === index ? "cyan" : undefined}>
+          {isActive && cursor === index ? "▸ " : "  "}
+          {item.label}
+        </Text>
+        {item.note ? <Text dimColor> {item.note}</Text> : null}
+        {item.error ? <Text color="yellow"> ⚠ {item.error}</Text> : null}
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
-      {items.map((item, index) => (
-        <Box key={index}>
-          <Text color={isActive && cursor === index ? "cyan" : undefined}>
-            {isActive && cursor === index ? "▸ " : "  "}
-            {item.label}
-          </Text>
-          {item.note ? <Text dimColor> {item.note}</Text> : null}
-          {item.error ? <Text color="yellow"> ⚠ {item.error}</Text> : null}
-        </Box>
-      ))}
-      <Text
-        color={isActive && cursor === items.length ? "cyan" : undefined}
-        dimColor
-      >
-        {isActive && cursor === items.length ? "▸ " : "  "}{addLabel}
-      </Text>
+      <ScrollableList
+        count={rows}
+        cursor={cursor}
+        maxVisible={maxVisible}
+        renderRow={renderRow}
+      />
     </Box>
   );
 }
