@@ -69,6 +69,13 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
  * Per-entry error string (or undefined). Index-aligned with `entries`.
  * The first occurrence of a name is clean; only later repeats are flagged as
  * duplicates, so the user sees the error on the entry they just added.
+ *
+ * Mirrors the groundcrew rules the screen can check locally so its inline
+ * feedback matches the Home badge (which comes from groundcrew's `loadConfig`).
+ * A scripted (`provision`) entry has no groundcrew-managed clone, so pairing it
+ * with `projectDirOverride` is rejected — surface that here rather than only on
+ * Home. (A half-filled `provision` is intentionally left to groundcrew; see
+ * `denormalizeRepos`.)
  */
 export function repoErrors(
   entries: readonly RepoEntry[],
@@ -77,8 +84,16 @@ export function repoErrors(
   return entries.map((entry) => {
     const name = entry.name.trim();
     if (name.length === 0) return "name is required";
-    if (seen.has(name)) return "duplicate repository name";
+    const duplicate = seen.has(name);
     seen.add(name);
+    if (duplicate) return "duplicate repository name";
+    const hasOverride = (entry.projectDirOverride?.trim().length ?? 0) > 0;
+    const hasProvision =
+      (entry.provision?.create.trim().length ?? 0) > 0 ||
+      (entry.provision?.remove.trim().length ?? 0) > 0;
+    if (hasOverride && hasProvision) {
+      return "projectDirOverride can't be combined with provision";
+    }
     return undefined;
   });
 }

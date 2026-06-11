@@ -42,7 +42,7 @@ test("enter opens the focused section", () => {
     />,
   );
   stdin.write("\r");
-  expect(onOpen).toHaveBeenCalledWith("workspace");
+  expect(onOpen).toHaveBeenCalledWith("repositories");
 });
 
 test("reports cursor moves to the parent", () => {

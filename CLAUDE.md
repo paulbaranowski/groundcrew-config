@@ -18,7 +18,10 @@ npm run test:watch     # vitest in watch mode
 npm run typecheck      # tsc --noEmit
 npm run build          # tsup → dist/cli.js
 npm run verify         # typecheck + test + build (the pre-publish gate)
+npm run bump           # npm version patch --no-git-tag-version (bump package.json only)
 ```
+
+**Always bump the version for every PR.** Run `npm run bump` (a patch bump) as part of preparing any PR so `package.json`'s `version` changes. This is required, not optional: `.github/workflows/release.yml` cuts a release on push to `main` _only_ when the version gains a new value — it tags `v<version>`, publishes a GitHub release, and rewrites the Homebrew formula. A PR that leaves the version untouched ships nothing. `npm run bump` edits `package.json` only (no git tag/commit — CI owns the tag); use `npm version minor` / `npm version major --no-git-tag-version` instead when the change warrants it.
 
 Run a single test file or test by name:
 

@@ -106,3 +106,28 @@ test("flags duplicate names and empty names", () => {
   expect(errors[1]).toMatch(/duplicate/i);
   expect(errors[2]).toMatch(/name is required/i);
 });
+
+test("flags projectDirOverride combined with provision (matches groundcrew)", () => {
+  const errors = repoErrors([
+    {
+      name: "catalog-tools-api",
+      projectDirOverride: "~/carrot",
+      workdir: "catalog/catalog-tools-api",
+      provision: { create: "graft", remove: "graft" },
+    },
+  ]);
+  expect(errors[0]).toMatch(/projectDirOverride.*provision/i);
+});
+
+test("a provision-only or override-only entry is clean", () => {
+  const errors = repoErrors([
+    {
+      name: "maple",
+      projectDirOverride: undefined,
+      provision: { create: "graft new", remove: "graft rm" },
+    },
+    { name: "catalog-tools-api", projectDirOverride: "~/carrot" },
+  ]);
+  expect(errors[0]).toBeUndefined();
+  expect(errors[1]).toBeUndefined();
+});
