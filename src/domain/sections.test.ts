@@ -8,16 +8,16 @@ import {
 
 test("section order is the Home list order", () => {
   expect(SECTION_ORDER).toEqual([
-    "workspace",
     "repositories",
-    "agents",
+    "workspace",
     "taskSources",
+    "agents",
+    "terminal",
+    "sandbox",
     "orchestrator",
     "usage",
     "hooks",
     "git",
-    "terminal",
-    "sandbox",
     "prompts",
     "advanced",
   ]);
@@ -155,16 +155,26 @@ test("taskSources summary lists enabled source kinds", () => {
   ).toBe("linear, todo-txt");
 });
 
-test("taskSources summary lists generic shell sources under the shell bucket", () => {
+test("taskSources summary names each generic shell source", () => {
   expect(
     sectionSummary("taskSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
       sources: [
         { kind: "linear", enabled: false },
         { kind: "shell", name: "jira" },
+        { kind: "shell", name: "github" },
       ],
     } as never),
-  ).toBe("1 shell");
+  ).toBe("jira, github");
+});
+
+test("taskSources summary falls back to 'shell' for a blank-named shell source", () => {
+  expect(
+    sectionSummary("taskSources", {
+      workspace: { projectDir: "~/d", knownRepositories: [] },
+      sources: [{ kind: "shell", name: "" }],
+    } as never),
+  ).toBe("shell");
 });
 
 test("taskSources summary warns when no sources are enabled", () => {

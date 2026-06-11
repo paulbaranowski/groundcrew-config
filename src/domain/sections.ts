@@ -11,23 +11,25 @@ import {
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
-  shellSourceCount,
+  shellSourceNames,
 } from "./sources.ts";
 import { isUsageDisabled } from "./usage.ts";
 
 export type { SectionId };
 
 export const SECTION_ORDER: SectionId[] = [
-  "workspace",
+  // The six primary setup sections, in the order a new user works through them.
   "repositories",
-  "agents",
+  "workspace",
   "taskSources",
+  "agents",
+  "terminal",
+  "sandbox",
+  // Advanced/optional sections follow, reachable below the essentials.
   "orchestrator",
   "usage",
   "hooks",
   "git",
-  "terminal",
-  "sandbox",
   "prompts",
   "advanced",
 ];
@@ -219,8 +221,7 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       if (isLinearEnabled(draft)) kinds.push("linear");
       if (isTodoTxtEnabled(draft)) kinds.push("todo-txt");
       if (isPlanKeeperEnabled(draft)) kinds.push("plan-keeper");
-      const shell = shellSourceCount(draft);
-      if (shell > 0) kinds.push(`${shell} shell`);
+      kinds.push(...shellSourceNames(draft));
       return kinds.join(", ");
     }
     case "usage": {

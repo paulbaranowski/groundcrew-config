@@ -2,6 +2,9 @@ import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { App } from "./app.tsx";
 
+const DOWN = "\x1b[B"; // down-arrow escape sequence
+const ESC = "\x1b";
+
 const draft = {
   workspace: { projectDir: "~/dev/groundcrew", knownRepositories: ["a/b"] },
   agents: { default: "claude", definitions: { claude: {} } },
@@ -37,9 +40,11 @@ test("enter opens a section, esc returns home", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  stdin.write("\r"); // open Workspace
-  await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
-  stdin.write(""); // esc back
+  stdin.write("\r"); // open Repositories (row 0)
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("repos groundcrew is allowed to work on"),
+  );
+  stdin.write(ESC); // esc back
   await vi.waitFor(() => expect(lastFrame()).toContain("Task Sources"));
   unmount();
 });
@@ -49,10 +54,12 @@ test("opens the Agents bypass-permissions form from Home", async () => {
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
   // Each waitFor yields a tick so ink processes one queued arrow before the
-  // next write. [B is the down-arrow escape sequence.
-  stdin.write("[B"); // down to Repositories (row 2)
-  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
-  stdin.write("[B"); // down to Agents (row 3)
+  // next write. Agents is row 3: Repositories, Workspace, Task Sources, Agents.
+  stdin.write(DOWN); // down to Workspace (row 1)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  stdin.write(DOWN); // down to Task Sources (row 2)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Task Sources"));
+  stdin.write(DOWN); // down to Agents (row 3)
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Agents"));
   stdin.write("\r");
   await vi.waitFor(() =>
@@ -62,21 +69,17 @@ test("opens the Agents bypass-permissions form from Home", async () => {
 });
 
 test("esc restores the Home row that was open", async () => {
-  const DOWN = "[B";
-  const ESC = "";
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  stdin.write(DOWN); // down to Repositories (row 2)
-  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
-  stdin.write("\r"); // open Repositories
-  await vi.waitFor(() =>
-    expect(lastFrame()).toContain("repos groundcrew is allowed to work on"),
-  );
+  stdin.write(DOWN); // down to Workspace (row 1)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  stdin.write("\r"); // open Workspace
+  await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
   stdin.write(ESC); // esc back to Home
-  // The cursor must stay on Repositories, not snap back to Workspace.
-  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
-  expect(lastFrame()).not.toContain("▸ Workspace");
+  // The cursor must stay on Workspace, not snap back to Repositories.
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  expect(lastFrame()).not.toContain("▸ Repositories");
   unmount();
 });
 
@@ -84,9 +87,7 @@ test("opens Repositories from Home", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  stdin.write("[B"); // down to Repositories (row 2)
-  await vi.waitFor(() => expect(lastFrame()).toContain("Repositories"));
-  stdin.write("\r");
+  stdin.write("\r"); // open Repositories (row 0)
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("repos groundcrew is allowed to work on"),
   );

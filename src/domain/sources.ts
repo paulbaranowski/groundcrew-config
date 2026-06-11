@@ -283,6 +283,17 @@ export function shellSourceCount(draft: ConfigDraft): number {
 }
 
 /**
+ * Display names of the generic shell sources, in order — what the Home summary
+ * shows instead of a bare count. A blank/missing name falls back to "shell".
+ */
+export function shellSourceNames(draft: ConfigDraft): string[] {
+  return shellSources(draft).map((s) => {
+    const name = (s as { name?: string }).name;
+    return name !== undefined && name.trim().length > 0 ? name : "shell";
+  });
+}
+
+/**
  * Replace the generic shell sources, preserving every other entry (linear,
  * todo-txt, plan-keeper, unknown kinds). The dedicated screens keep ownership
  * of their own entries.

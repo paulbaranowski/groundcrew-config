@@ -3,6 +3,7 @@ import { App } from "./app.tsx";
 import { createFullscreen, installFullscreen } from "./hooks/useFullscreen.ts";
 import { loadDraft } from "./io/load.ts";
 import { locate } from "./io/locate.ts";
+import { seedNewConfig } from "./io/seed.ts";
 import { metaOutput } from "./meta.ts";
 
 const argv = process.argv.slice(2);
@@ -16,7 +17,9 @@ if (meta !== null) {
 }
 
 const { target, path: configPath } = locate(argv, process.cwd());
-const initialDraft = await loadDraft(configPath);
+// A new/absent config opens pre-filled with opinionated macOS defaults (and a
+// shipped starter prompt file) instead of an empty skeleton.
+const initialDraft = (await loadDraft(configPath)) ?? seedNewConfig(target);
 
 // Take over the alternate screen before the first frame, and guarantee the
 // terminal is restored on every exit path. No-op when stdout is not a TTY.
