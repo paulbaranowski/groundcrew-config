@@ -8,7 +8,9 @@ import {
   type ShellTextField,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
+import { useEditGuard } from "../hooks/useEditGuard.ts";
 import { ShellEnvEditor } from "./ShellEnvEditor.tsx";
+import { SaveGuard } from "./SaveGuard.tsx";
 
 type Source = NonNullable<ConfigDraft["sources"]>[number];
 
@@ -39,6 +41,7 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
   const [fields, setFields] = useState<ShellFields>(() => readShellFields(source));
   const [active, setActive] = useState(0);
   const [mode, setMode] = useState<"fields" | "env">("fields");
+  const guard = useEditGuard();
   // Mirror the active row in a ref so a burst of keypresses in one render (each
   // useInput call shares a stale `active` closure until React re-renders) still
   // branches enter on the latest row — the same trick ListField uses.
@@ -51,7 +54,10 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
 
   useInput(
     (_input, key) => {
-      if (key.escape) onCancel();
+      if (key.escape) {
+        guard.requestCancel(onCancel);
+        return;
+      }
       if (key.downArrow) moveActive(Math.min(ENV_ROW, activeRef.current + 1));
       if (key.upArrow) moveActive(Math.max(0, activeRef.current - 1));
       if (key.return) {
@@ -59,14 +65,28 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
         else onSave(applyShellFields(source, fields));
       }
     },
-    { isActive: mode === "fields" },
+    { isActive: mode === "fields" && !guard.guarding },
   );
+
+  if (guard.guarding) {
+    return (
+      <SaveGuard
+        label="shell source"
+        onSave={() => onSave(applyShellFields(source, fields))}
+        onDiscard={onCancel}
+        onCancel={guard.keepEditing}
+      />
+    );
+  }
 
   if (mode === "env") {
     return (
       <ShellEnvEditor
         env={fields.env}
-        onChange={(env) => setFields((f) => ({ ...f, env }))}
+        onChange={(env) => {
+          guard.markDirty();
+          setFields((f) => ({ ...f, env }));
+        }}
         onBack={() => setMode("fields")}
       />
     );
@@ -88,7 +108,10 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
             value={fields[row.key]}
             placeholder={row.placeholder}
             isActive={active === index}
-            onChange={(v) => setFields((f) => ({ ...f, [row.key]: v }))}
+            onChange={(v) => {
+              guard.markDirty();
+              setFields((f) => ({ ...f, [row.key]: v }));
+            }}
           />
         ))}
         <Box>

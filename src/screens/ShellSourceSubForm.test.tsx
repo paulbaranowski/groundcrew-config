@@ -103,6 +103,22 @@ test("save round-trips an existing env untouched", () => {
   });
 });
 
+test("esc after an edit pops the save guard", async () => {
+  const onCancel = vi.fn();
+  const { lastFrame, stdin } = render(
+    <ShellSourceSubForm
+      source={{ kind: "shell", name: "jira", commands: { listTasks: "jira ls" } } as never}
+      onSave={() => {}}
+      onCancel={onCancel}
+    />,
+  );
+  stdin.write("2"); // edit the name field
+  await vi.waitFor(() => expect(lastFrame()).toContain("jira2"));
+  stdin.write(ESC);
+  await vi.waitFor(() => expect(lastFrame()).toContain("Unsaved shell source"));
+  expect(onCancel).not.toHaveBeenCalled();
+});
+
 test("entering the env row opens the env editor", async () => {
   const { lastFrame, stdin } = render(
     <ShellSourceSubForm

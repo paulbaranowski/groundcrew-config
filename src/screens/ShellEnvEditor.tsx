@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { ListField, type ListItem } from "../components/ListField.tsx";
 import { TextField } from "../components/TextField.tsx";
+import { useEditGuard } from "../hooks/useEditGuard.ts";
+import { SaveGuard } from "./SaveGuard.tsx";
 import type { EnvEntry } from "../domain/sources.ts";
 
 interface Props {
@@ -30,13 +32,31 @@ function EnvEntryEditor({
   const [key, setKey] = useState(entry.key);
   const [value, setValue] = useState(entry.value);
   const [active, setActive] = useState(0);
+  const guard = useEditGuard();
 
-  useInput((_input, k) => {
-    if (k.escape) onCancel();
-    if (k.downArrow) setActive((a) => Math.min(1, a + 1));
-    if (k.upArrow) setActive((a) => Math.max(0, a - 1));
-    if (k.return) onSave({ key, value });
-  });
+  useInput(
+    (_input, k) => {
+      if (k.escape) {
+        guard.requestCancel(onCancel);
+        return;
+      }
+      if (k.downArrow) setActive((a) => Math.min(1, a + 1));
+      if (k.upArrow) setActive((a) => Math.max(0, a - 1));
+      if (k.return) onSave({ key, value });
+    },
+    { isActive: !guard.guarding },
+  );
+
+  if (guard.guarding) {
+    return (
+      <SaveGuard
+        label="variable"
+        onSave={() => onSave({ key, value })}
+        onDiscard={onCancel}
+        onCancel={guard.keepEditing}
+      />
+    );
+  }
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
@@ -47,14 +67,14 @@ function EnvEntryEditor({
           value={key}
           placeholder="VAR_NAME"
           isActive={active === 0}
-          onChange={setKey}
+          onChange={guard.track(setKey)}
         />
         <TextField
           label="value"
           value={value}
           placeholder="stored literally in the config"
           isActive={active === 1}
-          onChange={setValue}
+          onChange={guard.track(setValue)}
         />
       </Box>
       {key.trim().length === 0 ? (
