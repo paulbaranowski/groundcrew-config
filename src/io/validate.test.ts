@@ -1,3 +1,6 @@
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { expect, test } from "vitest";
 import { mapSection, validateDraft } from "./validate.ts";
 
@@ -23,6 +26,19 @@ test("mapSection maps usage errors to usage", () => {
   expect(mapSection("agents.definitions.claude.usage is invalid")).toBe(
     "usage",
   );
+});
+
+test("mapSection routes the session limit to usage, other orchestrator keys to orchestrator", () => {
+  // sessionLimitPercentage is edited on the Usage Limits screen, so its error
+  // badge follows the field, not its orchestrator.* config path.
+  expect(
+    mapSection(
+      "groundcrew config: orchestrator.sessionLimitPercentage must be a finite number in (0, 100]",
+    ),
+  ).toBe("usage");
+  expect(
+    mapSection("groundcrew config: orchestrator.maximumInProgress must be an integer ≥ 1"),
+  ).toBe("orchestrator");
 });
 
 test("mapSection maps a prompts.initial error to prompts even when its prose names other sections", () => {
@@ -52,5 +68,42 @@ test("a missing projectDir fails and maps to the workspace section", async () =>
   if (!result.ok) {
     expect(result.message).toMatch(/workspace/i);
     expect(result.section).toBe("workspace");
+  }
+});
+
+test("a relative promptFile validates against the config's real directory", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "cc-validate-test-"));
+  try {
+    writeFileSync(path.join(dir, "prompt.md"), "Do the task {{task}}.");
+    const draft = {
+      workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
+      agents: { default: "claude", definitions: { claude: {} } },
+      prompts: { promptFile: "prompt.md" },
+    } as never;
+    // Resolved in the config's real dir, the sibling file is found -> ok.
+    expect((await validateDraft(draft, dir)).ok).toBe(true);
+    // Without the dir, groundcrew resolves the relative path against a throwaway
+    // temp dir where the file is absent -> a false failure routed to prompts.
+    const stray = await validateDraft(draft);
+    expect(stray.ok).toBe(false);
+    if (!stray.ok) expect(stray.section).toBe("prompts");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("validation leaves no sidecar behind in the config directory", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "cc-validate-test-"));
+  try {
+    await validateDraft(
+      {
+        workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
+        agents: { default: "claude", definitions: { claude: {} } },
+      } as never,
+      dir,
+    );
+    expect(readdirSync(dir)).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

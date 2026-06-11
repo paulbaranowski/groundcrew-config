@@ -29,6 +29,34 @@ test("space disables usage tracking on all enabled agents", () => {
   );
 });
 
+test("titled 'Usage Limits' and shows the session limit field", () => {
+  const { lastFrame } = render(
+    <UsageForm draft={draft} onChange={() => {}} onBack={() => {}} />,
+  );
+  const f = lastFrame() ?? "";
+  expect(f).toContain("Usage Limits");
+  expect(f).toContain("sessionLimitPercentage");
+});
+
+test("editing the limit writes orchestrator.sessionLimitPercentage", async () => {
+  const onChange = vi.fn();
+  const { lastFrame, stdin } = render(
+    <UsageForm draft={draft} onChange={onChange} onBack={() => {}} />,
+  );
+  stdin.write("\x1b[B"); // down-arrow to the limit field
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("› sessionLimitPercentage"),
+  );
+  stdin.write("7");
+  await vi.waitFor(() =>
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orchestrator: expect.objectContaining({ sessionLimitPercentage: 7 }),
+      }),
+    ),
+  );
+});
+
 test("notes when there are no enabled agents", () => {
   const empty = {
     workspace: { projectDir: "~/d", knownRepositories: [] },

@@ -244,8 +244,10 @@ export function enabledSourceCount(draft: ConfigDraft): number {
 /** The shell lifecycle commands the builder edits, in display order. */
 export const SHELL_COMMAND_FIELDS = [
   "verify",
+  "validate",
   "listTasks",
   "getTask",
+  "createTask",
   "markInProgress",
   "markInReview",
   "markDone",
@@ -293,8 +295,10 @@ export function readShellFields(source: Source | undefined): ShellFields {
   return {
     name: asString(s.name),
     verify: asString(c.verify),
+    validate: asString(c.validate),
     listTasks: asString(c.listTasks) || asString(c.fetch),
     getTask: asString(c.getTask) || asString(c.resolveOne),
+    createTask: asString(c.createTask),
     markInProgress: asString(c.markInProgress),
     markInReview: asString(c.markInReview),
     markDone: asString(c.markDone),
@@ -334,20 +338,4 @@ export function customSources(draft: ConfigDraft): Source[] {
 
 export function customSourceCount(draft: ConfigDraft): number {
   return customSources(draft).length;
-}
-
-/**
- * Replace the custom (unmanaged) sources, preserving every managed entry. Lets
- * the raw-JSON editor show only custom sources without dropping linear /
- * todo-txt / plan-keeper, which keep their own screens.
- */
-export function setCustomSources(
-  draft: ConfigDraft,
-  custom: readonly Source[],
-): ConfigDraft {
-  const managed = (draft.sources ?? []).filter(isManaged);
-  // Drop any managed entries from the incoming payload so a raw-JSON edit can't
-  // duplicate linear / todo-txt / plan-keeper, which are owned by their screens.
-  const unmanaged = custom.filter((s) => !isManaged(s));
-  return { ...draft, sources: [...managed, ...unmanaged] };
 }

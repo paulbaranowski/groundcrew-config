@@ -1,16 +1,12 @@
 import { useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import {
-  customSourceCount,
-  customSources,
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
-  setCustomSources,
   shellSourceCount,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
-import { EscapeHatch } from "./EscapeHatch.tsx";
 import { LinearForm } from "./LinearForm.tsx";
 import { PlanKeeperForm } from "./PlanKeeperForm.tsx";
 import { ShellSourcesForm } from "./ShellSourcesForm.tsx";
@@ -22,13 +18,12 @@ interface Props {
   onBack: () => void;
 }
 
-type Sub = "hub" | "linear" | "todoTxt" | "planKeeper" | "shell" | "custom";
+type Sub = "hub" | "linear" | "todoTxt" | "planKeeper" | "shell";
 const ROWS: Array<Exclude<Sub, "hub">> = [
   "linear",
   "todoTxt",
   "planKeeper",
   "shell",
-  "custom",
 ];
 
 export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
@@ -68,17 +63,6 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
     return <PlanKeeperForm draft={draft} onChange={onChange} onBack={back} />;
   if (sub === "shell")
     return <ShellSourcesForm draft={draft} onChange={onChange} onBack={back} />;
-  if (sub === "custom")
-    return (
-      <EscapeHatch
-        title="Custom task sources"
-        value={customSources(draft)}
-        onChange={(next) =>
-          onChange(setCustomSources(draft, next as NonNullable<ConfigDraft["sources"]>))
-        }
-        onBack={back}
-      />
-    );
 
   const rows: Array<{ id: Sub; label: string; status: string }> = [
     {
@@ -101,11 +85,6 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
       label: "Shell sources",
       status: `${shellSourceCount(draft)} source(s)`,
     },
-    {
-      id: "custom",
-      label: "Custom (raw JSON)",
-      status: `${customSourceCount(draft)} source(s)`,
-    },
   ];
 
   return (
@@ -127,7 +106,10 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
         ))}
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>↑/↓ move · enter open · esc back</Text>
+        <Text dimColor>
+          Where groundcrew gets its to-do list. Turn on one or more sources of
+          tickets for it to work through. ↑/↓ move · enter open · esc back.
+        </Text>
       </Box>
     </Box>
   );

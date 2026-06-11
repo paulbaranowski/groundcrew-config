@@ -85,8 +85,9 @@ export function RepositoriesForm({ draft, onChange, onBack }: Props) {
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          owner/repo names groundcrew may work on. ↑/↓ move · enter edit · d
-          delete · esc back. Per-repo projectDirOverride lives in the editor.
+          The repos groundcrew is allowed to work on, listed by their local
+          folder name (each must already exist under your projectDir). ↑/↓ move ·
+          enter edit · d delete · esc back.
         </Text>
       </Box>
     </Box>

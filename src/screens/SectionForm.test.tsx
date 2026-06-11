@@ -24,6 +24,7 @@ test("renders fields and the focused field's help", () => {
   const { lastFrame } = render(
     <SectionForm
       title="Git"
+      description="What this section is for."
       spec={spec}
       draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
       onChange={() => {}}
@@ -32,6 +33,7 @@ test("renders fields and the focused field's help", () => {
   );
   expect(lastFrame()).toContain("remote");
   expect(lastFrame()).toContain("Git remote name.");
+  expect(lastFrame()).toContain("What this section is for.");
 });
 
 test("typing into the active text field emits an updated draft", () => {
@@ -39,6 +41,7 @@ test("typing into the active text field emits an updated draft", () => {
   const { stdin } = render(
     <SectionForm
       title="Git"
+      description="What this section is for."
       spec={spec}
       draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
       onChange={onChange}
@@ -64,6 +67,7 @@ test("a non-numeric value in a number field does not emit NaN", () => {
   const { stdin } = render(
     <SectionForm
       title="Orchestrator"
+      description="What this section is for."
       spec={numberSpec}
       draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
       onChange={onChange}
@@ -79,6 +83,7 @@ test("esc calls onBack", async () => {
   const { stdin } = render(
     <SectionForm
       title="Git"
+      description="What this section is for."
       spec={spec}
       draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
       onChange={() => {}}

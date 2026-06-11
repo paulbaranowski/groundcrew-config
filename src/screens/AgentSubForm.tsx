@@ -67,8 +67,9 @@ export function AgentSubForm({ name, def, sandboxRequired, onSave, onCancel }: P
       ) : null}
       <Box marginTop={1}>
         <Text dimColor>
-          ↑/↓ move · type to edit · enter save · esc cancel. Blank fields inherit
-          the built-in preset / are omitted.
+          Fine-tune how this agent launches — most people can leave these blank.
+          Blank fields inherit the built-in preset. ↑/↓ move · type to edit ·
+          enter save · esc cancel.
         </Text>
       </Box>
     </Box>

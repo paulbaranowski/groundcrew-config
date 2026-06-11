@@ -19,8 +19,10 @@ interface Props {
 const ROWS: Array<{ key: keyof ShellFields; label: string; placeholder: string }> = [
   { key: "name", label: "name", placeholder: "kebab-case, e.g. jira" },
   { key: "verify", label: "commands.verify", placeholder: "connectivity check (optional)" },
+  { key: "validate", label: "commands.validate", placeholder: "emit JSON array of config error strings (optional)" },
   { key: "listTasks", label: "commands.listTasks", placeholder: "emit ShellIssue[] JSON (required)" },
   { key: "getTask", label: "commands.getTask", placeholder: "emit one ShellIssue for ${id}" },
+  { key: "createTask", label: "commands.createTask", placeholder: "create from ${title}/${description}, emit the new ShellIssue (optional)" },
   { key: "markInProgress", label: "commands.markInProgress", placeholder: "move ${id} in-progress" },
   { key: "markInReview", label: "commands.markInReview", placeholder: "move ${id} in-review" },
   { key: "markDone", label: "commands.markDone", placeholder: "move ${id} done" },
@@ -70,8 +72,9 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
       ) : null}
       <Box marginTop={1}>
         <Text dimColor>
-          ↑/↓ move · type to edit · enter save · esc cancel. {"${id}"} is
-          substituted per task. timeouts/env stay in Custom JSON.
+          Commands groundcrew runs to talk to your tracker. listTasks is required;{" "}
+          {"${id}"} is filled in per task. ↑/↓ move · type to edit · enter save ·
+          esc cancel.
         </Text>
       </Box>
     </Box>

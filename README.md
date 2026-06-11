@@ -20,21 +20,22 @@ crew-config ./path/to/crew.config.json
 - Reads any existing `crew.config.ts`/`.js`/`.json` to pre-fill, and always saves
   minimal `crew.config.json`. A shadowing `crew.config.ts`/`.js`/`.mjs` is moved to `*.bak`.
 - Every save is validated by groundcrew's own loader, so "valid" means "crew accepts it".
-- Custom ticket adapters and model definitions are edited as raw JSON in `$EDITOR`.
+- Unmanaged shell task sources have no screen, and non-built-in agent definitions are listed read-only; author both by hand in `crew.config.json`. The TUI preserves them untouched on save.
 
 ### Sections
 
 - **Workspace** — project/worktree directories.
-- **Repositories** — the repos groundcrew may work on (`owner/repo`, with an optional per-repo directory override).
-- **Models** — enabled agent models (raw JSON).
+- **Repositories** — the repos groundcrew may work on (`owner/repo`, with an optional per-repo directory override). The repo editor also covers `workdir` (a project subdirectory within the worktree) and `provision` (scripted `create`/`remove` worktree templates — both `create` and `remove` are required, and `provision` is mutually exclusive with the directory override).
+- **Agents** — enable the built-in agents (claude, codex) and edit their fields; any non-built-in agent definitions are listed read-only (author them in `crew.config.json`).
 - **Task Sources** — a hub (groundcrew needs at least one enabled source to run):
   - **Linear** — enable/disable (groundcrew 4.24+ no longer enables Linear implicitly). The API key is read from `GROUNDCREW_LINEAR_API_KEY` / `LINEAR_API_KEY` in your environment, _not_ this file; the screen shows whether it's set.
   - **todo-txt** — enable/disable a zero-credentials local-file source, with editable `todoPath` / `tasksDir`.
   - **PlanKeeper** — enable/disable. Install with `brew install paulbaranowski/tap/plan-keeper`; enabling adds the `plan-keeper crew …` shell source.
-  - **Custom** — any other shell adapters, as raw JSON.
-- **Orchestrator** — concurrency + polling + session-limit %.
-- **Usage** — disable per-model usage tracking (groundcrew's opt-out from session-usage / codexbar gating).
-- **Hooks / Git / Terminal / Sandbox / Prompts / Advanced** — the rest of `crew.config.json` (Terminal = `workspaceKind`).
+  - **Shell sources** — managed shell adapters. Any other (unmanaged) shell sources are authored by hand in `crew.config.json`; the TUI preserves them on save but no longer surfaces a screen for them.
+- **Orchestrator** — concurrency + polling (`maximumInProgress`, `pollIntervalMilliseconds`).
+- **Usage Limits** — toggle per-agent usage tracking and set the session-usage ceiling (`sessionLimitPercentage`) above which groundcrew stops launching. Tracking requires the [codexbar](https://codexbar.app/) menu-bar app on Mac (`brew install --cask steipete/tap/codexbar`); groundcrew reads usage via its bundled `codexbar` CLI. (The limit is still stored as `orchestrator.sessionLimitPercentage` in the file.)
+- **Prompts** — the initial agent prompt, set inline (`initial`) or loaded from a file (`promptFile`); the two are mutually exclusive.
+- **Hooks / Git / Terminal / Sandbox / Advanced** — the rest of `crew.config.json` (Terminal = `workspaceKind`, which now includes `zellij`).
 
 ## Develop
 

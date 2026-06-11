@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { Footer } from "./components/Footer.tsx";
 import {
+  SECTION_DESCRIPTION,
   SECTION_LABEL,
   simpleSectionSpec,
   type SectionId,
 } from "./domain/sections.ts";
 import type { ConfigDraft } from "./domain/types.ts";
 import { enabledSourceCount } from "./domain/sources.ts";
-import { saveDraft, type Target } from "./io/save.ts";
+import path from "node:path";
+import { saveDraft, targetPath, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
 import { Home } from "./screens/Home.tsx";
 import { AgentsForm } from "./screens/AgentsForm.tsx";
@@ -33,6 +35,9 @@ export function App({ initialDraft, target }: Props) {
       ({ workspace: { projectDir: "", knownRepositories: [] } } as ConfigDraft),
   );
   const [route, setRoute] = useState<Route>({ name: "home" });
+  // Home's selected row lives here so it survives opening a section and
+  // returning (Home unmounts while a section is on screen).
+  const [homeCursor, setHomeCursor] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [valid, setValid] = useState(true);
   const [checked, setChecked] = useState(false);
@@ -44,7 +49,7 @@ export function App({ initialDraft, target }: Props) {
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
-      void validateDraft(draft).then((result) => {
+      void validateDraft(draft, path.dirname(targetPath(target))).then((result) => {
         if (cancelled) return;
         setChecked(true);
         setValid(result.ok);
@@ -114,9 +119,18 @@ export function App({ initialDraft, target }: Props) {
           <Text dimColor>{savedAt ?? target.scope}</Text>
         </Box>
         <Box marginTop={1}>
+          <Text dimColor>
+            groundcrew picks up your tickets and runs AI coding agents on them
+            automatically — each in its own isolated copy of your repo — then
+            opens a PR. Set it up below.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
           <Home
             draft={draft}
             issues={homeIssues}
+            cursor={homeCursor}
+            onCursorChange={setHomeCursor}
             onOpen={(id) => setRoute({ name: "section", id })}
           />
         </Box>
@@ -148,6 +162,7 @@ export function App({ initialDraft, target }: Props) {
   return (
     <SectionForm
       title={SECTION_LABEL[id]}
+      description={SECTION_DESCRIPTION[id]}
       spec={simpleSectionSpec(id)}
       draft={draft}
       onChange={update}

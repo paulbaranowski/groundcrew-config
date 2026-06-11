@@ -7,7 +7,6 @@ import {
   type SectionId,
 } from "./types.ts";
 import {
-  customSourceCount,
   enabledSourceCount,
   isLinearEnabled,
   isPlanKeeperEnabled,
@@ -39,13 +38,44 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   agents: "Agents",
   ticketSources: "Task Sources",
   orchestrator: "Orchestrator",
-  usage: "Usage",
+  usage: "Usage Limits",
   hooks: "Hooks",
   git: "Git",
   terminal: "Terminal",
   sandbox: "Sandbox",
   prompts: "Prompts",
   advanced: "Logging",
+};
+
+/**
+ * Plain-English, one-line purpose for each section, written for someone who has
+ * never used groundcrew. Shown at the top of each screen's help block. The
+ * spec-driven sections (SectionForm) read theirs from here directly; the bespoke
+ * screens carry their own (longer) copy inline.
+ */
+export const SECTION_DESCRIPTION: Record<SectionId, string> = {
+  workspace:
+    "Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a \"git worktree\") created under worktreeDir. Add the repos themselves in the Repositories section.",
+  repositories:
+    "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir).",
+  agents:
+    "The AI coding tools groundcrew runs on your tickets (e.g. Claude, Codex). Check the ones installed on your machine. \"bypass permission prompts\" lets the agent act without stopping to ask.",
+  ticketSources:
+    "Where groundcrew gets its to-do list. Turn on one or more sources of tickets for it to work through.",
+  orchestrator:
+    "Controls how many tasks groundcrew runs at once and how often it checks for new ones.",
+  usage:
+    "Usage tracking lets groundcrew watch your AI subscription's usage so it won't launch agents when you're near your limits. Disabling opts every enabled agent out. The session limit % is the usage ceiling above which it stops launching new agents.",
+  hooks:
+    "A shell command run right after each worktree is created (e.g. install dependencies). A repo's own config overrides this.",
+  git: "Git settings groundcrew uses when creating branches and worktrees.",
+  terminal:
+    "Which terminal multiplexer hosts the running agents (tmux, cmux, or zellij).",
+  sandbox:
+    "Pick the sandbox that isolates each agent from the rest of your machine while it runs.",
+  prompts:
+    "The instructions groundcrew gives the agent at the start of every task.",
+  advanced: "Where groundcrew writes its log file.",
 };
 
 /** A field in the generic SectionForm. `path` is a dotted path into the draft. */
@@ -76,13 +106,6 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           kind: "number",
           help: "How often to poll for tickets (ms).",
           placeholder: String(ORCHESTRATOR_DEFAULTS.pollIntervalMilliseconds),
-        },
-        {
-          path: "orchestrator.sessionLimitPercentage",
-          label: "sessionLimitPercentage",
-          kind: "number",
-          help: "Stop launching above this session-usage %.",
-          placeholder: String(ORCHESTRATOR_DEFAULTS.sessionLimitPercentage),
         },
       ];
     case "hooks":
@@ -124,7 +147,13 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           label: "runner",
           kind: "select",
           options: RUNNERS,
-          help: "Local isolation backend. auto = safehouse (macOS) / sdx (Linux). none = unsandboxed.",
+          help: [
+            "• auto — chooses for you (safehouse on macOS, sdx on Linux)",
+            "• safehouse — macOS only",
+            "• srt — Anthropic sandbox-runtime, fast & no Docker, macOS + Linux/WSL",
+            "• sdx — Docker Sandboxes, needs Docker, macOS + Linux",
+            "• none — no sandbox (unsafe)",
+          ].join("\n"),
         },
       ];
     case "prompts":
@@ -133,7 +162,13 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           path: "prompts.initial",
           label: "initial",
           kind: "text",
-          help: "Initial agent prompt. Supports {{task}}, {{title}}, {{description}}, {{worktree}}, {{workspaceContinuationInstruction}}.",
+          help: "Inline initial agent prompt. Mutually exclusive with promptFile. Supports {{task}}, {{title}}, {{description}}, {{worktree}}, {{workspaceContinuationInstruction}}.",
+        },
+        {
+          path: "prompts.promptFile",
+          label: "promptFile",
+          kind: "text",
+          help: "Path to a file whose contents become the initial prompt. Resolved relative to the config dir; ~ expands. Mutually exclusive with initial.",
         },
       ];
     case "terminal":
@@ -186,14 +221,15 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       if (isPlanKeeperEnabled(draft)) kinds.push("plan-keeper");
       const shell = shellSourceCount(draft);
       if (shell > 0) kinds.push(`${shell} shell`);
-      const custom = customSourceCount(draft);
-      if (custom > 0) kinds.push(`${custom} custom`);
       return kinds.join(", ");
     }
-    case "usage":
-      return isUsageDisabled(draft.agents)
-        ? "tracking disabled"
-        : "tracking enabled";
+    case "usage": {
+      if (isUsageDisabled(draft.agents)) return "tracking disabled";
+      const limit =
+        draft.orchestrator?.sessionLimitPercentage ??
+        ORCHESTRATOR_DEFAULTS.sessionLimitPercentage;
+      return `tracking enabled · limit ${limit}%`;
+    }
     case "orchestrator": {
       const o = draft.orchestrator ?? {};
       const max =
@@ -201,10 +237,7 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       const poll =
         (o.pollIntervalMilliseconds ??
           ORCHESTRATOR_DEFAULTS.pollIntervalMilliseconds) / 1000;
-      const limit =
-        o.sessionLimitPercentage ??
-        ORCHESTRATOR_DEFAULTS.sessionLimitPercentage;
-      return `max ${max} · poll ${poll}s · limit ${limit}%`;
+      return `max ${max} · poll ${poll}s`;
     }
     case "hooks":
       return draft.defaults?.hooks?.prepareWorktree
@@ -214,10 +247,13 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       return `${draft.git?.remote ?? GIT_DEFAULTS.remote} · ${draft.git?.defaultBranch ?? GIT_DEFAULTS.defaultBranch}`;
     case "sandbox":
       return `runner: ${draft.local?.runner ?? "auto"}`;
-    case "prompts":
-      return draft.prompts?.initial
-        ? `custom (${draft.prompts.initial.length} chars)`
+    case "prompts": {
+      const prompts = draft.prompts ?? {};
+      if (prompts.promptFile) return `file: ${prompts.promptFile}`;
+      return prompts.initial
+        ? `custom (${prompts.initial.length} chars)`
         : "default";
+    }
     case "terminal":
       return `workspaceKind: ${draft.workspaceKind ?? "auto"}`;
     case "advanced":

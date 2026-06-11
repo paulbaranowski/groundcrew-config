@@ -30,12 +30,14 @@ test("shows the bypass sub-option only when claude is enabled", () => {
   const on = render(
     <AgentsForm draft={claudeOnly} onChange={() => {}} onBack={() => {}} />,
   );
-  expect(on.lastFrame()).toContain("bypass permission prompts");
+  // Match the toggle row's checkbox marker, not the bare phrase — the help text
+  // now also mentions "bypass permission prompts".
+  expect(on.lastFrame()).toContain("] bypass permission prompts");
 
   const off = render(
     <AgentsForm draft={draftWith({ codex: {} })} onChange={() => {}} onBack={() => {}} />,
   );
-  expect(off.lastFrame()).not.toContain("bypass permission prompts");
+  expect(off.lastFrame()).not.toContain("] bypass permission prompts");
 });
 
 test("shows the bypass box checked when claude already bypasses", () => {
@@ -107,7 +109,7 @@ test("space on the codex row enables codex", async () => {
   );
 });
 
-test("custom agents are shown read-only for raw JSON editing", () => {
+test("custom agents are listed read-only, authored in the config file", () => {
   const { lastFrame } = render(
     <AgentsForm
       draft={draftWith({ claude: {}, "my-agent": { cmd: "foo" } })}
@@ -117,7 +119,7 @@ test("custom agents are shown read-only for raw JSON editing", () => {
   );
   const f = lastFrame() ?? "";
   expect(f).toContain("my-agent");
-  expect(f).toContain("raw JSON");
+  expect(f).toContain("crew.config.json");
 });
 
 test("enter on an agent row opens its detail editor", async () => {
