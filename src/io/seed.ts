@@ -20,9 +20,17 @@ import { targetPath, type Target } from "./save.ts";
 export function seedNewConfig(target: Target): ConfigDraft {
   const dir = path.dirname(targetPath(target));
   const promptPath = path.join(dir, DEFAULT_PROMPT_FILE);
-  if (!existsSync(promptPath)) {
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(promptPath, DEFAULT_INITIAL_PROMPT);
+  try {
+    if (!existsSync(promptPath)) {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(promptPath, DEFAULT_INITIAL_PROMPT);
+    }
+  } catch {
+    // The config dir isn't writable yet (locked-down first-run environment).
+    // Don't crash startup before the UI mounts; fall back to an inline prompt so
+    // the seeded draft stays valid — a dangling `promptFile` would otherwise fail
+    // validation. The user's first save surfaces the real write error loudly.
+    return { ...defaultDraft(), prompts: { initial: DEFAULT_INITIAL_PROMPT } };
   }
   return defaultDraft();
 }

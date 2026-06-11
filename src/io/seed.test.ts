@@ -37,3 +37,17 @@ test("never clobbers an existing prompt file", () => {
 
   expect(readFileSync(promptPath, "utf8")).toBe("my edited prompt");
 });
+
+test("falls back to an inline prompt when the config dir is unwritable", () => {
+  // Make the config dir uncreatable: a parent path component is a file, so
+  // mkdirSync throws ENOTDIR rather than crashing startup.
+  const root = dir();
+  const blocker = path.join(root, "blocker");
+  writeFileSync(blocker, "");
+  const cwd = path.join(blocker, "sub");
+
+  const draft = seedNewConfig({ scope: "local", cwd });
+
+  expect(draft.prompts).toEqual({ initial: DEFAULT_INITIAL_PROMPT });
+  expect(draft.prompts?.promptFile).toBeUndefined();
+});

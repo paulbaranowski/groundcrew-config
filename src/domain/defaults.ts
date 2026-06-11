@@ -61,5 +61,5 @@ export function defaultDraft(): ConfigDraft {
     workspaceKind: "tmux",
     local: { runner: "safehouse" },
     prompts: { promptFile: DEFAULT_PROMPT_FILE },
-  } as ConfigDraft;
+  } satisfies ConfigDraft;
 }
