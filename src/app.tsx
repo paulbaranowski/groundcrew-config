@@ -108,12 +108,21 @@ export function App({ initialDraft, target }: Props) {
     };
   }, [draft]);
 
+  // The single mutation path for the draft: besides swapping in `next`, it marks
+  // the draft `dirty` (unsaved edits exist, gating the quit guard and footer) and
+  // clears `saved` (the green "✓ saved" indicator). Every screen's draft write
+  // must route through this — a bare `setDraft` would silently leave `dirty`/`saved`
+  // stale and the UI would lie about whether edits are persisted.
   function update(next: ConfigDraft): void {
     setDraft(next);
     setDirty(true);
     setSaved(false);
   }
 
+  // Persists the draft and reconciles all save-state flags: clears `dirty`
+  // (no unsaved edits remain), sets `saved` (drives the "✓ saved" indicator),
+  // and records `shadowed` — the list of higher-precedence config files (.ts/.js)
+  // that saveDraft renamed aside so our .json is the one groundcrew loads.
   async function save(): Promise<void> {
     const result = await saveDraft(target, draft);
     setDirty(false);
@@ -147,8 +156,12 @@ export function App({ initialDraft, target }: Props) {
   }
 
   const noSources = enabledSourceCount(draft) === 0;
-  // crew run refuses without a task source, but loadConfig accepts empty sources,
-  // so badge it here (separate from loadConfig validity).
+  // `issues` carries only sections loadConfig flagged. Here we inject a synthetic
+  // `taskSources` badge that is NOT derived from loadConfig validity: loadConfig
+  // accepts an empty `sources[]`, but `crew run` refuses to do any work without a
+  // task source. The badge nudges the user even though the config is technically
+  // valid. The footer still reports `issues` (the real validity count) unchanged;
+  // only Home's per-section badges see this augmented set.
   const homeIssues = noSources
     ? new Set<SectionId>([...issues, "taskSources"])
     : issues;
