@@ -21,6 +21,7 @@ import {
   setShellSources,
   setTodoTxtEnabled,
   setTodoTxtField,
+  shellListTasksCommand,
   shellSourceCount,
   shellSources,
   todoTxtSource,
@@ -191,6 +192,64 @@ test("shellSources / setShellSources manage generic shell entries only", () => {
     { kind: "shell", name: "plankeeper" },
     { kind: "shell", name: "gitlab", commands: { listTasks: "glab ls" } },
   ]);
+});
+
+test("shellListTasksCommand returns commands.listTasks when present", () => {
+  expect(
+    shellListTasksCommand({
+      kind: "shell",
+      name: "jira",
+      commands: { listTasks: "jira ls", fetch: "legacy" },
+    } as never),
+  ).toBe("jira ls");
+});
+
+test("shellListTasksCommand falls back to the legacy commands.fetch alias", () => {
+  expect(
+    shellListTasksCommand({
+      kind: "shell",
+      name: "jira",
+      commands: { fetch: "jira ls" },
+    } as never),
+  ).toBe("jira ls");
+});
+
+test("shellListTasksCommand returns undefined for missing/non-string/non-shell", () => {
+  // No listTasks or fetch command on the shell source.
+  expect(
+    shellListTasksCommand({ kind: "shell", name: "jira", commands: {} } as never),
+  ).toBeUndefined();
+  // A non-string command value is not returned.
+  expect(
+    shellListTasksCommand({
+      kind: "shell",
+      name: "jira",
+      commands: { listTasks: 42 },
+    } as never),
+  ).toBeUndefined();
+  // A non-shell kind never lists tasks through this helper.
+  expect(shellListTasksCommand({ kind: "linear" } as never)).toBeUndefined();
+});
+
+test("structural helpers partition a mixed sources array consistently", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      { kind: "linear" },
+      { kind: "todo-txt" },
+      { kind: "shell", name: "plankeeper" },
+      { kind: "shell", name: "jira", commands: { listTasks: "jira ls" } },
+      { kind: "webhook" },
+    ],
+  } as never;
+  // plan-keeper is detected via its name; only it is "plan-keeper enabled".
+  expect(isPlanKeeperEnabled(draft)).toBe(true);
+  // shellSources is the generic-shell bucket — plankeeper is excluded.
+  expect(shellSources(draft).map((s) => (s as { name: string }).name)).toEqual([
+    "jira",
+  ]);
+  // customSources holds only the unmanaged, non-shell kinds.
+  expect(customSources(draft)).toEqual([{ kind: "webhook" }]);
 });
 
 test("readShellFields / applyShellFields round-trip preferred command names", () => {
