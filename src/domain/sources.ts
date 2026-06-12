@@ -1,6 +1,33 @@
 import type { ConfigDraft } from "./types.ts";
 
+/**
+ * Task sources are matched structurally, not by a flag: a source's identity is
+ * read off its `kind`, optional `name`, and `enabled !== false` shape. This
+ * module owns the linear / todo-txt / plan-keeper / generic-shell entries and
+ * edits them through `kind`-narrowing against groundcrew's real discriminated
+ * union; any other (unknown) kind is preserved untouched on save.
+ */
+
 type Source = NonNullable<ConfigDraft["sources"]>[number];
+
+/** The `{ kind: "linear" }` member of groundcrew's source union. */
+type LinearSource = Extract<Source, { kind: "linear" }>;
+/** The `{ kind: "todo-txt" }` member of groundcrew's source union. */
+type TodoTxtSource = Extract<Source, { kind: "todo-txt" }>;
+/** The `{ kind: "shell" }` member of groundcrew's source union. */
+export type ShellSource = Extract<Source, { kind: "shell" }>;
+
+/**
+ * The fields every source shares structurally regardless of kind. `name` and
+ * `enabled` are read through this so the kind/name/`enabled !== false` matching
+ * stays in one place instead of being re-asserted ad hoc at each call site.
+ */
+interface SourceCommon {
+  kind: string;
+  name?: string;
+  enabled?: boolean;
+}
+
 export type TodoTxtField =
   | "todoPath"
   | "tasksDir"
@@ -11,31 +38,31 @@ export type TodoTxtField =
 const PLAN_KEEPER_NAME = "plankeeper";
 
 function sourceName(source: Source): string {
-  return (source as { name?: string }).name ?? source.kind;
+  return (source as SourceCommon).name ?? source.kind;
 }
 
 function isDisabled(source: Source): boolean {
-  return (source as { enabled?: boolean }).enabled === false;
+  return (source as SourceCommon).enabled === false;
 }
 
-function isLinearKind(source: Source): boolean {
+function isLinearKind(source: Source): source is LinearSource {
   return source.kind === "linear";
 }
 
-function isTodoTxtKind(source: Source): boolean {
+function isTodoTxtKind(source: Source): source is TodoTxtSource {
   return source.kind === "todo-txt";
 }
 
-function isShellKind(source: Source): boolean {
+function isShellKind(source: Source): source is ShellSource {
   return source.kind === "shell";
 }
 
-function isPlanKeeper(source: Source): boolean {
+function isPlanKeeper(source: Source): source is ShellSource {
   return isShellKind(source) && sourceName(source) === PLAN_KEEPER_NAME;
 }
 
 /** A generic shell source — any `kind:"shell"` entry other than the PlanKeeper preset. */
-function isGenericShell(source: Source): boolean {
+function isGenericShell(source: Source): source is ShellSource {
   return isShellKind(source) && !isPlanKeeper(source);
 }
 
@@ -48,7 +75,7 @@ function isManaged(source: Source): boolean {
   return isLinearKind(source) || isTodoTxtKind(source) || isShellKind(source);
 }
 
-export function planKeeperSource(): Source {
+export function planKeeperSource(): ShellSource {
   return {
     kind: "shell",
     name: PLAN_KEEPER_NAME,
@@ -59,11 +86,28 @@ export function planKeeperSource(): Source {
       markInProgress: "plan-keeper crew start ${id}",
       markInReview: "plan-keeper crew review ${id}",
     },
-  } as unknown as Source;
+  };
 }
 
-export function todoTxtSource(): Source {
-  return { kind: "todo-txt" } as unknown as Source;
+/**
+ * The loose, user-facing todo-txt entry. groundcrew's exported union types the
+ * defaulted fields (name/todoPath/tasksDir/idPrefix/timezone) as required —
+ * their values are filled at load time — so the bare `{ kind: "todo-txt" }` the
+ * TUI writes is declared against this optional-field shape rather than the
+ * post-default union member.
+ */
+interface TodoTxtSourceInput {
+  kind: "todo-txt";
+  name?: string;
+  todoPath?: string;
+  tasksDir?: string;
+  defaultRepository?: string;
+  idPrefix?: string;
+  timezone?: string;
+}
+
+export function todoTxtSource(): TodoTxtSourceInput {
+  return { kind: "todo-txt" };
 }
 
 // Linear (4.24: no longer implicit — enabled only when an enabled
@@ -78,7 +122,7 @@ export function setLinearEnabled(
 ): ConfigDraft {
   const others = (draft.sources ?? []).filter((s) => !isLinearKind(s));
   const sources = enabled
-    ? [...others, { kind: "linear" } as unknown as Source]
+    ? [...others, { kind: "linear" } satisfies LinearSource]
     : others;
   return { ...draft, sources };
 }
@@ -88,7 +132,7 @@ export type LinearField = "name" | "team";
 /** The two overridable canonical-status mappings (each an array of names). */
 export type LinearStatusField = "inProgress" | "inReview";
 
-function findLinear(draft: ConfigDraft): Source | undefined {
+function findLinear(draft: ConfigDraft): LinearSource | undefined {
   return (draft.sources ?? []).find(isLinearKind);
 }
 
@@ -96,9 +140,7 @@ export function getLinearField(
   draft: ConfigDraft,
   field: LinearField,
 ): string | undefined {
-  const entry = findLinear(draft);
-  const value =
-    entry === undefined ? undefined : (entry as Record<string, unknown>)[field];
+  const value = findLinear(draft)?.[field];
   return typeof value === "string" ? value : undefined;
 }
 
@@ -109,10 +151,10 @@ export function setLinearField(
 ): ConfigDraft {
   const sources = (draft.sources ?? []).map((s) => {
     if (!isLinearKind(s)) return s;
-    const next = { ...(s as Record<string, unknown>) };
+    const next: LinearSource = { ...s };
     if (value.length === 0) delete next[field];
     else next[field] = value;
-    return next as unknown as Source;
+    return next;
   });
   return { ...draft, sources };
 }
@@ -125,10 +167,7 @@ export function getLinearStatuses(
   draft: ConfigDraft,
   field: LinearStatusField,
 ): string {
-  const entry = findLinear(draft);
-  const statuses = (entry as { statuses?: Record<string, unknown> } | undefined)
-    ?.statuses;
-  const names = statuses?.[field];
+  const names = findLinear(draft)?.statuses?.[field];
   return Array.isArray(names)
     ? names.filter((n): n is string => typeof n === "string").join(", ")
     : "";
@@ -151,13 +190,13 @@ export function setLinearStatuses(
     .filter((n) => n.length > 0);
   const sources = (draft.sources ?? []).map((s) => {
     if (!isLinearKind(s)) return s;
-    const next = { ...(s as Record<string, unknown>) };
-    const statuses = { ...((next.statuses as Record<string, unknown>) ?? {}) };
+    const next: LinearSource = { ...s };
+    const statuses = { ...(next.statuses ?? {}) };
     if (names.length === 0) delete statuses[field];
     else statuses[field] = names;
     if (Object.keys(statuses).length === 0) delete next.statuses;
     else next.statuses = statuses;
-    return next as unknown as Source;
+    return next;
   });
   return { ...draft, sources };
 }
@@ -172,7 +211,9 @@ export function setTodoTxtEnabled(
   enabled: boolean,
 ): ConfigDraft {
   const others = (draft.sources ?? []).filter((s) => !isTodoTxtKind(s));
-  const sources = enabled ? [...others, todoTxtSource()] : others;
+  // `todoTxtSource()` is the loose user-facing entry (defaulted keys omitted);
+  // widen it to the strict union member, whose defaults groundcrew fills at load.
+  const sources = enabled ? [...others, todoTxtSource() as Source] : others;
   return { ...draft, sources };
 }
 
@@ -180,9 +221,7 @@ export function getTodoTxtField(
   draft: ConfigDraft,
   field: TodoTxtField,
 ): string | undefined {
-  const entry = (draft.sources ?? []).find(isTodoTxtKind);
-  const value =
-    entry === undefined ? undefined : (entry as Record<string, unknown>)[field];
+  const value = (draft.sources ?? []).find(isTodoTxtKind)?.[field];
   return typeof value === "string" ? value : undefined;
 }
 
@@ -193,10 +232,10 @@ export function setTodoTxtField(
 ): ConfigDraft {
   const sources = (draft.sources ?? []).map((s) => {
     if (!isTodoTxtKind(s)) return s;
-    const next = { ...(s as Record<string, unknown>) };
+    const next: TodoTxtSource = { ...s };
     if (value.length === 0) delete next[field];
     else next[field] = value;
-    return next as unknown as Source;
+    return next;
   });
   return { ...draft, sources };
 }
@@ -224,8 +263,7 @@ export function setPlanKeeperEnabled(
 export function planKeeperCommands(
   draft: ConfigDraft,
 ): Array<[string, string]> | undefined {
-  const entry = (draft.sources ?? []).find(isPlanKeeper);
-  const commands = (entry as { commands?: unknown })?.commands;
+  const commands: unknown = (draft.sources ?? []).find(isPlanKeeper)?.commands;
   // typeof null === "object", so guard null explicitly before Object.entries.
   if (commands === null || typeof commands !== "object") return undefined;
   return Object.entries(commands as Record<string, unknown>).filter(
@@ -241,7 +279,13 @@ export function enabledSourceCount(draft: ConfigDraft): number {
 // Generic shell sources (Jira, etc.) — every kind:"shell" entry except the
 // dedicated PlanKeeper preset, edited through the guided shell builder.
 
-/** The shell lifecycle commands the builder edits, in display order. */
+/**
+ * The shell lifecycle commands the builder edits, in display order. Of these,
+ * `listTasks` (or its legacy `fetch` alias) is the one required command — a
+ * source with neither can't enumerate tasks. The legacy `fetch`/`resolveOne`
+ * aliases are read as a fallback (see `readShellFields`) but are never written
+ * back: the builder always emits the preferred `listTasks`/`getTask` names.
+ */
 export const SHELL_COMMAND_FIELDS = [
   "verify",
   "validate",
@@ -274,8 +318,22 @@ export interface ShellFields extends Record<ShellCommandField, string> {
   env: EnvEntry[];
 }
 
-export function shellSources(draft: ConfigDraft): Source[] {
+export function shellSources(draft: ConfigDraft): ShellSource[] {
   return (draft.sources ?? []).filter(isGenericShell);
+}
+
+/**
+ * The command groundcrew runs to enumerate a shell source's tasks: the preferred
+ * `commands.listTasks`, falling back to the legacy `commands.fetch` alias.
+ * `undefined` when neither is set (the source can't list tasks).
+ */
+export function shellListTasksCommand(source: Source): string | undefined {
+  if (!isShellKind(source)) return undefined;
+  // `commands` is required by the type, but malformed on-disk JSON (hand-edited)
+  // can omit it; guard before reading so render never crashes (cf. readShellFields).
+  const commands = (source.commands as Record<string, unknown>) ?? {};
+  const value = commands.listTasks ?? commands.fetch;
+  return typeof value === "string" ? value : undefined;
 }
 
 export function shellSourceCount(draft: ConfigDraft): number {
@@ -288,7 +346,7 @@ export function shellSourceCount(draft: ConfigDraft): number {
  */
 export function shellSourceNames(draft: ConfigDraft): string[] {
   return shellSources(draft).map((s) => {
-    const name = (s as { name?: string }).name;
+    const name = (s as SourceCommon).name;
     return name !== undefined && name.trim().length > 0 ? name : "shell";
   });
 }
@@ -357,18 +415,26 @@ export function readShellFields(source: Source | undefined): ShellFields {
 export function applyShellFields(
   base: Source | undefined,
   fields: ShellFields,
-): Source {
-  const src = { ...((base ?? {}) as Record<string, unknown>) };
-  src.kind = "shell";
-  src.name = fields.name.trim();
-  const commands = { ...((src.commands as Record<string, unknown>) ?? {}) };
+): ShellSource {
+  // Carry forward unmanaged keys (e.g. `timeouts`) only when `base` is already a
+  // shell source; a different-kind base is replaced wholesale.
+  const carried: ShellSource =
+    base !== undefined && isShellKind(base)
+      ? { ...base }
+      : { kind: "shell", name: fields.name.trim(), commands: {} };
+  const commands: ShellSource["commands"] = { ...carried.commands };
   delete commands.fetch;
   delete commands.resolveOne;
   for (const key of SHELL_COMMAND_FIELDS) {
     if (fields[key].length === 0) delete commands[key];
     else commands[key] = fields[key];
   }
-  src.commands = commands;
+  const src: ShellSource = {
+    ...carried,
+    kind: "shell",
+    name: fields.name.trim(),
+    commands,
+  };
   if (fields.cwd.trim().length === 0) delete src.cwd;
   else src.cwd = fields.cwd;
   const env: Record<string, string> = {};
@@ -378,7 +444,7 @@ export function applyShellFields(
   }
   if (Object.keys(env).length === 0) delete src.env;
   else src.env = env;
-  return src as unknown as Source;
+  return src;
 }
 
 /** Sources with no managed screen (not linear / todo-txt / plan-keeper). */

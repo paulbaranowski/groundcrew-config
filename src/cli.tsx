@@ -23,6 +23,10 @@ const initialDraft = (await loadDraft(configPath)) ?? seedNewConfig(target);
 
 // Take over the alternate screen before the first frame, and guarantee the
 // terminal is restored on every exit path. No-op when stdout is not a TTY.
+// installFullscreen wires every restore handler before it calls enter(): that
+// order is load-bearing, so a fatal event during startup can never strand the
+// terminal in the alt screen. Any edit to the teardown path must re-run
+// `node scripts/verify-teardown.mjs` (after `npm run build`).
 const dispose = installFullscreen(createFullscreen(process.stdout));
 try {
   const instance = render(<App initialDraft={initialDraft} target={target} />);

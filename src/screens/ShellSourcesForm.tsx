@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { ListField, type ListItem } from "../components/ListField.tsx";
-import { setShellSources, shellSources } from "../domain/sources.ts";
+import {
+  setShellSources,
+  shellListTasksCommand,
+  shellSources,
+} from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { ShellSourceSubForm } from "./ShellSourceSubForm.tsx";
 
@@ -13,12 +17,9 @@ interface Props {
   onBack: () => void;
 }
 
-function listTasksOf(source: Source): string | undefined {
-  const commands = (source as { commands?: Record<string, unknown> }).commands;
-  const value = commands?.listTasks ?? commands?.fetch;
-  return typeof value === "string" ? value : undefined;
-}
-
+// Section editor for custom `kind:"shell"` task sources: a ListField of entries
+// that delegates each one to ShellSourceSubForm. Follows the screen contract —
+// see SectionForm.
 export function ShellSourcesForm({ draft, onChange, onBack }: Props) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
   const entries = shellSources(draft);
@@ -50,11 +51,14 @@ export function ShellSourcesForm({ draft, onChange, onBack }: Props) {
     );
   }
 
-  const items: ListItem[] = entries.map((entry) => ({
-    label: (entry as { name?: string }).name || "(unnamed)",
-    note: listTasksOf(entry) ? `→ ${listTasksOf(entry)}` : "⚠ no listTasks",
-    error: undefined,
-  }));
+  const items: ListItem[] = entries.map((entry) => {
+    const listTasks = shellListTasksCommand(entry);
+    return {
+      label: entry.name || "(unnamed)",
+      note: listTasks ? `→ ${listTasks}` : "⚠ no listTasks",
+      error: undefined,
+    };
+  });
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>

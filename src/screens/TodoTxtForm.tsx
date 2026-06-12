@@ -24,6 +24,8 @@ const FIELDS: Array<{ field: TodoTxtField; placeholder: string }> = [
   { field: "timezone", placeholder: "UTC  (default)" },
 ];
 
+// Section editor for the todo-txt task source: an enable toggle plus its local
+// file/dir/prefix/timezone fields. Follows the screen contract — see SectionForm.
 export function TodoTxtForm({ draft, onChange, onBack }: Props) {
   const enabled = isTodoTxtEnabled(draft);
   const [focusIndex, setFocusIndex] = useState(0);

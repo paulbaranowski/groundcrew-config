@@ -1,6 +1,8 @@
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+// Immutable dotted-path get/set into the draft — the store/clear primitive
+// behind every FieldSpec. `getByPath` reads a leaf value (or undefined if any
+// segment is absent); `setByPath` writes one without mutating its input.
+
+import { isObject } from "./guards.ts";
 
 export function getByPath(draft: unknown, path: string): unknown {
   let current: unknown = draft;
@@ -11,6 +13,12 @@ export function getByPath(draft: unknown, path: string): unknown {
   return current;
 }
 
+/**
+ * Returns a shallow-cloned draft with `value` stored at the dotted `path`.
+ * Intermediate objects along the path are created on demand when missing.
+ * Passing `value === undefined` deletes the leaf key — the clear-a-field idiom
+ * (a blanked-out field stores nothing rather than an empty value).
+ */
 export function setByPath<T extends Record<string, unknown>>(
   draft: T,
   path: string,

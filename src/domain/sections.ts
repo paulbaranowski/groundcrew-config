@@ -80,9 +80,32 @@ export const SECTION_DESCRIPTION: Record<SectionId, string> = {
   advanced: "Where groundcrew writes its log file.",
 };
 
-/** A field in the generic SectionForm. `path` is a dotted path into the draft. */
+/**
+ * The dotted paths the spec-driven sections write into the draft. Every `path`
+ * value produced by `simpleSectionSpec` appears here; adding a field to a
+ * spec-driven section means adding its path to this union (typecheck enforces
+ * the round trip through `setByPath`).
+ */
+export type FieldPath =
+  | "orchestrator.maximumInProgress"
+  | "orchestrator.pollIntervalMilliseconds"
+  | "defaults.hooks.prepareWorktree"
+  | "git.remote"
+  | "git.defaultBranch"
+  | "git.branchPrefix"
+  | "local.runner"
+  | "prompts.initial"
+  | "prompts.promptFile"
+  | "workspaceKind"
+  | "logging.file";
+
+/**
+ * A field in the generic SectionForm. `path` is a dotted path into the draft;
+ * for a `kind: "select"` field, the `options` values must be assignable to the
+ * draft field that `path` points at (they are stored verbatim via `setByPath`).
+ */
 export interface FieldSpec {
-  path: string;
+  path: FieldPath;
   label: string;
   kind: "text" | "select" | "number";
   help: string;

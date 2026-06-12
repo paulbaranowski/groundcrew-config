@@ -1,7 +1,10 @@
+import { isObject } from "./guards.ts";
 import type { ConfigDraft } from "./types.ts";
 
 type Agents = ConfigDraft["agents"];
-type Def = Record<string, unknown>;
+/** A single agent definition entry, exactly groundcrew's user-facing shape. */
+export type AgentDef = NonNullable<NonNullable<Agents>["definitions"]>[string];
+type Def = AgentDef;
 
 /** Built-in agent presets, in display order. An empty `{}` entry enables one. */
 export const BUILTIN_AGENTS = ["claude", "codex"] as const;
@@ -34,10 +37,8 @@ export function setAgentEnabled(
 export function getAgentDef(agents: Agents, name: string): Def {
   const def = (agents?.definitions ?? {})[name];
   // Exclude arrays — `typeof [] === "object"` — so a stray array from a raw-JSON
-  // edit can't leak through as a definition (matches isObject elsewhere).
-  return def !== null && typeof def === "object" && !Array.isArray(def)
-    ? (def as Def)
-    : {};
+  // edit can't leak through as a definition.
+  return isObject(def) ? (def as Def) : {};
 }
 
 /** Replace `name`'s definition, enabling it if it was absent. */

@@ -35,6 +35,9 @@ interface Props {
   itemActions?: ItemAction[];
 }
 
+// An editable list of items with a moving cursor: ↑/↓ select, enter activates a
+// row (or the trailing "add" row), `d` deletes, and optional single-key
+// itemActions fire on the focused item. Windowed by ScrollableList.
 export function ListField({
   items,
   isActive,
@@ -46,7 +49,11 @@ export function ListField({
   const [cursor, setCursor] = useState(0);
   // Mirror the cursor in a ref so a burst of keypresses delivered in one render
   // (each useInput call shares a stale `cursor` closure until React re-renders)
-  // still reads and advances from the latest position.
+  // still reads and advances from the latest position. The useInput handler
+  // below MUST read `cursorRef.current`, never the render-time `cursor` state:
+  // every keystroke in a single tick sees the same stale closure, so a fast
+  // ↑/↓-then-enter would act on the pre-burst index. Do not "simplify" the ref
+  // away in favor of `cursor` — it reintroduces that stale-closure bug.
   const cursorRef = useRef(0);
   const { rows: terminalRows } = useFullscreen();
   const rows = items.length + 1; // +1 for the add row

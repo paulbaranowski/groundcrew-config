@@ -38,8 +38,9 @@ interface Props {
 
 /**
  * Render a windowed slice of a list around `cursor`, with `↑ N more` / `↓ N
- * more` markers when rows are hidden above or below. Layout-only: the caller
- * owns row content, keys, and selection styling.
+ * more` markers when rows are hidden above or below. Layout-only: holds no
+ * selection state and no input handling — the caller owns row content, keys,
+ * cursor movement, and selection styling.
  */
 export function ScrollableList({ count, cursor, maxVisible, renderRow }: Props) {
   const { start, end } = computeWindow(count, cursor, maxVisible);

@@ -26,11 +26,20 @@ const ROWS: Array<Exclude<Sub, "hub">> = [
   "shell",
 ];
 
+/**
+ * Hub for the taskSources section: owns sub-routing to LinearForm, TodoTxtForm,
+ * PlanKeeperForm, and ShellSourcesForm via its `Sub` union and `ROWS`. To add a
+ * task-source screen, extend `Sub`/`ROWS` and the dispatch here — not app.tsx,
+ * which only routes the `taskSources` SectionId to this hub.
+ */
 export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
   const [sub, setSub] = useState<Sub>("hub");
   const [cursor, setCursor] = useState(0);
   // Mirror the cursor in a ref so a down+enter burst in one render opens the
-  // latest row (the handler otherwise closes over a stale cursor).
+  // latest row. The useInput handler MUST read `cursorRef.current`, never the
+  // render-time `cursor` state: every keystroke in one tick shares the same
+  // stale closure, so reading `cursor` would open the pre-burst row. Do not
+  // "simplify" the ref away.
   const cursorRef = useRef(0);
 
   function moveCursor(next: number): void {

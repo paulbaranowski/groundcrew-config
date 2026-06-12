@@ -12,6 +12,9 @@ interface Props {
   onBack: () => void;
 }
 
+// Section editor for the PlanKeeper task source (a `kind:"shell"` preset feeding
+// saved ~/plans in as tasks): an enable toggle that shows its preset commands.
+// Follows the screen contract — see SectionForm.
 export function PlanKeeperForm({ draft, onChange, onBack }: Props) {
   const enabled = isPlanKeeperEnabled(draft);
   const commands = planKeeperCommands(draft);

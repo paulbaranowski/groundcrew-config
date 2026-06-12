@@ -5,18 +5,16 @@ import {
   applyShellFields,
   readShellFields,
   type ShellFields,
+  type ShellSource,
   type ShellTextField,
 } from "../domain/sources.ts";
-import type { ConfigDraft } from "../domain/types.ts";
 import { useEditGuard } from "../hooks/useEditGuard.ts";
 import { ShellEnvEditor } from "./ShellEnvEditor.tsx";
 import { SaveGuard } from "./SaveGuard.tsx";
 
-type Source = NonNullable<ConfigDraft["sources"]>[number];
-
 interface Props {
-  source: Source | undefined;
-  onSave: (source: Source) => void;
+  source: ShellSource | undefined;
+  onSave: (source: ShellSource) => void;
   onCancel: () => void;
 }
 
@@ -37,6 +35,9 @@ const ROWS: Array<{ key: ShellTextField; label: string; placeholder: string }> =
 // instead of saving. So the navigable range is [0, ROWS.length], not ROWS.length-1.
 const ENV_ROW = ROWS.length;
 
+// Buffered sub-editor for one shell source: edits the name/commands/cwd rows plus
+// a nested env editor locally, committing via `onSave` only on enter (esc routes
+// through the edit guard). Owned by ShellSourcesForm, not a top-level screen.
 export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
   const [fields, setFields] = useState<ShellFields>(() => readShellFields(source));
   const [active, setActive] = useState(0);
@@ -44,7 +45,10 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
   const guard = useEditGuard();
   // Mirror the active row in a ref so a burst of keypresses in one render (each
   // useInput call shares a stale `active` closure until React re-renders) still
-  // branches enter on the latest row — the same trick ListField uses.
+  // branches enter on the latest row — the same trick ListField uses. The
+  // useInput handler MUST read `activeRef.current`, never the render-time
+  // `active` state, or a fast ↑/↓-then-enter branches on the pre-burst row. Do
+  // not "simplify" the ref away.
   const activeRef = useRef(0);
 
   function moveActive(next: number): void {

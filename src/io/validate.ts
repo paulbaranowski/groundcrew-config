@@ -13,10 +13,21 @@ export type ValidationResult =
   | { ok: true }
   | { ok: false; message: string; section: SectionId | undefined };
 
+// Validity is whatever groundcrew's loadConfig accepts — nothing here reimplements
+// the schema. It is established out-of-process: the pruned draft is written to a
+// temp GROUNDCREW_CONFIG sidecar and a child Node process (CHILD below) imports
+// groundcrew's real loadConfig and reports whether it throws. Validation runs in
+// the config's REAL directory when it exists, so config-relative paths (e.g.
+// prompts.promptFile) resolve exactly as groundcrew will at load time; dropping
+// the configDir argument silently flips valid configs to invalid. SECTION_PREFIXES
+// is ordered most-specific-first — reordering it changes badge routing.
+
 // Resolve groundcrew's entry once so the child imports it by absolute URL,
 // independent of the child's cwd.
 const groundcrewUrl = import.meta.resolve("@clipboard-health/groundcrew");
 
+// Child process body: import groundcrew's real loadConfig and exit non-zero with
+// its message if the GROUNDCREW_CONFIG sidecar is rejected.
 const CHILD = `
 const { loadConfig } = await import(${JSON.stringify(groundcrewUrl)});
 try { await loadConfig(); }
@@ -90,10 +101,7 @@ export async function validateDraft(
   // never shadows the user's own crew.config.json discovery), placed *in* the
   // config dir — not a subdir — so `path.dirname` matches the real config's.
   const file = path.join(dir, `.crew.config.validate-${randomUUID()}.json`);
-  writeFileSync(
-    file,
-    JSON.stringify(pruneEmpty(draft as unknown as Record<string, unknown>)),
-  );
+  writeFileSync(file, JSON.stringify(pruneEmpty(draft)));
   try {
     await run(process.execPath, ["--input-type=module", "-e", CHILD], {
       env: { ...process.env, GROUNDCREW_CONFIG: file },

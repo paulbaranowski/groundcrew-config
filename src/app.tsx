@@ -62,7 +62,11 @@ export function App({ initialDraft, target }: Props) {
   const { rows, columns } = useFullscreen();
   const [draft, setDraft] = useState<ConfigDraft>(
     initialDraft ??
-      ({ workspace: { projectDir: "", knownRepositories: [] } } as ConfigDraft),
+      // Degenerate empty seed used when no config exists on disk; distinct from
+      // defaultDraft(), the richer opinionated seed.
+      ({
+        workspace: { projectDir: "", knownRepositories: [] },
+      } satisfies ConfigDraft),
   );
   const [route, setRoute] = useState<Route>({ name: "home" });
   // Home's selected row lives here so it survives opening a section and
@@ -80,7 +84,10 @@ export function App({ initialDraft, target }: Props) {
   // user always knows which config they're editing (not just its scope).
   const configPath = targetPath(target);
 
-  // Debounced round-trip validation whenever the draft changes.
+  // Debounced round-trip validation whenever the draft changes. Each run spawns a
+  // child Node process (see validateDraft), so it is debounced to one per 150ms of
+  // quiet; do not casually widen the dependency array — extra deps mean extra child
+  // processes per keystroke.
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -101,12 +108,21 @@ export function App({ initialDraft, target }: Props) {
     };
   }, [draft]);
 
+  // The single mutation path for the draft: besides swapping in `next`, it marks
+  // the draft `dirty` (unsaved edits exist, gating the quit guard and footer) and
+  // clears `saved` (the green "✓ saved" indicator). Every screen's draft write
+  // must route through this — a bare `setDraft` would silently leave `dirty`/`saved`
+  // stale and the UI would lie about whether edits are persisted.
   function update(next: ConfigDraft): void {
     setDraft(next);
     setDirty(true);
     setSaved(false);
   }
 
+  // Persists the draft and reconciles all save-state flags: clears `dirty`
+  // (no unsaved edits remain), sets `saved` (drives the "✓ saved" indicator),
+  // and records `shadowed` — the list of higher-precedence config files (.ts/.js)
+  // that saveDraft renamed aside so our .json is the one groundcrew loads.
   async function save(): Promise<void> {
     const result = await saveDraft(target, draft);
     setDirty(false);
@@ -140,8 +156,12 @@ export function App({ initialDraft, target }: Props) {
   }
 
   const noSources = enabledSourceCount(draft) === 0;
-  // crew run refuses without a task source, but loadConfig accepts empty sources,
-  // so badge it here (separate from loadConfig validity).
+  // `issues` carries only sections loadConfig flagged. Here we inject a synthetic
+  // `taskSources` badge that is NOT derived from loadConfig validity: loadConfig
+  // accepts an empty `sources[]`, but `crew run` refuses to do any work without a
+  // task source. The badge nudges the user even though the config is technically
+  // valid. The footer still reports `issues` (the real validity count) unchanged;
+  // only Home's per-section badges see this augmented set.
   const homeIssues = noSources
     ? new Set<SectionId>([...issues, "taskSources"])
     : issues;
@@ -199,6 +219,13 @@ export function App({ initialDraft, target }: Props) {
   const id = route.id;
   const back = () => setRoute({ name: "home" });
 
+  // Route dispatch: five section ids get bespoke screens via the explicit
+  // branches below; every other SectionId falls through to the generic
+  // SectionForm driven by `simpleSectionSpec(id)`. Adding a simple section
+  // means adding a simpleSectionSpec case plus its registry entries
+  // (SECTION_LABEL/SECTION_DESCRIPTION); adding a complex one means adding a
+  // branch here. Either way, a new SectionId also needs an entry in
+  // validate.ts's SECTION_PREFIXES, or its error badge mis-routes.
   const form =
     id === "workspace" ? (
       <WorkspaceForm draft={draft} onChange={update} onBack={back} />

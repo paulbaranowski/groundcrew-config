@@ -8,6 +8,8 @@ interface Props {
   onChange: (next: string) => void;
 }
 
+// A left/right-arrow option cycler (not a dropdown): renders every option inline
+// with the active one in brackets, wrapping past the ends.
 export function SelectField({
   label,
   value,

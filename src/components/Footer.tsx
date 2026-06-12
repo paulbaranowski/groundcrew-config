@@ -14,6 +14,8 @@ interface Props {
   noSources?: boolean;
 }
 
+// Status bar pinned to Home's bottom row: validity/issue-count/no-sources/unsaved
+// indicators on the left, the caller-supplied key hints on the right.
 export function Footer({
   dirty,
   issues,

@@ -18,6 +18,9 @@ interface Props {
   onBack: () => void;
 }
 
+// Section editor for workspace.knownRepositories: a ListField of repo entries
+// with add/edit/duplicate/delete, each edited via RepoSubForm. Follows the screen
+// contract — see SectionForm.
 export function RepositoriesForm({ draft, onChange, onBack }: Props) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
   const entries = normalizeRepos(draft.workspace.knownRepositories);

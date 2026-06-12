@@ -30,7 +30,7 @@ export interface FullscreenStdout {
 }
 
 /** Minimal process surface, injectable for tests. Listener shape matches Node's. */
-type ProcessListener = (...args: any[]) => void;
+type ProcessListener = (...args: unknown[]) => void;
 export interface FullscreenProcess {
   on(event: string, listener: ProcessListener): unknown;
   off(event: string, listener: ProcessListener): unknown;
@@ -62,9 +62,11 @@ export function createFullscreen(stdout: FullscreenStdout): FullscreenController
       stdout.write(ENTER_ALT_SCREEN + HIDE_CURSOR + CLEAR_SCREEN);
     },
     exit() {
-      // `entered` is only ever true when isTTY was true at enter time, so this
-      // implicitly no-ops off-TTY without re-checking isTTY (which could have
-      // changed). `restored` makes double-invocation harmless.
+      // Idempotency keys off the `entered`/`restored` flags, never a live isTTY
+      // read: `entered` is only ever true when isTTY was true at enter time, so
+      // this implicitly no-ops off-TTY without re-reading isTTY (which could have
+      // flipped). `restored` makes double-invocation from multiple teardown paths
+      // harmless. A live isTTY check here could skip a needed restore.
       if (!entered || restored) return;
       restored = true;
       stdout.write(SHOW_CURSOR + LEAVE_ALT_SCREEN);
