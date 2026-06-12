@@ -45,7 +45,10 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
   const guard = useEditGuard();
   // Mirror the active row in a ref so a burst of keypresses in one render (each
   // useInput call shares a stale `active` closure until React re-renders) still
-  // branches enter on the latest row — the same trick ListField uses.
+  // branches enter on the latest row — the same trick ListField uses. The
+  // useInput handler MUST read `activeRef.current`, never the render-time
+  // `active` state, or a fast ↑/↓-then-enter branches on the pre-burst row. Do
+  // not "simplify" the ref away.
   const activeRef = useRef(0);
 
   function moveActive(next: number): void {

@@ -36,7 +36,10 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
   const [sub, setSub] = useState<Sub>("hub");
   const [cursor, setCursor] = useState(0);
   // Mirror the cursor in a ref so a down+enter burst in one render opens the
-  // latest row (the handler otherwise closes over a stale cursor).
+  // latest row. The useInput handler MUST read `cursorRef.current`, never the
+  // render-time `cursor` state: every keystroke in one tick shares the same
+  // stale closure, so reading `cursor` would open the pre-burst row. Do not
+  // "simplify" the ref away.
   const cursorRef = useRef(0);
 
   function moveCursor(next: number): void {

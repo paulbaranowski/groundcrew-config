@@ -54,6 +54,10 @@ export function TextField({
       return;
     }
     const timer = setInterval(() => setCaretOn((on) => !on), CARET_BLINK_MS);
+    // `unref()` is required, not cosmetic: an active interval keeps Node's event
+    // loop alive, so without this the blink would block process/test exit (a
+    // headless test rendering a TextField would hang). Keep the optional call —
+    // it is a no-op where timers lack `unref` but load-bearing under Node.
     timer.unref?.();
     return () => clearInterval(timer);
   }, [isActive, disabled]);
