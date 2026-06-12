@@ -5,18 +5,16 @@ import {
   applyShellFields,
   readShellFields,
   type ShellFields,
+  type ShellSource,
   type ShellTextField,
 } from "../domain/sources.ts";
-import type { ConfigDraft } from "../domain/types.ts";
 import { useEditGuard } from "../hooks/useEditGuard.ts";
 import { ShellEnvEditor } from "./ShellEnvEditor.tsx";
 import { SaveGuard } from "./SaveGuard.tsx";
 
-type Source = NonNullable<ConfigDraft["sources"]>[number];
-
 interface Props {
-  source: Source | undefined;
-  onSave: (source: Source) => void;
+  source: ShellSource | undefined;
+  onSave: (source: ShellSource) => void;
   onCancel: () => void;
 }
 
