@@ -2,9 +2,7 @@
 // behind every FieldSpec. `getByPath` reads a leaf value (or undefined if any
 // segment is absent); `setByPath` writes one without mutating its input.
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { isObject } from "./guards.ts";
 
 export function getByPath(draft: unknown, path: string): unknown {
   let current: unknown = draft;

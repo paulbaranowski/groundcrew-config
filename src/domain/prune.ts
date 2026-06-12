@@ -18,17 +18,14 @@
  * with a bare `pruneValue(draft)` would drop those enable-markers and leave
  * `agents.default` dangling.
  */
+import { isObject } from "./guards.ts";
 import type { ConfigDraft } from "./types.ts";
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isEmpty(value: unknown): boolean {
   if (value === undefined) return true;
   if (typeof value === "string") return value.length === 0;
   if (Array.isArray(value)) return value.length === 0;
-  if (isPlainObject(value)) return Object.keys(value).length === 0;
+  if (isObject(value)) return Object.keys(value).length === 0;
   return false;
 }
 
@@ -36,7 +33,7 @@ function pruneValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(pruneValue).filter((v) => !isEmpty(v));
   }
-  if (isPlainObject(value)) {
+  if (isObject(value)) {
     const out: Record<string, unknown> = {};
     for (const [key, raw] of Object.entries(value)) {
       const pruned = pruneValue(raw);
@@ -58,7 +55,7 @@ export function pruneEmpty(
   const source = draft as Record<string, unknown>;
   const pruned = pruneValue(source) as Record<string, unknown>;
   if ("workspace" in source) {
-    const workspace = isPlainObject(source.workspace) ? source.workspace : {};
+    const workspace = isObject(source.workspace) ? source.workspace : {};
     const prunedWorkspace = pruneValue(workspace) as Record<string, unknown>;
     if (
       "knownRepositories" in workspace &&
@@ -84,10 +81,10 @@ function restoreAgentDefinitions(
   pruned: Record<string, unknown>,
 ): void {
   const agents = draft.agents;
-  if (!isPlainObject(agents) || !isPlainObject(agents.definitions)) return;
+  if (!isObject(agents) || !isObject(agents.definitions)) return;
 
-  const prunedAgents = isPlainObject(pruned.agents) ? pruned.agents : {};
-  const prunedDefinitions = isPlainObject(prunedAgents.definitions)
+  const prunedAgents = isObject(pruned.agents) ? pruned.agents : {};
+  const prunedDefinitions = isObject(prunedAgents.definitions)
     ? prunedAgents.definitions
     : {};
   for (const [name, definition] of Object.entries(agents.definitions)) {
