@@ -49,6 +49,9 @@ export function SectionForm({
     } else {
       value = raw;
     }
+    // draftPath is the typed boundary: the draft crosses into setByPath as an
+    // untyped record and back to ConfigDraft. The FieldPath union on field.path
+    // is what keeps these casts honest about which leaves get written.
     onChange(
       setByPath(
         draft as unknown as Record<string, unknown>,
