@@ -39,9 +39,9 @@ test("help line lists the duplicate shortcut", () => {
   const { lastFrame } = render(
     <RepositoriesForm draft={draft} onChange={() => {}} onBack={() => {}} />,
   );
-  expect(lastFrame()).toContain(
-    "↑/↓ move · enter edit · c duplicate · d delete · esc back",
-  );
+  // The help line wraps in the test's terminal width, so assert on the
+  // contiguous portion carrying the new confirm-on-delete copy.
+  expect(lastFrame()).toContain("c duplicate · d delete (confirm)");
 });
 
 test("c on a scripted repo opens the sub-form prefilled with the copy", async () => {
@@ -66,6 +66,64 @@ test("c on a scripted repo opens the sub-form prefilled with the copy", async ()
   expect(lastFrame()).toContain("maple-copy");
   expect(lastFrame()).toContain("graft add maple");
   expect(lastFrame()).toContain("graft rm maple");
+});
+
+test("d shows the delete confirmation and does not delete until confirmed", async () => {
+  const two = {
+    workspace: {
+      projectDir: "~/dev/groundcrew",
+      knownRepositories: ["maple", "oak"],
+    },
+  } as never as ConfigDraft;
+
+  const { stdin, lastFrame } = render(<Host initial={two} />);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ maple"));
+
+  stdin.write("d"); // request delete of the focused repo
+  // The guard appears; the repo is still in the (now-hidden) list behind it.
+  await vi.waitFor(() => expect(lastFrame()).toContain("Delete maple?"));
+  expect(lastFrame()).toContain("[esc] Cancel");
+});
+
+test("y on the delete guard removes the focused repo", async () => {
+  const two = {
+    workspace: {
+      projectDir: "~/dev/groundcrew",
+      knownRepositories: ["maple", "oak"],
+    },
+  } as never as ConfigDraft;
+
+  const { stdin, lastFrame } = render(<Host initial={two} />);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ maple"));
+
+  stdin.write("d");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Delete maple?"));
+
+  stdin.write("y"); // confirm
+  await vi.waitFor(() => expect(lastFrame()).toContain("Repositories"));
+  expect(lastFrame()).not.toContain("maple");
+  expect(lastFrame()).toContain("oak");
+});
+
+test("esc on the delete guard keeps the repo", async () => {
+  const two = {
+    workspace: {
+      projectDir: "~/dev/groundcrew",
+      knownRepositories: ["maple", "oak"],
+    },
+  } as never as ConfigDraft;
+
+  const { stdin, lastFrame } = render(<Host initial={two} />);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ maple"));
+
+  stdin.write("d");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Delete maple?"));
+
+  stdin.write("\x1b"); // cancel
+  await vi.waitFor(() => expect(lastFrame()).not.toContain("Delete maple?"));
+  // Both repos survive a cancelled delete.
+  expect(lastFrame()).toContain("maple");
+  expect(lastFrame()).toContain("oak");
 });
 
 test("c commits the copy immediately; esc returns to a list holding both repos", async () => {

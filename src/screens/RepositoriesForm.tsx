@@ -11,6 +11,7 @@ import {
 import { setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { RepoSubForm } from "./RepoSubForm.tsx";
+import { DeleteGuard } from "./DeleteGuard.tsx";
 
 interface Props {
   draft: ConfigDraft;
@@ -23,15 +24,21 @@ interface Props {
 // contract — see SectionForm.
 export function RepositoriesForm({ draft, onChange, onBack }: Props) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
+  const [pendingDelete, setPendingDelete] = useState<number | undefined>(
+    undefined,
+  );
   const entries = normalizeRepos(draft.workspace.knownRepositories);
   const errors = repoErrors(entries);
 
+  // Esc-to-back is live only on the bare list — not while a sub-editor or the
+  // delete confirmation owns input (the DeleteGuard handles its own esc).
+  const listActive = editing === undefined && pendingDelete === undefined;
   useInput(
     (_input, key) => {
-      if (editing !== undefined) return;
+      if (!listActive) return;
       if (key.escape) onBack();
     },
-    { isActive: editing === undefined },
+    { isActive: listActive },
   );
 
   function commitEntries(next: RepoEntry[]): void {
@@ -87,19 +94,31 @@ export function RepositoriesForm({ draft, onChange, onBack }: Props) {
     error: errors[index],
   }));
 
+  if (pendingDelete !== undefined) {
+    const target = entries[pendingDelete];
+    return (
+      <DeleteGuard
+        name={target?.name ?? "this repo"}
+        onConfirm={() => {
+          commitEntries(entries.filter((_, i) => i !== pendingDelete));
+          setPendingDelete(undefined);
+        }}
+        onCancel={() => setPendingDelete(undefined)}
+      />
+    );
+  }
+
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Repositories</Text>
       <Box marginTop={1} flexDirection="column">
         <ListField
           items={items}
-          isActive
+          isActive={pendingDelete === undefined}
           onActivate={(index) =>
             setEditing(index === entries.length ? entries.length : index)
           }
-          onDelete={(index) =>
-            commitEntries(entries.filter((_, i) => i !== index))
-          }
+          onDelete={(index) => setPendingDelete(index)}
           itemActions={[{ key: "c", onPress: duplicateAt }]}
         />
       </Box>
@@ -107,7 +126,7 @@ export function RepositoriesForm({ draft, onChange, onBack }: Props) {
         <Text dimColor>
           The repos groundcrew is allowed to work on, listed by their local
           folder name (each must already exist under your projectDir). ↑/↓ move ·
-          enter edit · c duplicate · d delete · esc back.
+          enter edit · c duplicate · d delete (confirm) · esc back.
         </Text>
       </Box>
     </Box>

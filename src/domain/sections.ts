@@ -226,8 +226,10 @@ function repoCount(draft: ConfigDraft): number {
 
 export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
   switch (id) {
-    case "workspace":
-      return draft.workspace.projectDir;
+    case "workspace": {
+      const { projectDir, worktreeDir } = draft.workspace;
+      return `${projectDir} · worktreeDir: ${worktreeDir ?? projectDir}`;
+    }
     case "repositories": {
       const n = repoCount(draft);
       return `${n} repo${n === 1 ? "" : "s"}`;
