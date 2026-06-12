@@ -1,3 +1,5 @@
+import type { ConfigDraft } from "./types.ts";
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -31,11 +33,12 @@ function pruneValue(value: unknown): unknown {
  * when empty (an absent `knownRepositories` is not synthesized).
  */
 export function pruneEmpty(
-  draft: Record<string, unknown>,
+  draft: ConfigDraft | Record<string, unknown>,
 ): Record<string, unknown> {
-  const pruned = pruneValue(draft) as Record<string, unknown>;
-  if ("workspace" in draft) {
-    const workspace = isPlainObject(draft.workspace) ? draft.workspace : {};
+  const source = draft as Record<string, unknown>;
+  const pruned = pruneValue(source) as Record<string, unknown>;
+  if ("workspace" in source) {
+    const workspace = isPlainObject(source.workspace) ? source.workspace : {};
     const prunedWorkspace = pruneValue(workspace) as Record<string, unknown>;
     if (
       "knownRepositories" in workspace &&
@@ -47,7 +50,7 @@ export function pruneEmpty(
     }
     pruned.workspace = prunedWorkspace;
   }
-  restoreAgentDefinitions(draft, pruned);
+  restoreAgentDefinitions(source, pruned);
   return pruned;
 }
 

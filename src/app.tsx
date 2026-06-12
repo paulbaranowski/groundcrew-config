@@ -84,7 +84,10 @@ export function App({ initialDraft, target }: Props) {
   // user always knows which config they're editing (not just its scope).
   const configPath = targetPath(target);
 
-  // Debounced round-trip validation whenever the draft changes.
+  // Debounced round-trip validation whenever the draft changes. Each run spawns a
+  // child Node process (see validateDraft), so it is debounced to one per 150ms of
+  // quiet; do not casually widen the dependency array — extra deps mean extra child
+  // processes per keystroke.
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
