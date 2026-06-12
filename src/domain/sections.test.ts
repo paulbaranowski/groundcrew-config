@@ -23,12 +23,24 @@ test("section order is the Home list order", () => {
   ]);
 });
 
-test("workspace summary shows projectDir only", () => {
+test("workspace summary shows projectDir and the configured worktreeDir", () => {
+  expect(
+    sectionSummary("workspace", {
+      workspace: {
+        projectDir: "~/dev/groundcrew",
+        worktreeDir: "~/dev/worktrees",
+        knownRepositories: ["a/b"],
+      },
+    } as never),
+  ).toBe("~/dev/groundcrew · worktreeDir: ~/dev/worktrees");
+});
+
+test("workspace summary falls back to projectDir when worktreeDir is unset", () => {
   expect(
     sectionSummary("workspace", {
       workspace: { projectDir: "~/dev/groundcrew", knownRepositories: ["a/b"] },
     } as never),
-  ).toBe("~/dev/groundcrew");
+  ).toBe("~/dev/groundcrew · worktreeDir: ~/dev/groundcrew");
 });
 
 test("repositories summary shows the repo count", () => {
