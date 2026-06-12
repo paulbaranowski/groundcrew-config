@@ -329,7 +329,10 @@ export function shellSources(draft: ConfigDraft): ShellSource[] {
  */
 export function shellListTasksCommand(source: Source): string | undefined {
   if (!isShellKind(source)) return undefined;
-  const value = source.commands.listTasks ?? source.commands.fetch;
+  // `commands` is required by the type, but malformed on-disk JSON (hand-edited)
+  // can omit it; guard before reading so render never crashes (cf. readShellFields).
+  const commands = (source.commands as Record<string, unknown>) ?? {};
+  const value = commands.listTasks ?? commands.fetch;
   return typeof value === "string" ? value : undefined;
 }
 

@@ -229,6 +229,10 @@ test("shellListTasksCommand returns undefined for missing/non-string/non-shell",
   ).toBeUndefined();
   // A non-shell kind never lists tasks through this helper.
   expect(shellListTasksCommand({ kind: "linear" } as never)).toBeUndefined();
+  // A malformed shell source with no `commands` object does not throw.
+  expect(
+    shellListTasksCommand({ kind: "shell", name: "jira" } as never),
+  ).toBeUndefined();
 });
 
 test("structural helpers partition a mixed sources array consistently", () => {
