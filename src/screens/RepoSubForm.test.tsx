@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 import { RepoSubForm } from "./RepoSubForm.tsx";
 
 const ESC = String.fromCharCode(27);
+const DOWN = "\x1b[B"; // down-arrow escape sequence
 
 test("previews resolved location using projectDir default", () => {
   const { lastFrame } = render(
@@ -117,6 +118,86 @@ test("the save guard's discard cancels without saving", async () => {
   stdin.write("d");
   await vi.waitFor(() => expect(onCancel).toHaveBeenCalled());
   expect(onSave).not.toHaveBeenCalled();
+});
+
+test("projectDirOverride is inert while provision is set", async () => {
+  const onSave = vi.fn();
+  const { lastFrame, stdin } = render(
+    <RepoSubForm
+      entry={{
+        name: "org/repo",
+        projectDirOverride: undefined,
+        provision: { create: "graft add", remove: "graft rm" },
+      }}
+      projectDir="~/dev"
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  // The override field reads as disabled rather than offering its placeholder.
+  expect(lastFrame()).toContain("projectDirOverride");
+  expect(lastFrame()).toContain("disabled");
+  stdin.write(DOWN); // focus projectDirOverride
+  await vi.waitFor(() => expect(lastFrame()).toContain("› projectDirOverride"));
+  stdin.write("X"); // inert: typing is ignored
+  stdin.write("\r");
+  expect(onSave).toHaveBeenCalledWith({
+    name: "org/repo",
+    projectDirOverride: undefined,
+    workdir: undefined,
+    provision: { create: "graft add", remove: "graft rm" },
+  });
+});
+
+test("provision fields are inert while projectDirOverride is set", async () => {
+  const onSave = vi.fn();
+  const { lastFrame, stdin } = render(
+    <RepoSubForm
+      entry={{ name: "org/repo", projectDirOverride: "~/custom" }}
+      projectDir="~/dev"
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  stdin.write(DOWN); // name -> projectDirOverride
+  stdin.write(DOWN); // -> workdir
+  stdin.write(DOWN); // -> provision.create
+  await vi.waitFor(() => expect(lastFrame()).toContain("› provision.create"));
+  stdin.write("X"); // inert
+  stdin.write("\r");
+  expect(onSave).toHaveBeenCalledWith({
+    name: "org/repo",
+    projectDirOverride: "~/custom",
+    workdir: undefined,
+    provision: undefined,
+  });
+});
+
+test("a legacy entry with both set keeps both fields editable", async () => {
+  const onSave = vi.fn();
+  const { lastFrame, stdin } = render(
+    <RepoSubForm
+      entry={{
+        name: "org/repo",
+        projectDirOverride: "~/custom",
+        provision: { create: "graft add", remove: "graft rm" },
+      }}
+      projectDir="~/dev"
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  stdin.write(DOWN); // focus projectDirOverride
+  await vi.waitFor(() => expect(lastFrame()).toContain("› projectDirOverride"));
+  stdin.write("Z"); // editable: neither field is disabled while both are set
+  await vi.waitFor(() => expect(lastFrame()).toContain("~/customZ"));
+  stdin.write("\r");
+  expect(onSave).toHaveBeenCalledWith({
+    name: "org/repo",
+    projectDirOverride: "~/customZ",
+    workdir: undefined,
+    provision: { create: "graft add", remove: "graft rm" },
+  });
 });
 
 test("the save guard's esc returns to editing", async () => {
