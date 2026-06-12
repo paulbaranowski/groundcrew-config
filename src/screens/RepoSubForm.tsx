@@ -64,6 +64,17 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
     );
   }
 
+  // `projectDirOverride` and `provision` are mutually exclusive (groundcrew
+  // rejects the combo; see `repoEntries.ts`). Enforce it in the editor: an empty
+  // field goes inert once its counterpart is filled, so the invalid state can't
+  // be typed in the first place. Both being filled (a legacy/invalid config)
+  // disables neither, so the user can still clear one to fix it.
+  const overrideFilled = override.trim().length > 0;
+  const provisionFilled =
+    provisionCreate.trim().length > 0 || provisionRemove.trim().length > 0;
+  const overrideDisabled = provisionFilled && !overrideFilled;
+  const provisionDisabled = overrideFilled && !provisionFilled;
+
   const base = override.length === 0 ? projectDir : override;
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
@@ -81,6 +92,8 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
           placeholder={`${projectDir}  (default)`}
           isActive={active === 1}
           onChange={guard.track(setOverride)}
+          disabled={overrideDisabled}
+          disabledHint="(disabled — clear provision to use)"
         />
         <TextField
           label="workdir"
@@ -95,6 +108,8 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
           placeholder="replaces `git worktree add`; vars: ${repo} ${branch} ${dir} ${baseRef} ${task}"
           isActive={active === 3}
           onChange={guard.track(setProvisionCreate)}
+          disabled={provisionDisabled}
+          disabledHint="(disabled — clear projectDirOverride to use)"
         />
         <TextField
           label="provision.remove"
@@ -102,6 +117,8 @@ export function RepoSubForm({ entry, projectDir, onSave, onCancel }: Props) {
           placeholder="replaces `git worktree remove`; vars: ${repo} ${branch} ${dir} ${baseRef} ${task}"
           isActive={active === 4}
           onChange={guard.track(setProvisionRemove)}
+          disabled={provisionDisabled}
+          disabledHint="(disabled — clear projectDirOverride to use)"
         />
       </Box>
       <Box marginTop={1}>
