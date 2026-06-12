@@ -1,3 +1,23 @@
+/**
+ * Save-time minimizer: drops empty values so the written `crew.config.json`
+ * stays minimal. Empty means undefined, an empty string, an empty array, or an
+ * empty plain object (see `isEmpty`).
+ *
+ * Some fields are meaningful precisely _when_ empty and must survive the prune.
+ * Any new such field must be taught to this module — the generic prune does not
+ * know which empties carry meaning. The current exceptions:
+ *  - top-level `workspace` is always retained.
+ *  - `workspace.knownRepositories` is required, so it is kept even when empty
+ *    (an absent `knownRepositories` is not synthesized).
+ *  - `agents.definitions[name] = {}` is the enable-marker for a built-in agent;
+ *    an empty definition still enables it.
+ *
+ * `pruneEmpty` is the only sanctioned entry point. It runs the generic
+ * `pruneValue` first, then `restoreAgentDefinitions` re-attaches the dropped
+ * enable-markers, mutating the pruned object in place. Replacing `pruneEmpty`
+ * with a bare `pruneValue(draft)` would drop those enable-markers and leave
+ * `agents.default` dangling.
+ */
 import type { ConfigDraft } from "./types.ts";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
