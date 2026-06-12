@@ -27,9 +27,6 @@ export type Runner = (typeof RUNNERS)[number];
 export const WORKSPACE_KINDS = ["auto", "cmux", "tmux", "zellij"] as const;
 export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
 
-/** Built-in agent presets that enable with `{}`. */
-export const BUILT_IN_AGENTS = ["claude", "codex"] as const;
-
 /** Orchestrator defaults groundcrew applies; shown as ghost values in the UI. */
 export const ORCHESTRATOR_DEFAULTS = {
   maximumInProgress: 4,

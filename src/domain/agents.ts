@@ -1,7 +1,9 @@
 import type { ConfigDraft } from "./types.ts";
 
 type Agents = ConfigDraft["agents"];
-type Def = Record<string, unknown>;
+/** A single agent definition entry, exactly groundcrew's user-facing shape. */
+export type AgentDef = NonNullable<NonNullable<Agents>["definitions"]>[string];
+type Def = AgentDef;
 
 /** Built-in agent presets, in display order. An empty `{}` entry enables one. */
 export const BUILTIN_AGENTS = ["claude", "codex"] as const;

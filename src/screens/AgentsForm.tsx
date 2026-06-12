@@ -40,7 +40,7 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
   const focused = Math.min(cursor, rows.length - 1);
 
   const custom = Object.keys(definitions).filter(
-    (name) => !BUILTIN_AGENTS.includes(name as never),
+    (name) => !(BUILTIN_AGENTS as readonly string[]).includes(name),
   );
 
   function toggle(row: Row): void {

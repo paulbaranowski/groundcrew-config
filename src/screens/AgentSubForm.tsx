@@ -6,10 +6,9 @@ import { SaveGuard } from "./SaveGuard.tsx";
 import {
   applyAgentFields,
   readAgentFields,
+  type AgentDef as Def,
   type AgentFields,
 } from "../domain/agents.ts";
-
-type Def = Record<string, unknown>;
 
 interface Props {
   name: string;
