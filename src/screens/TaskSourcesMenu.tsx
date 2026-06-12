@@ -26,6 +26,12 @@ const ROWS: Array<Exclude<Sub, "hub">> = [
   "shell",
 ];
 
+/**
+ * Hub for the taskSources section: owns sub-routing to LinearForm, TodoTxtForm,
+ * PlanKeeperForm, and ShellSourcesForm via its `Sub` union and `ROWS`. To add a
+ * task-source screen, extend `Sub`/`ROWS` and the dispatch here — not app.tsx,
+ * which only routes the `taskSources` SectionId to this hub.
+ */
 export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
   const [sub, setSub] = useState<Sub>("hub");
   const [cursor, setCursor] = useState(0);

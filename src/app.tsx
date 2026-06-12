@@ -219,6 +219,13 @@ export function App({ initialDraft, target }: Props) {
   const id = route.id;
   const back = () => setRoute({ name: "home" });
 
+  // Route dispatch: five section ids get bespoke screens via the explicit
+  // branches below; every other SectionId falls through to the generic
+  // SectionForm driven by `simpleSectionSpec(id)`. Adding a simple section
+  // means adding a simpleSectionSpec case plus its registry entries
+  // (SECTION_LABEL/SECTION_DESCRIPTION); adding a complex one means adding a
+  // branch here. Either way, a new SectionId also needs an entry in
+  // validate.ts's SECTION_PREFIXES, or its error badge mis-routes.
   const form =
     id === "workspace" ? (
       <WorkspaceForm draft={draft} onChange={update} onBack={back} />
