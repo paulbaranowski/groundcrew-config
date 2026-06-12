@@ -20,6 +20,12 @@ function asString(value: unknown): string {
   return value === undefined ? "" : String(value);
 }
 
+// Screen contract (shared by every section editor): a screen receives the whole
+// `draft`, emits the next draft via `onChange(nextDraft)`, and never saves or
+// validates — App owns that. `onBack` returns to Home.
+//
+// The generic section editor: renders one FieldSpec row per entry in `spec`
+// (TextField or SelectField), writing each leaf back through draftPath.
 export function SectionForm({
   title,
   description,

@@ -17,6 +17,9 @@ interface Props {
   onBack: () => void;
 }
 
+// Section editor for custom `kind:"shell"` task sources: a ListField of entries
+// that delegates each one to ShellSourceSubForm. Follows the screen contract —
+// see SectionForm.
 export function ShellSourcesForm({ draft, onChange, onBack }: Props) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
   const entries = shellSources(draft);

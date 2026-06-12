@@ -30,6 +30,9 @@ const FIELD_ROWS = [
   { key: "inReview", label: "statuses.inReview" },
 ] as const;
 
+// Section editor for the built-in Linear task source: enable toggle plus optional
+// team/name and inProgress/inReview status overrides (the API key comes from the
+// environment). Follows the screen contract — see SectionForm.
 export function LinearForm({ draft, onChange, onBack, env = process.env }: Props) {
   const enabled = isLinearEnabled(draft);
   const key = linearApiKeyStatus(env);

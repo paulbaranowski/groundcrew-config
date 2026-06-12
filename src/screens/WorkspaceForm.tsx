@@ -13,6 +13,8 @@ interface Props {
 type Focus = "projectDir" | "worktreeDir";
 const FOCI: Focus[] = ["projectDir", "worktreeDir"];
 
+// Section editor for the workspace paths (projectDir and worktreeDir). Follows
+// the screen contract — see SectionForm.
 export function WorkspaceForm({ draft, onChange, onBack }: Props) {
   const [focusIndex, setFocusIndex] = useState(0);
   const focus = FOCI[focusIndex] ?? "projectDir";

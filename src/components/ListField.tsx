@@ -35,6 +35,9 @@ interface Props {
   itemActions?: ItemAction[];
 }
 
+// An editable list of items with a moving cursor: ↑/↓ select, enter activates a
+// row (or the trailing "add" row), `d` deletes, and optional single-key
+// itemActions fire on the focused item. Windowed by ScrollableList.
 export function ListField({
   items,
   isActive,

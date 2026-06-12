@@ -19,6 +19,8 @@ interface Props {
   disabledHint?: string;
 }
 
+// Controlled single-line input with a blinking caret. Supports an inert
+// `disabled` mode (focusable but ignores keystrokes) for mutually-exclusive fields.
 export function TextField({
   label,
   value,

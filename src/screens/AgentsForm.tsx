@@ -23,6 +23,9 @@ type Row =
   | { kind: "enable"; name: (typeof BUILTIN_AGENTS)[number] }
   | { kind: "bypass" };
 
+// Section editor for the coding agents groundcrew runs: enable/disable each
+// built-in (claude, codex), toggle claude's permission-bypass child row, and edit
+// per-agent fields via AgentSubForm. Follows the screen contract — see SectionForm.
 export function AgentsForm({ draft, onChange, onBack }: Props) {
   const [cursor, setCursor] = useState(0);
   const [editing, setEditing] = useState<string | undefined>(undefined);

@@ -11,6 +11,9 @@ interface Props {
   onBack: () => void;
 }
 
+// Section editor for usage limits: toggle per-agent usage tracking and set the
+// orchestrator's sessionLimitPercentage ceiling. Follows the screen contract —
+// see SectionForm.
 export function UsageForm({ draft, onChange, onBack }: Props) {
   const disabled = isUsageDisabled(draft.agents);
   const hasAgents = Object.keys(draft.agents?.definitions ?? {}).length > 0;

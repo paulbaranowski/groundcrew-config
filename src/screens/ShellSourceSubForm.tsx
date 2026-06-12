@@ -35,6 +35,9 @@ const ROWS: Array<{ key: ShellTextField; label: string; placeholder: string }> =
 // instead of saving. So the navigable range is [0, ROWS.length], not ROWS.length-1.
 const ENV_ROW = ROWS.length;
 
+// Buffered sub-editor for one shell source: edits the name/commands/cwd rows plus
+// a nested env editor locally, committing via `onSave` only on enter (esc routes
+// through the edit guard). Owned by ShellSourcesForm, not a top-level screen.
 export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
   const [fields, setFields] = useState<ShellFields>(() => readShellFields(source));
   const [active, setActive] = useState(0);
