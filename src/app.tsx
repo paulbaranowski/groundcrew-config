@@ -62,7 +62,11 @@ export function App({ initialDraft, target }: Props) {
   const { rows, columns } = useFullscreen();
   const [draft, setDraft] = useState<ConfigDraft>(
     initialDraft ??
-      ({ workspace: { projectDir: "", knownRepositories: [] } } as ConfigDraft),
+      // Degenerate empty seed used when no config exists on disk; distinct from
+      // defaultDraft(), the richer opinionated seed.
+      ({
+        workspace: { projectDir: "", knownRepositories: [] },
+      } satisfies ConfigDraft),
   );
   const [route, setRoute] = useState<Route>({ name: "home" });
   // Home's selected row lives here so it survives opening a section and
