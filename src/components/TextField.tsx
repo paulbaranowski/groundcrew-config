@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 
 const CARET_BLINK_MS = 530;
@@ -30,15 +30,48 @@ export function TextField({
   disabled = false,
   disabledHint,
 }: Props) {
+  // Caret position (index into `value`, 0..value.length). Mirrored in a ref so a
+  // burst of keypresses delivered in one render — each `useInput` call shares the
+  // same stale `caret` closure until React re-renders — still moves and edits
+  // from the latest position (same reason `ListField` keeps `cursorRef`). The
+  // handler MUST read `caretRef.current`, never the render-time `caret`.
+  const [caret, setCaret] = useState(value.length);
+  const caretRef = useRef(value.length);
+  function moveCaret(next: number): void {
+    caretRef.current = next;
+    setCaret(next);
+  }
+  // Re-home the caret to the end whenever the field (re)gains focus, so editing
+  // an existing value starts at a sensible place. Deliberately keyed on focus
+  // only (not `value`): re-homing on every keystroke would fight interior edits.
+  useEffect(() => {
+    if (isActive && !disabled) moveCaret(value.length);
+  }, [isActive, disabled]);
+
   useInput(
     (input, key) => {
+      const pos = Math.min(caretRef.current, value.length);
+      if (key.leftArrow) {
+        moveCaret(Math.max(0, pos - 1));
+        return;
+      }
+      if (key.rightArrow) {
+        moveCaret(Math.min(value.length, pos + 1));
+        return;
+      }
       if (key.backspace || key.delete) {
-        onChange(value.slice(0, -1));
+        // Backspace removes the character before the caret.
+        if (pos === 0) return;
+        onChange(value.slice(0, pos - 1) + value.slice(pos));
+        moveCaret(pos - 1);
         return;
       }
       if (key.return || key.upArrow || key.downArrow || key.escape || key.tab)
         return;
-      if (input) onChange(value + input);
+      if (input) {
+        onChange(value.slice(0, pos) + input + value.slice(pos));
+        moveCaret(pos + input.length);
+      }
     },
     { isActive: isActive && !disabled },
   );
@@ -75,25 +108,41 @@ export function TextField({
   }
 
   const hasValue = value.length > 0;
-  // A space when the caret is "off" keeps the text from shifting as it blinks.
-  const caret = isActive ? (
+  const pos = Math.min(caret, value.length);
+  // The caret has two renderings depending on where it sits:
+  //   • At the end of the value (or on an empty field) there is no character to
+  //     mark, so draw a thin bar in its own column. A trailing bar is harmless —
+  //     it never splits the text — and a space when "off" holds the column so the
+  //     text doesn't jitter as it blinks.
+  //   • In the *interior*, drawing a bar would insert a column and visibly split
+  //     the word (e.g. "flawless-inve▏ntory"). Instead, highlight the character
+  //     the caret sits on with inverse video — a block cursor that occupies no
+  //     extra column, so the text stays contiguous.
+  const endBar = isActive ? (
     <Text color="cyan">{caretOn ? "▏" : " "}</Text>
   ) : null;
+  const atEnd = pos >= value.length;
   return (
     <Box>
       <Text color={isActive ? "cyan" : undefined}>
         {isActive ? "› " : "  "}
         {label}{" "}
       </Text>
-      {hasValue ? (
+      {!hasValue ? (
+        <Text>
+          {endBar}
+          <Text dimColor>{placeholder ?? ""}</Text>
+        </Text>
+      ) : atEnd ? (
         <Text>
           {value}
-          {caret}
+          {endBar}
         </Text>
       ) : (
         <Text>
-          {caret}
-          <Text dimColor>{placeholder ?? ""}</Text>
+          {value.slice(0, pos)}
+          <Text inverse={isActive && caretOn}>{value[pos]}</Text>
+          {value.slice(pos + 1)}
         </Text>
       )}
     </Box>
