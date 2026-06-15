@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { Footer } from "./components/Footer.tsx";
 import { useFullscreen } from "./hooks/useFullscreen.ts";
@@ -9,6 +9,7 @@ import {
   type SectionId,
 } from "./domain/sections.ts";
 import type { ConfigDraft } from "./domain/types.ts";
+import { modifiedSections } from "./domain/modified.ts";
 import { enabledSourceCount } from "./domain/sources.ts";
 import path from "node:path";
 import { saveDraft, targetPath, type Target } from "./io/save.ts";
@@ -161,6 +162,11 @@ export function App({ initialDraft, target }: Props) {
     );
   }
 
+  const modified = useMemo(
+    () => modifiedSections(baseline, draft),
+    [baseline, draft],
+  );
+
   const noSources = enabledSourceCount(draft) === 0;
   // `issues` carries only sections loadConfig flagged. Here we inject a synthetic
   // `taskSources` badge that is NOT derived from loadConfig validity: loadConfig
@@ -213,6 +219,7 @@ export function App({ initialDraft, target }: Props) {
           <Home
             draft={draft}
             issues={homeIssues}
+            modified={modified}
             cursor={homeCursor}
             onCursorChange={setHomeCursor}
             onOpen={(id) => setRoute({ name: "section", id })}
