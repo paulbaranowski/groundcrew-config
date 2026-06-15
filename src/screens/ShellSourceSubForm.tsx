@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { TextField } from "../components/TextField.tsx";
+import { valuesEqual } from "../domain/diff.ts";
 import {
   applyShellFields,
   readShellFields,
@@ -14,6 +15,8 @@ import { SaveGuard } from "./SaveGuard.tsx";
 
 interface Props {
   source: ShellSource | undefined;
+  /** The matched baseline source; undefined for a newly-added source. */
+  baselineSource: ShellSource | undefined;
   onSave: (source: ShellSource) => void;
   onCancel: () => void;
 }
@@ -38,8 +41,14 @@ const ENV_ROW = ROWS.length;
 // Buffered sub-editor for one shell source: edits the name/commands/cwd rows plus
 // a nested env editor locally, committing via `onSave` only on enter (esc routes
 // through the edit guard). Owned by ShellSourcesForm, not a top-level screen.
-export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
+export function ShellSourceSubForm({
+  source,
+  baselineSource,
+  onSave,
+  onCancel,
+}: Props) {
   const [fields, setFields] = useState<ShellFields>(() => readShellFields(source));
+  const baselineFields = readShellFields(baselineSource);
   const [active, setActive] = useState(0);
   const [mode, setMode] = useState<"fields" | "env">("fields");
   const guard = useEditGuard();
@@ -87,6 +96,7 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
     return (
       <ShellEnvEditor
         env={fields.env}
+        baselineEnv={baselineFields.env}
         onChange={(env) => {
           guard.markDirty();
           setFields((f) => ({ ...f, env }));
@@ -100,24 +110,34 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
   const listTasksMissing = fields.listTasks.trim().length === 0;
   const envActive = active === ENV_ROW;
   const envCount = fields.env.length;
+  // For a newly-added source (no matching baseline) every field reads as modified.
+  const envModified =
+    baselineSource === undefined ||
+    !valuesEqual(fields.env, baselineFields.env);
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Shell source</Text>
       <Box flexDirection="column" marginTop={1}>
-        {ROWS.map((row, index) => (
-          <TextField
-            key={row.key}
-            label={row.label}
-            value={fields[row.key]}
-            placeholder={row.placeholder}
-            isActive={active === index}
-            onChange={(v) => {
-              guard.markDirty();
-              setFields((f) => ({ ...f, [row.key]: v }));
-            }}
-          />
-        ))}
+        {ROWS.map((row, index) => {
+          const modified =
+            baselineSource === undefined ||
+            !valuesEqual(fields[row.key], baselineFields[row.key]);
+          return (
+            <TextField
+              key={row.key}
+              label={row.label}
+              value={fields[row.key]}
+              placeholder={row.placeholder}
+              isActive={active === index}
+              modified={modified}
+              onChange={(v) => {
+                guard.markDirty();
+                setFields((f) => ({ ...f, [row.key]: v }));
+              }}
+            />
+          );
+        })}
         <Box>
           <Text color={envActive ? "cyan" : undefined}>
             {envActive ? "› " : "  "}env{" "}
@@ -125,6 +145,7 @@ export function ShellSourceSubForm({ source, onSave, onCancel }: Props) {
           <Text dimColor>
             {envCount} variable{envCount === 1 ? "" : "s"} — enter to edit
           </Text>
+          {envModified ? <Text color="yellow"> ●</Text> : null}
         </Box>
       </Box>
       {nameMissing || listTasksMissing ? (

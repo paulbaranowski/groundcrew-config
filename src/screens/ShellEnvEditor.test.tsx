@@ -9,7 +9,12 @@ const DOWN = `${ESC}[B`;
 test("lists existing variables as key = value", () => {
   const env: EnvEntry[] = [{ key: "JIRA_HOST", value: "jira.example.com" }];
   const { lastFrame } = render(
-    <ShellEnvEditor env={env} onChange={() => {}} onBack={() => {}} />,
+    <ShellEnvEditor
+      env={env}
+      baselineEnv={env}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
   );
   const f = lastFrame() ?? "";
   expect(f).toContain("Environment variables");
@@ -20,7 +25,12 @@ test("lists existing variables as key = value", () => {
 test("esc on the list goes back", async () => {
   const onBack = vi.fn();
   const { stdin } = render(
-    <ShellEnvEditor env={[]} onChange={() => {}} onBack={onBack} />,
+    <ShellEnvEditor
+      env={[]}
+      baselineEnv={[]}
+      onChange={() => {}}
+      onBack={onBack}
+    />,
   );
   stdin.write(ESC);
   await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
@@ -29,7 +39,12 @@ test("esc on the list goes back", async () => {
 test("adding a variable appends a new key/value entry", async () => {
   const onChange = vi.fn();
   const { lastFrame, stdin } = render(
-    <ShellEnvEditor env={[]} onChange={onChange} onBack={() => {}} />,
+    <ShellEnvEditor
+      env={[]}
+      baselineEnv={[]}
+      onChange={onChange}
+      onBack={() => {}}
+    />,
   );
   // Cursor starts on the "+ add variable…" row; enter opens the entry editor.
   // Await a re-render between keystrokes: each TextField's focus is state-driven,
@@ -60,10 +75,31 @@ test("d deletes the focused variable", async () => {
     { key: "B", value: "2" },
   ];
   const { stdin } = render(
-    <ShellEnvEditor env={env} onChange={onChange} onBack={() => {}} />,
+    <ShellEnvEditor
+      env={env}
+      baselineEnv={env}
+      onChange={onChange}
+      onBack={() => {}}
+    />,
   );
   stdin.write("d"); // cursor on the first entry
   await vi.waitFor(() =>
     expect(onChange).toHaveBeenCalledWith([{ key: "B", value: "2" }]),
   );
+});
+
+test("marks a changed env entry row with ●", () => {
+  const baseEnv: EnvEntry[] = [{ key: "API_KEY", value: "old" }];
+  const env: EnvEntry[] = [{ key: "API_KEY", value: "new" }];
+  const { lastFrame } = render(
+    <ShellEnvEditor
+      env={env}
+      baselineEnv={baseEnv}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  const line =
+    (lastFrame() ?? "").split("\n").find((l) => l.includes("API_KEY")) ?? "";
+  expect(line).toContain("●");
 });

@@ -47,9 +47,12 @@ export function ShellSourcesForm({
   }
 
   if (editing !== undefined) {
+    const current = entries[editing];
+    const baselineSource = baseEntries.find((e) => e.name === current?.name);
     return (
       <ShellSourceSubForm
-        source={entries[editing]}
+        source={current}
+        baselineSource={baselineSource}
         onSave={(source) => {
           const next = [...entries];
           next[editing] = source;
