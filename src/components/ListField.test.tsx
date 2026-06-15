@@ -104,3 +104,22 @@ test("an itemAction does NOT fire on the trailing add row", async () => {
   stdin.write("c");
   expect(onPress).not.toHaveBeenCalled();
 });
+
+test("renders a ● on items marked modified", () => {
+  const { lastFrame } = render(
+    <ListField
+      items={[
+        { label: "a", note: undefined, error: undefined },
+        { label: "b", note: undefined, error: undefined, modified: true },
+      ]}
+      isActive
+      onActivate={() => {}}
+      onDelete={() => {}}
+    />,
+  );
+  const frame = lastFrame() ?? "";
+  const lineB = frame.split("\n").find((l) => l.includes("b")) ?? "";
+  expect(lineB).toContain("●");
+  const lineA = frame.split("\n").find((l) => l.match(/(^|\s)a(\s|$)/)) ?? "";
+  expect(lineA).not.toContain("●");
+});

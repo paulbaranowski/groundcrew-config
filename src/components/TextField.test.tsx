@@ -146,3 +146,29 @@ test("the end caret still renders a visible bar at the value's tail", () => {
   // Caret homes to the end on focus; the trailing bar is harmless (no split).
   expect(lastFrame() ?? "").toContain("ab▏");
 });
+
+test("renders a yellow ● marker when modified", () => {
+  const { lastFrame } = render(
+    <TextField
+      label="remote"
+      value="upstream"
+      isActive={false}
+      modified
+      onChange={() => {}}
+    />,
+  );
+  expect(lastFrame() ?? "").toContain("●");
+});
+
+test("does not render ● when not modified", () => {
+  const { lastFrame } = render(
+    <TextField
+      label="remote"
+      value="origin"
+      isActive={false}
+      modified={false}
+      onChange={() => {}}
+    />,
+  );
+  expect(lastFrame() ?? "").not.toContain("●");
+});

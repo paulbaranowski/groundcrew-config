@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { TextField } from "../components/TextField.tsx";
+import { valuesEqual } from "../domain/diff.ts";
 import { linearApiKeyStatus } from "../domain/env.ts";
 import {
   getLinearField,
@@ -14,6 +15,8 @@ import type { ConfigDraft } from "../domain/types.ts";
 
 interface Props {
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `modified` markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
   /** Injected for testability; defaults to the real process env. */
@@ -33,7 +36,13 @@ const FIELD_ROWS = [
 // Section editor for the built-in Linear task source: enable toggle plus optional
 // team/name and inProgress/inReview status overrides (the API key comes from the
 // environment). Follows the screen contract — see SectionForm.
-export function LinearForm({ draft, onChange, onBack, env = process.env }: Props) {
+export function LinearForm({
+  draft,
+  baseline,
+  onChange,
+  onBack,
+  env = process.env,
+}: Props) {
   const enabled = isLinearEnabled(draft);
   const key = linearApiKeyStatus(env);
   const [focus, setFocus] = useState(0);
@@ -51,6 +60,8 @@ export function LinearForm({ draft, onChange, onBack, env = process.env }: Props
     if (input === " " && row === 0) onChange(setLinearEnabled(draft, !enabled));
   });
 
+  const enableModified = isLinearEnabled(draft) !== isLinearEnabled(baseline);
+
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Linear (built-in)</Text>
@@ -60,6 +71,7 @@ export function LinearForm({ draft, onChange, onBack, env = process.env }: Props
           <Text color={enabled ? "green" : "yellow"}>
             {enabled ? "enabled" : "disabled"}
           </Text>
+          {enableModified ? <Text color="yellow"> ●</Text> : null}
         </Text>
       </Box>
       {enabled ? (
@@ -70,6 +82,10 @@ export function LinearForm({ draft, onChange, onBack, env = process.env }: Props
             const value = isStatus
               ? getLinearStatuses(draft, field.key)
               : getLinearField(draft, field.key) ?? "";
+            const baselineValue = isStatus
+              ? getLinearStatuses(baseline, field.key)
+              : getLinearField(baseline, field.key) ?? "";
+            const modified = !valuesEqual(value, baselineValue);
             return (
               <TextField
                 key={field.key}
@@ -79,6 +95,7 @@ export function LinearForm({ draft, onChange, onBack, env = process.env }: Props
                   isStatus ? "comma-separated names  (optional)" : "(optional)"
                 }
                 isActive={row === index + 1}
+                modified={modified}
                 onChange={(v) =>
                   onChange(
                     isStatus

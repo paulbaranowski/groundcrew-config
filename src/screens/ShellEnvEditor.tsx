@@ -2,12 +2,15 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { ListField, type ListItem } from "../components/ListField.tsx";
 import { TextField } from "../components/TextField.tsx";
+import { modifiedByKey } from "../domain/modified.ts";
 import { useEditGuard } from "../hooks/useEditGuard.ts";
 import { SaveGuard } from "./SaveGuard.tsx";
 import type { EnvEntry } from "../domain/sources.ts";
 
 interface Props {
   env: EnvEntry[];
+  /** The baseline env list to diff against for per-row `●` markers. */
+  baselineEnv: EnvEntry[];
   onChange: (next: EnvEntry[]) => void;
   onBack: () => void;
 }
@@ -95,9 +98,18 @@ function EnvEntryEditor({
  * one level deeper. The list order is purely cosmetic — `applyShellFields`
  * collapses it back into a `Record` (later key wins, blank keys dropped).
  */
-export function ShellEnvEditor({ env, onChange, onBack }: Props) {
+export function ShellEnvEditor({ env, baselineEnv, onChange, onBack }: Props) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
+  // Use the index as a positional fallback for blank-keyed entries — without it,
+  // two rows whose key the user hasn't typed yet would collide in modifiedByKey's
+  // map, and only one of them would be diffed against. (Blank-key entries are
+  // dropped on save by applyShellFields, so this only matters while editing.)
+  const modified = modifiedByKey(env, baselineEnv, (e, i) => e.key || `__blank__${i}`);
 
+  // No SaveGuard here: this list view holds nothing dirty of its own — every
+  // committed edit has already flowed through onChange into the parent
+  // ShellSourceSubForm's `fields.env` buffer (which has its own guard). The
+  // dirty state lives in EnvEntryEditor while a single row is being edited.
   useInput(
     (_input, key) => {
       if (key.escape) onBack();
@@ -125,10 +137,11 @@ export function ShellEnvEditor({ env, onChange, onBack }: Props) {
     );
   }
 
-  const items: ListItem[] = env.map((entry) => ({
+  const items: ListItem[] = env.map((entry, index) => ({
     label: entry.key || "(unnamed)",
     note: `= ${entry.value || "(empty)"}`,
     error: undefined,
+    modified: modified[index],
   }));
 
   return (

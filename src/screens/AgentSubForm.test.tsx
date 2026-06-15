@@ -6,10 +6,12 @@ const ESC = String.fromCharCode(27);
 const DOWN = `${ESC}[B`;
 
 test("renders the editable fields seeded from the definition", () => {
+  const def = { cmd: "claude --permission-mode auto" };
   const { lastFrame } = render(
     <AgentSubForm
       name="claude"
-      def={{ cmd: "claude --permission-mode auto" }}
+      def={def}
+      baselineDef={def}
       sandboxRequired={false}
       onSave={() => {}}
       onCancel={() => {}}
@@ -25,10 +27,12 @@ test("renders the editable fields seeded from the definition", () => {
 });
 
 test("warns when sandbox is required but unset", () => {
+  const def = {};
   const { lastFrame } = render(
     <AgentSubForm
       name="claude"
-      def={{}}
+      def={def}
+      baselineDef={def}
       sandboxRequired
       onSave={() => {}}
       onCancel={() => {}}
@@ -38,11 +42,13 @@ test("warns when sandbox is required but unset", () => {
 });
 
 test("enter saves the merged definition", async () => {
+  const def = {};
   const onSave = vi.fn();
   const { lastFrame, stdin } = render(
     <AgentSubForm
       name="claude"
-      def={{}}
+      def={def}
+      baselineDef={def}
       sandboxRequired
       onSave={onSave}
       onCancel={() => {}}
@@ -60,11 +66,13 @@ test("enter saves the merged definition", async () => {
 });
 
 test("esc cancels", async () => {
+  const def = {};
   const onCancel = vi.fn();
   const { stdin } = render(
     <AgentSubForm
       name="claude"
-      def={{}}
+      def={def}
+      baselineDef={def}
       sandboxRequired={false}
       onSave={() => {}}
       onCancel={onCancel}
@@ -72,4 +80,22 @@ test("esc cancels", async () => {
   );
   stdin.write(ESC);
   await vi.waitFor(() => expect(onCancel).toHaveBeenCalled());
+});
+
+test("marks a field whose buffered value differs from baseline with ●", () => {
+  const baselineDef = {};
+  const def = { cmd: "/usr/local/bin/claude" };
+  const { lastFrame } = render(
+    <AgentSubForm
+      name="claude"
+      def={def}
+      baselineDef={baselineDef}
+      sandboxRequired={false}
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  const line =
+    (lastFrame() ?? "").split("\n").find((l) => l.match(/\scmd\s/)) ?? "";
+  expect(line).toContain("●");
 });

@@ -17,6 +17,8 @@ const HOME_CHROME_ROWS = 9;
 interface Props {
   draft: ConfigDraft;
   issues: Set<SectionId>;
+  /** Sections whose draft slice differs from baseline (unsaved edits). */
+  modified: Set<SectionId>;
   // Selected-row index, owned by App so it survives navigating into a section
   // and back (Home unmounts while a section is open).
   cursor: number;
@@ -24,7 +26,14 @@ interface Props {
   onOpen: (id: SectionId) => void;
 }
 
-export function Home({ draft, issues, cursor, onCursorChange, onOpen }: Props) {
+export function Home({
+  draft,
+  issues,
+  modified,
+  cursor,
+  onCursorChange,
+  onOpen,
+}: Props) {
   // Mirror the cursor in a ref so an enter that lands in the same input batch as
   // a preceding arrow key (before App re-renders) opens the latest row. The
   // useInput handler below MUST read `cursorRef.current`, never the render-time
@@ -60,6 +69,7 @@ export function Home({ draft, issues, cursor, onCursorChange, onOpen }: Props) {
   function renderRow(index: number) {
     const id = SECTION_ORDER[index]!;
     const bad = issues.has(id);
+    const edited = modified.has(id);
     return (
       <Box key={id}>
         <Text color={cursor === index ? "cyan" : undefined}>
@@ -72,6 +82,7 @@ export function Home({ draft, issues, cursor, onCursorChange, onOpen }: Props) {
         </Box>
         <Text color={bad ? "yellow" : "green"}>{bad ? "⚠" : "✓"} </Text>
         <Text dimColor>{sectionSummary(id, draft)}</Text>
+        {edited ? <Text color="yellow"> (edited)</Text> : null}
       </Box>
     );
   }

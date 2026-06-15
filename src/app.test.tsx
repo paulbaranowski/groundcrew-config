@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { App } from "./app.tsx";
@@ -92,4 +95,112 @@ test("opens Repositories from Home", async () => {
     expect(lastFrame()).toContain("repos groundcrew is allowed to work on"),
   );
   unmount();
+});
+
+// Generous so the freshly-mounted TextField's useInput effect has subscribed to
+// stdin before we start typing — the docs-prescribed pattern. 20ms is enough in
+// isolation, but the full suite running 47 files concurrently can starve the
+// timer, so we use a longer wait.
+const SETTLE_AFTER_MOUNT_MS = 100;
+
+test("an edit shows (edited) on the affected Home section", async () => {
+  const { lastFrame, stdin, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  // Open Workspace (row 1 -> down once + enter).
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
+  // Type a single char into projectDir (the focused field).
+  stdin.write("x");
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+  // Esc back to Home; the section row gets (edited).
+  stdin.write(ESC);
+  await vi.waitFor(() => {
+    const frame = lastFrame() ?? "";
+    const line = frame.split("\n").find((l) => l.includes("Workspace")) ?? "";
+    expect(line).toContain("(edited)");
+  });
+  unmount();
+});
+
+test("reverting a single field clears its marker", async () => {
+  const { lastFrame, stdin, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  stdin.write(DOWN); // -> Workspace
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
+  stdin.write("x"); // edit projectDir
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+  stdin.write("\x7f"); // backspace -> revert
+  await vi.waitFor(() => expect(lastFrame() ?? "").not.toContain("●"));
+  unmount();
+});
+
+test("q on a dirty draft opens QuitGuard without tripping Rules-of-Hooks", async () => {
+  // Regression: the modified-markers feature added a useMemo to App; if that
+  // hook sits AFTER the `if (quitting)` early return, the very first render
+  // skips it and the next render (after esc) re-adds it, tripping React's
+  // "Rendered fewer hooks than expected" check. Reproduce by going dirty, then
+  // pressing q (opens QuitGuard), then esc (returns home).
+  const { lastFrame, stdin, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
+  stdin.write("x"); // edit -> dirty
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+  stdin.write(ESC); // esc back to Home (still dirty)
+  await vi.waitFor(() => {
+    const frame = lastFrame() ?? "";
+    const line = frame.split("\n").find((l) => l.includes("Workspace")) ?? "";
+    expect(line).toContain("(edited)");
+  });
+  stdin.write("q"); // open QuitGuard
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("Unsaved changes"));
+  stdin.write(ESC); // cancel quit -> back to Home; hook count must match
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("Workspace"));
+  expect(lastFrame() ?? "").not.toContain("Unsaved changes");
+  unmount();
+});
+
+test("saving clears every modified marker — and the (edited) section badge", async () => {
+  // saveDraft writes to disk; isolate in a per-test tmpdir so the test is
+  // hermetic and doesn't pollute /tmp/crew.config.json across runs.
+  const dir = mkdtempSync(path.join(tmpdir(), "cc-app-save-test-"));
+  try {
+    const { lastFrame, stdin, unmount } = render(
+      <App initialDraft={draft} target={{ scope: "local", cwd: dir }} />,
+    );
+    // Make an edit so a `●` and an `(edited)` badge both appear, then esc home.
+    stdin.write(DOWN);
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+    stdin.write("\r");
+    await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+    await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
+    stdin.write("x");
+    await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+    stdin.write(ESC);
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? "";
+      const line = frame.split("\n").find((l) => l.includes("Workspace")) ?? "";
+      expect(line).toContain("(edited)");
+    });
+    // Save. After the async write resolves, baseline = draft, so every marker
+    // (the row dot and the (edited) suffix) must clear.
+    stdin.write("s");
+    await vi.waitFor(() => expect(lastFrame() ?? "").not.toContain("(edited)"));
+    expect(lastFrame() ?? "").not.toContain("●");
+    unmount();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

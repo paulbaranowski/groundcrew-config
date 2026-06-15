@@ -17,7 +17,12 @@ const both = draftWith({ claude: {}, codex: {} });
 
 test("renders enable checkboxes for claude and codex", () => {
   const { lastFrame } = render(
-    <AgentsForm draft={draftWith({ claude: {} })} onChange={() => {}} onBack={() => {}} />,
+    <AgentsForm
+      draft={draftWith({ claude: {} })}
+      baseline={draftWith({ claude: {} })}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
   );
   const f = lastFrame() ?? "";
   expect(f).toContain("claude");
@@ -28,14 +33,19 @@ test("renders enable checkboxes for claude and codex", () => {
 
 test("shows the bypass sub-option only when claude is enabled", () => {
   const on = render(
-    <AgentsForm draft={claudeOnly} onChange={() => {}} onBack={() => {}} />,
+    <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={() => {}} onBack={() => {}} />,
   );
   // Match the toggle row's checkbox marker, not the bare phrase — the help text
   // now also mentions "bypass permission prompts".
   expect(on.lastFrame()).toContain("] bypass permission prompts");
 
   const off = render(
-    <AgentsForm draft={draftWith({ codex: {} })} onChange={() => {}} onBack={() => {}} />,
+    <AgentsForm
+      draft={draftWith({ codex: {} })}
+      baseline={draftWith({ codex: {} })}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
   );
   expect(off.lastFrame()).not.toContain("] bypass permission prompts");
 });
@@ -44,6 +54,7 @@ test("shows the bypass box checked when claude already bypasses", () => {
   const { lastFrame } = render(
     <AgentsForm
       draft={draftWith({ claude: { cmd: "claude --permission-mode bypassPermissions" } })}
+      baseline={draftWith({ claude: { cmd: "claude --permission-mode bypassPermissions" } })}
       onChange={() => {}}
       onBack={() => {}}
     />,
@@ -55,7 +66,7 @@ test("shows the bypass box checked when claude already bypasses", () => {
 test("space on the claude row disables claude", () => {
   const onChange = vi.fn();
   const { stdin } = render(
-    <AgentsForm draft={both} onChange={onChange} onBack={() => {}} />,
+    <AgentsForm draft={both} baseline={both} onChange={onChange} onBack={() => {}} />,
   );
   stdin.write(" ");
   expect(onChange).toHaveBeenCalledWith(
@@ -68,7 +79,7 @@ test("space on the claude row disables claude", () => {
 test("space on the bypass row toggles bypass on claude", async () => {
   const onChange = vi.fn();
   const { lastFrame, stdin } = render(
-    <AgentsForm draft={both} onChange={onChange} onBack={() => {}} />,
+    <AgentsForm draft={both} baseline={both} onChange={onChange} onBack={() => {}} />,
   );
   stdin.write(DOWN); // down to the bypass sub-row
   await vi.waitFor(() =>
@@ -90,7 +101,7 @@ test("space on the bypass row toggles bypass on claude", async () => {
 test("space on the codex row enables codex", async () => {
   const onChange = vi.fn();
   const { lastFrame, stdin } = render(
-    <AgentsForm draft={claudeOnly} onChange={onChange} onBack={() => {}} />,
+    <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={onChange} onBack={() => {}} />,
   );
   // rows: claude (0), bypass (1), codex (2)
   stdin.write(DOWN);
@@ -113,6 +124,7 @@ test("custom agents are listed read-only, authored in the config file", () => {
   const { lastFrame } = render(
     <AgentsForm
       draft={draftWith({ claude: {}, "my-agent": { cmd: "foo" } })}
+      baseline={draftWith({ claude: {}, "my-agent": { cmd: "foo" } })}
       onChange={() => {}}
       onBack={() => {}}
     />,
@@ -124,7 +136,7 @@ test("custom agents are listed read-only, authored in the config file", () => {
 
 test("enter on an agent row opens its detail editor", async () => {
   const { lastFrame, stdin } = render(
-    <AgentsForm draft={claudeOnly} onChange={() => {}} onBack={() => {}} />,
+    <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={() => {}} onBack={() => {}} />,
   );
   stdin.write("\r"); // enter on the focused claude row
   await vi.waitFor(() => expect(lastFrame()).toContain("Agent: claude"));
@@ -134,7 +146,7 @@ test("enter on an agent row opens its detail editor", async () => {
 test("saving the detail editor writes the agent definition", async () => {
   const onChange = vi.fn();
   const { lastFrame, stdin } = render(
-    <AgentsForm draft={claudeOnly} onChange={onChange} onBack={() => {}} />,
+    <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={onChange} onBack={() => {}} />,
   );
   stdin.write("\r"); // open claude detail
   await vi.waitFor(() => expect(lastFrame()).toContain("Agent: claude"));
@@ -149,8 +161,33 @@ test("saving the detail editor writes the agent definition", async () => {
 test("esc returns to the home screen", async () => {
   const onBack = vi.fn();
   const { stdin } = render(
-    <AgentsForm draft={claudeOnly} onChange={() => {}} onBack={onBack} />,
+    <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={() => {}} onBack={onBack} />,
   );
   stdin.write(ESC); // escape
   await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
+});
+
+test("marks the claude row with ● when its definition differs from baseline", () => {
+  const baseline = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+    agents: { default: "claude", definitions: { claude: {} } },
+  } as never;
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+    agents: {
+      default: "claude",
+      definitions: { claude: { cmd: "/usr/local/bin/claude" } },
+    },
+  } as never;
+  const { lastFrame } = render(
+    <AgentsForm
+      draft={draft}
+      baseline={baseline}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  const line =
+    (lastFrame() ?? "").split("\n").find((l) => l.includes(" claude")) ?? "";
+  expect(line).toContain("●");
 });

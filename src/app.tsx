@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { Footer } from "./components/Footer.tsx";
 import { useFullscreen } from "./hooks/useFullscreen.ts";
@@ -9,6 +9,7 @@ import {
   type SectionId,
 } from "./domain/sections.ts";
 import type { ConfigDraft } from "./domain/types.ts";
+import { modifiedSections } from "./domain/modified.ts";
 import { enabledSourceCount } from "./domain/sources.ts";
 import path from "node:path";
 import { saveDraft, targetPath, type Target } from "./io/save.ts";
@@ -61,13 +62,18 @@ export function App({ initialDraft, target }: Props) {
   const { exit } = useApp();
   const { rows, columns } = useFullscreen();
   const [draft, setDraft] = useState<ConfigDraft>(
-    initialDraft ??
+    () =>
+      initialDraft ??
       // Degenerate empty seed used when no config exists on disk; distinct from
       // defaultDraft(), the richer opinionated seed.
       ({
         workspace: { projectDir: "", knownRepositories: [] },
       } satisfies ConfigDraft),
   );
+  // The last-saved draft: the anchor for unsaved-edit markers. Seeded to the same
+  // value as `draft` so a freshly loaded config reads as "no edits yet"; reset to
+  // `draft` on successful save so every marker clears at once.
+  const [baseline, setBaseline] = useState<ConfigDraft>(() => draft);
   const [route, setRoute] = useState<Route>({ name: "home" });
   // Home's selected row lives here so it survives opening a section and
   // returning (Home unmounts while a section is on screen).
@@ -125,6 +131,7 @@ export function App({ initialDraft, target }: Props) {
   // that saveDraft renamed aside so our .json is the one groundcrew loads.
   async function save(): Promise<void> {
     const result = await saveDraft(target, draft);
+    setBaseline(draft);
     setDirty(false);
     setSaved(true);
     setShadowed(result.shadowed);
@@ -141,6 +148,15 @@ export function App({ initialDraft, target }: Props) {
       }
     },
     { isActive: route.name === "home" && !quitting },
+  );
+
+  // Computed BEFORE any conditional early return — Rules-of-Hooks requires
+  // every render to call the same hooks in the same order, and the `quitting`
+  // branch below would otherwise skip this one on first entry, then re-call it
+  // after cancel, tripping React's "Rendered fewer hooks than expected" check.
+  const modified = useMemo(
+    () => modifiedSections(baseline, draft),
+    [baseline, draft],
   );
 
   if (quitting) {
@@ -207,6 +223,7 @@ export function App({ initialDraft, target }: Props) {
           <Home
             draft={draft}
             issues={homeIssues}
+            modified={modified}
             cursor={homeCursor}
             onCursorChange={setHomeCursor}
             onOpen={(id) => setRoute({ name: "section", id })}
@@ -228,21 +245,47 @@ export function App({ initialDraft, target }: Props) {
   // validate.ts's SECTION_PREFIXES, or its error badge mis-routes.
   const form =
     id === "workspace" ? (
-      <WorkspaceForm draft={draft} onChange={update} onBack={back} />
+      <WorkspaceForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "repositories" ? (
-      <RepositoriesForm draft={draft} onChange={update} onBack={back} />
+      <RepositoriesForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "taskSources" ? (
-      <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />
+      <TaskSourcesMenu
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "usage" ? (
-      <UsageForm draft={draft} onChange={update} onBack={back} />
+      <UsageForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "agents" ? (
-      <AgentsForm draft={draft} onChange={update} onBack={back} />
+      <AgentsForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : (
       <SectionForm
         title={SECTION_LABEL[id]}
         description={SECTION_DESCRIPTION[id]}
         spec={simpleSectionSpec(id)}
         draft={draft}
+        baseline={baseline}
         onChange={update}
         onBack={back}
       />

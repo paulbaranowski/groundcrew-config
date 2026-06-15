@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { pruneEmpty } from "../domain/prune.ts";
+import { sectionForKeyPath } from "../domain/sectionRouting.ts";
 import type { ConfigDraft, SectionId } from "../domain/types.ts";
 
 const run = promisify(execFile);
@@ -19,8 +20,10 @@ export type ValidationResult =
 // groundcrew's real loadConfig and reports whether it throws. Validation runs in
 // the config's REAL directory when it exists, so config-relative paths (e.g.
 // prompts.promptFile) resolve exactly as groundcrew will at load time; dropping
-// the configDir argument silently flips valid configs to invalid. SECTION_PREFIXES
-// is ordered most-specific-first — reordering it changes badge routing.
+// the configDir argument silently flips valid configs to invalid.
+//
+// SECTION_PREFIXES (the routing table) lives in domain/sectionRouting.ts so the
+// modified-marker code can reuse it without importing from io.
 
 // Resolve groundcrew's entry once so the child imports it by absolute URL,
 // independent of the child's cwd.
@@ -34,36 +37,6 @@ try { await loadConfig(); }
 catch (error) { console.error(error?.message ?? String(error)); process.exit(1); }
 `;
 
-// Ordered most-specific-first: a longer key that *contains* a shorter one must
-// be tested before it, e.g. "workspaceKind" before "workspace" (since
-// "workspaceKind".includes("workspace") is true) and "defaults.hooks" before
-// any bare "hooks" check.
-//
-// "usage" is listed before "agents" on purpose: in groundcrew config there is no
-// top-level `usage` key — usage always lives under
-// `agents.definitions.<name>.usage.*`, which contains both substrings. Routing
-// those errors to the Usage badge (not Agents) points the user at the Usage
-// screen, where the `usage.disabled` toggle that owns this config actually lives.
-const SECTION_PREFIXES: Array<[string, SectionId]> = [
-  ["knownRepositories", "repositories"],
-  ["workspaceKind", "terminal"],
-  ["defaults.hooks", "hooks"],
-  ["workspace", "workspace"],
-  ["usage", "usage"],
-  // The session limit is edited on the Usage Limits screen even though it lives
-  // under `orchestrator.*` in the file — route its errors to that badge. Must
-  // precede the bare "orchestrator" entry below (most-specific-first).
-  ["orchestrator.sessionLimitPercentage", "usage"],
-  ["agents", "agents"],
-  ["linear", "taskSources"],
-  ["sources", "taskSources"],
-  ["orchestrator", "orchestrator"],
-  ["git", "git"],
-  ["local", "sandbox"],
-  ["prompts", "prompts"],
-  ["logging", "advanced"],
-];
-
 export function mapSection(message: string): SectionId | undefined {
   // groundcrew errors read "groundcrew config: <key.path> <prose>". The section
   // identity lives in the key path; match only against it, not the whole
@@ -71,10 +44,7 @@ export function mapSection(message: string): SectionId | undefined {
   // allowed-placeholder list "{{workspaceContinuationInstruction}}" in a
   // prompts.initial error — hijacks the badge (here, mis-routing to workspace).
   const keyPath = message.replace(/^groundcrew config:\s*/, "").split(/\s/, 1)[0] ?? "";
-  for (const [prefix, section] of SECTION_PREFIXES) {
-    if (keyPath.includes(prefix)) return section;
-  }
-  return undefined;
+  return sectionForKeyPath(keyPath);
 }
 
 export async function validateDraft(

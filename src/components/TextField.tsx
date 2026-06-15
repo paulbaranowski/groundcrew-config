@@ -17,6 +17,8 @@ interface Props {
   disabled?: boolean;
   /** Shown in place of the placeholder while `disabled`. */
   disabledHint?: string;
+  /** True when the current value differs from its last-saved baseline. */
+  modified?: boolean;
 }
 
 // Controlled single-line input with a blinking caret. Supports an inert
@@ -29,6 +31,7 @@ export function TextField({
   placeholder,
   disabled = false,
   disabledHint,
+  modified = false,
 }: Props) {
   // Caret position (index into `value`, 0..value.length). Mirrored in a ref so a
   // burst of keypresses delivered in one render — each `useInput` call shares the
@@ -103,6 +106,7 @@ export function TextField({
           {label}{" "}
         </Text>
         <Text dimColor>{disabledHint ?? "(disabled)"}</Text>
+        {modified ? <Text color="yellow"> ●</Text> : null}
       </Box>
     );
   }
@@ -145,6 +149,7 @@ export function TextField({
           {value.slice(pos + 1)}
         </Text>
       )}
+      {modified ? <Text color="yellow"> ●</Text> : null}
     </Box>
   );
 }

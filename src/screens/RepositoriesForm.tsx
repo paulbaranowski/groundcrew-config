@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { ListField, type ListItem } from "../components/ListField.tsx";
+import { modifiedByKey } from "../domain/modified.ts";
 import {
   denormalizeRepos,
   duplicateEntry,
@@ -15,6 +16,8 @@ import { DeleteGuard } from "./DeleteGuard.tsx";
 
 interface Props {
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `modified` markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
 }
@@ -22,12 +25,19 @@ interface Props {
 // Section editor for workspace.knownRepositories: a ListField of repo entries
 // with add/edit/duplicate/delete, each edited via RepoSubForm. Follows the screen
 // contract — see SectionForm.
-export function RepositoriesForm({ draft, onChange, onBack }: Props) {
+export function RepositoriesForm({
+  draft,
+  baseline,
+  onChange,
+  onBack,
+}: Props) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
   const [pendingDelete, setPendingDelete] = useState<number | undefined>(
     undefined,
   );
   const entries = normalizeRepos(draft.workspace.knownRepositories);
+  const baseEntries = normalizeRepos(baseline.workspace.knownRepositories);
+  const modified = modifiedByKey(entries, baseEntries, (entry) => entry.name);
   const errors = repoErrors(entries);
 
   // Esc-to-back is live only on the bare list — not while a sub-editor or the
@@ -71,9 +81,11 @@ export function RepositoriesForm({ draft, onChange, onBack }: Props) {
       name: "",
       projectDirOverride: undefined,
     };
+    const baselineEntry = baseEntries.find((e) => e.name === current.name);
     return (
       <RepoSubForm
         entry={current}
+        baselineEntry={baselineEntry}
         projectDir={draft.workspace.projectDir}
         onSave={(entry) => {
           const next = [...entries];
@@ -92,6 +104,7 @@ export function RepositoriesForm({ draft, onChange, onBack }: Props) {
       ? `→ at ${entry.projectDirOverride}`
       : undefined,
     error: errors[index],
+    modified: modified[index],
   }));
 
   if (pendingDelete !== undefined) {
