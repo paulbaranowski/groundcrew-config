@@ -17,16 +17,30 @@ test("lists Linear, todo-txt, PlanKeeper and Shell sources", () => {
   expect(lastFrame()).not.toContain("Custom");
 });
 
-test("lists the Shell sources row with its source count", () => {
+test("shows each shell source's name inline on the Shell sources row", () => {
   const draftWithShell = {
     workspace: { projectDir: "~/d", knownRepositories: [] },
-    sources: [{ kind: "shell", name: "jira", commands: { listTasks: "jira ls" } }],
+    sources: [
+      { kind: "shell", name: "jira", commands: { listTasks: "jira ls" } },
+      { kind: "shell", name: "github", commands: { listTasks: "gh ls" } },
+    ],
   } as never;
   const { lastFrame } = render(
     <TaskSourcesMenu draft={draftWithShell} baseline={draftWithShell} onChange={() => {}} onBack={() => {}} />,
   );
-  expect(lastFrame()).toContain("Shell sources");
-  expect(lastFrame()).toContain("1 source(s)");
+  const frame = lastFrame() ?? "";
+  const shellLine = frame.split("\n").find((l) => l.includes("Shell sources")) ?? "";
+  expect(shellLine).toContain("jira");
+  expect(shellLine).toContain("github");
+});
+
+test("shows 'none' on the Shell sources row when no shell sources are configured", () => {
+  const { lastFrame } = render(
+    <TaskSourcesMenu draft={draft} baseline={draft} onChange={() => {}} onBack={() => {}} />,
+  );
+  const frame = lastFrame() ?? "";
+  const shellLine = frame.split("\n").find((l) => l.includes("Shell sources")) ?? "";
+  expect(shellLine).toContain("none");
 });
 
 test("enter opens todo-txt; esc returns to the hub", async () => {

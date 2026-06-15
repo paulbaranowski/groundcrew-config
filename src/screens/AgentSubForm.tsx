@@ -60,7 +60,7 @@ export function AgentSubForm({
     return (
       <SaveGuard
         label="agent"
-        onSave={() => onSave(applyAgentFields(def, fields))}
+        onApply={() => onSave(applyAgentFields(def, fields))}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}
       />
@@ -109,7 +109,7 @@ export function AgentSubForm({
         <Text dimColor>
           Fine-tune how this agent launches — most people can leave these blank.
           Blank fields inherit the built-in preset. ↑/↓ move · type to edit ·
-          enter save · esc cancel.
+          enter apply · esc cancel.
         </Text>
       </Box>
     </Box>

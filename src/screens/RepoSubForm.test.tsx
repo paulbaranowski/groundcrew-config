@@ -81,10 +81,10 @@ test("esc with no edits cancels immediately, no guard", async () => {
   );
   stdin.write(ESC);
   await vi.waitFor(() => expect(onCancel).toHaveBeenCalled());
-  expect(lastFrame()).not.toContain("Unsaved repository");
+  expect(lastFrame()).not.toContain("Pending repository edits");
 });
 
-test("esc after an edit pops the save guard, and 's' commits the edit", async () => {
+test("esc after an edit pops the save guard, and 'a' applies the edit", async () => {
   const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
   const onSave = vi.fn();
   const { lastFrame, stdin } = render(
@@ -99,8 +99,8 @@ test("esc after an edit pops the save guard, and 's' commits the edit", async ()
   stdin.write("X"); // edits the name field (active first)
   await vi.waitFor(() => expect(lastFrame()).toContain("org/repoX"));
   stdin.write(ESC);
-  await vi.waitFor(() => expect(lastFrame()).toContain("Unsaved repository"));
-  stdin.write("s");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Pending repository edits"));
+  stdin.write("a");
   await vi.waitFor(() =>
     expect(onSave).toHaveBeenCalledWith({
       name: "org/repoX",
@@ -127,7 +127,7 @@ test("the save guard's discard cancels without saving", async () => {
   stdin.write("X");
   await vi.waitFor(() => expect(lastFrame()).toContain("org/repoX"));
   stdin.write(ESC);
-  await vi.waitFor(() => expect(lastFrame()).toContain("Unsaved repository"));
+  await vi.waitFor(() => expect(lastFrame()).toContain("Pending repository edits"));
   stdin.write("d");
   await vi.waitFor(() => expect(onCancel).toHaveBeenCalled());
   expect(onSave).not.toHaveBeenCalled();
@@ -237,7 +237,7 @@ test("the save guard's esc returns to editing", async () => {
   stdin.write("X");
   await vi.waitFor(() => expect(lastFrame()).toContain("org/repoX"));
   stdin.write(ESC);
-  await vi.waitFor(() => expect(lastFrame()).toContain("Unsaved repository"));
+  await vi.waitFor(() => expect(lastFrame()).toContain("Pending repository edits"));
   stdin.write(ESC);
   await vi.waitFor(() => expect(lastFrame()).toContain("Repo located at"));
   expect(onCancel).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 {
   "name": "@clipboard-health/groundcrew-config",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Interactive TUI to create and update groundcrew's crew.config.json",
   "license": "MIT",
   "type": "module",

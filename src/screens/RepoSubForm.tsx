@@ -100,7 +100,7 @@ export function RepoSubForm({
     return (
       <SaveGuard
         label="repository"
-        onSave={() => onSave(buildEntry())}
+        onApply={() => onSave(buildEntry())}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}
       />

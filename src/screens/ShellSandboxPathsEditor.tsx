@@ -55,7 +55,7 @@ function PathEntryEditor({
     return (
       <SaveGuard
         label="path"
-        onSave={() => onSave(path)}
+        onApply={() => onSave(path)}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}
       />
@@ -80,7 +80,7 @@ function PathEntryEditor({
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>type to edit · enter save · esc cancel.</Text>
+        <Text dimColor>type to edit · enter apply · esc cancel.</Text>
       </Box>
     </Box>
   );

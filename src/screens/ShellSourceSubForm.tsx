@@ -89,7 +89,7 @@ export function ShellSourceSubForm({
     return (
       <SaveGuard
         label="shell source"
-        onSave={() => onSave(applyShellFields(source, fields))}
+        onApply={() => onSave(applyShellFields(source, fields))}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}
       />
@@ -195,7 +195,7 @@ export function ShellSourceSubForm({
       <Box marginTop={1}>
         <Text dimColor>
           Commands groundcrew runs to talk to your tracker. listTasks is required;{" "}
-          {"${id}"} is filled in per task. ↑/↓ move · type to edit · enter save ·
+          {"${id}"} is filled in per task. ↑/↓ move · type to edit · enter apply ·
           esc cancel.
         </Text>
       </Box>

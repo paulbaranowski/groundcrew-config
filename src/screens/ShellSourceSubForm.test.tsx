@@ -143,7 +143,7 @@ test("esc after an edit pops the save guard", async () => {
   stdin.write("2"); // edit the name field
   await vi.waitFor(() => expect(lastFrame()).toContain("jira2"));
   stdin.write(ESC);
-  await vi.waitFor(() => expect(lastFrame()).toContain("Unsaved shell source"));
+  await vi.waitFor(() => expect(lastFrame()).toContain("Pending shell source edits"));
   expect(onCancel).not.toHaveBeenCalled();
 });
 
