@@ -94,7 +94,14 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
       />
     );
   if (sub === "shell")
-    return <ShellSourcesForm draft={draft} onChange={onChange} onBack={back} />;
+    return (
+      <ShellSourcesForm
+        draft={draft}
+        baseline={baseline}
+        onChange={onChange}
+        onBack={back}
+      />
+    );
 
   const rows: Array<{ id: Sub; label: string; status: string }> = [
     {
