@@ -4,18 +4,17 @@ import { SaveGuard } from "./SaveGuard.tsx";
 
 const ESC = String.fromCharCode(27);
 
-test("renders the labelled prompt and key hints", () => {
+test("renders the prompt and key hints", () => {
   const { lastFrame } = render(
     <SaveGuard
-      label="repository"
       onApply={() => {}}
       onDiscard={() => {}}
       onCancel={() => {}}
     />,
   );
   const f = lastFrame() ?? "";
-  expect(f).toContain("Pending repository edits");
-  expect(f).toContain("Apply these edits to the draft?");
+  expect(f).toContain("Save these edits to current draft config?");
+  expect(f).toContain("(will not save to disk)");
   expect(f).toContain("[a] Apply");
   expect(f).toContain("[d] Discard");
   expect(f).toContain("[esc] Keep editing");
@@ -27,7 +26,6 @@ test("a applies, d discards, esc keeps editing", async () => {
   const onCancel = vi.fn();
   const { stdin } = render(
     <SaveGuard
-      label="repository"
       onApply={onApply}
       onDiscard={onDiscard}
       onCancel={onCancel}

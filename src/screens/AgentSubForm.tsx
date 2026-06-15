@@ -59,7 +59,6 @@ export function AgentSubForm({
   if (guard.guarding) {
     return (
       <SaveGuard
-        label="agent"
         onApply={() => onSave(applyAgentFields(def, fields))}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}

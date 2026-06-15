@@ -99,7 +99,6 @@ export function RepoSubForm({
   if (guard.guarding) {
     return (
       <SaveGuard
-        label="repository"
         onApply={() => onSave(buildEntry())}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}

@@ -88,7 +88,6 @@ export function ShellSourceSubForm({
   if (guard.guarding) {
     return (
       <SaveGuard
-        label="shell source"
         onApply={() => onSave(applyShellFields(source, fields))}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}

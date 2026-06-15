@@ -81,7 +81,7 @@ test("esc with no edits cancels immediately, no guard", async () => {
   );
   stdin.write(ESC);
   await vi.waitFor(() => expect(onCancel).toHaveBeenCalled());
-  expect(lastFrame()).not.toContain("Pending repository edits");
+  expect(lastFrame()).not.toContain("Save these edits to current draft config");
 });
 
 test("esc after an edit pops the save guard, and 'a' applies the edit", async () => {
@@ -99,7 +99,7 @@ test("esc after an edit pops the save guard, and 'a' applies the edit", async ()
   stdin.write("X"); // edits the name field (active first)
   await vi.waitFor(() => expect(lastFrame()).toContain("org/repoX"));
   stdin.write(ESC);
-  await vi.waitFor(() => expect(lastFrame()).toContain("Pending repository edits"));
+  await vi.waitFor(() => expect(lastFrame()).toContain("Save these edits to current draft config"));
   stdin.write("a");
   await vi.waitFor(() =>
     expect(onSave).toHaveBeenCalledWith({
@@ -127,7 +127,7 @@ test("the save guard's discard cancels without saving", async () => {
   stdin.write("X");
   await vi.waitFor(() => expect(lastFrame()).toContain("org/repoX"));
   stdin.write(ESC);
-  await vi.waitFor(() => expect(lastFrame()).toContain("Pending repository edits"));
+  await vi.waitFor(() => expect(lastFrame()).toContain("Save these edits to current draft config"));
   stdin.write("d");
   await vi.waitFor(() => expect(onCancel).toHaveBeenCalled());
   expect(onSave).not.toHaveBeenCalled();
@@ -237,7 +237,7 @@ test("the save guard's esc returns to editing", async () => {
   stdin.write("X");
   await vi.waitFor(() => expect(lastFrame()).toContain("org/repoX"));
   stdin.write(ESC);
-  await vi.waitFor(() => expect(lastFrame()).toContain("Pending repository edits"));
+  await vi.waitFor(() => expect(lastFrame()).toContain("Save these edits to current draft config"));
   stdin.write(ESC);
   await vi.waitFor(() => expect(lastFrame()).toContain("Repo located at"));
   expect(onCancel).not.toHaveBeenCalled();

@@ -53,7 +53,6 @@ function EnvEntryEditor({
   if (guard.guarding) {
     return (
       <SaveGuard
-        label="variable"
         onApply={() => onSave({ key, value })}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}

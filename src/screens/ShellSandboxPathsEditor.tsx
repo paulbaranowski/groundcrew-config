@@ -60,7 +60,6 @@ function PathEntryEditor({
       path.trim().length === 0 ? onCancel : () => onSave(path);
     return (
       <SaveGuard
-        label="path"
         onApply={apply}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}
