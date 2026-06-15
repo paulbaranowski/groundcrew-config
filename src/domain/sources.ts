@@ -87,6 +87,9 @@ export function planKeeperSource(): ShellSource {
       markInProgress: "plan-keeper crew start ${id}",
       markInReview: "plan-keeper crew review ${id}",
     },
+    // plan-keeper writes task state under ~/plans; pre-grant the sandbox so the
+    // preset works out of the box on groundcrew ≥ 4.42 without a manual edit.
+    sandboxWritePaths: ["~/plans"],
   };
 }
 

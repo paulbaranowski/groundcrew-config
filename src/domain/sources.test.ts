@@ -155,6 +155,13 @@ test("planKeeperSource uses the new 'plankeeper' name", () => {
   expect(s.commands.fetch).toBe("plan-keeper crew fetch");
 });
 
+test("planKeeperSource pre-grants ~/plans in sandboxWritePaths", () => {
+  // plan-keeper writes task state under ~/plans; without this default the
+  // preset would error out under groundcrew's 4.42 sandbox on first use.
+  const s = planKeeperSource() as { sandboxWritePaths?: string[] };
+  expect(s.sandboxWritePaths).toEqual(["~/plans"]);
+});
+
 test("isPlanKeeperEnabled / setPlanKeeperEnabled round-trip", () => {
   expect(isPlanKeeperEnabled(base)).toBe(false);
   const on = setPlanKeeperEnabled(base, true);
