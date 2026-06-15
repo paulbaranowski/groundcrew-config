@@ -269,7 +269,12 @@ export function App({ initialDraft, target }: Props) {
         onBack={back}
       />
     ) : id === "agents" ? (
-      <AgentsForm draft={draft} onChange={update} onBack={back} />
+      <AgentsForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : (
       <SectionForm
         title={SECTION_LABEL[id]}

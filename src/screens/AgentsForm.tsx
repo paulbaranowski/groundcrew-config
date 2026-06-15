@@ -8,12 +8,15 @@ import {
   setAgentDef,
   setAgentEnabled,
 } from "../domain/agents.ts";
+import { valuesEqual } from "../domain/diff.ts";
 import { isBypassEnabled, setBypass } from "../domain/permissions.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { AgentSubForm } from "./AgentSubForm.tsx";
 
 interface Props {
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `modified` markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
 }
@@ -26,12 +29,14 @@ type Row =
 // Section editor for the coding agents groundcrew runs: enable/disable each
 // built-in (claude, codex), toggle claude's permission-bypass child row, and edit
 // per-agent fields via AgentSubForm. Follows the screen contract — see SectionForm.
-export function AgentsForm({ draft, onChange, onBack }: Props) {
+export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
   const [cursor, setCursor] = useState(0);
   const [editing, setEditing] = useState<string | undefined>(undefined);
 
   const agents = draft.agents ?? {};
   const definitions = agents.definitions ?? {};
+  const baseAgents = baseline.agents ?? {};
+  const baseDefinitions = baseAgents.definitions ?? {};
   const claudeOn = isAgentEnabled(agents, "claude");
   const sandboxRequired = runnerRequiresSandbox(draft.local?.runner);
 
@@ -105,21 +110,29 @@ export function AgentsForm({ draft, onChange, onBack }: Props) {
           const marker = active ? "▸ " : "  ";
           if (row.kind === "enable") {
             const on = isAgentEnabled(agents, row.name);
+            const baseOn = isAgentEnabled(baseAgents, row.name);
+            const modified =
+              on !== baseOn ||
+              !valuesEqual(definitions[row.name], baseDefinitions[row.name]);
             return (
               <Text key={row.name} color={active ? "cyan" : undefined}>
                 {marker}
                 <Text color={on ? "green" : undefined}>[{on ? "x" : " "}]</Text>{" "}
                 {row.name}
+                {modified ? <Text color="yellow"> ●</Text> : null}
               </Text>
             );
           }
           const on = isBypassEnabled("claude", definitions.claude);
+          const baseBypass = isBypassEnabled("claude", baseDefinitions.claude);
+          const modified = on !== baseBypass;
           return (
             <Text key="bypass" color={active ? "cyan" : undefined}>
               {marker}
               {"    "}
               <Text color={on ? "green" : undefined}>[{on ? "x" : " "}]</Text>{" "}
               bypass permission prompts
+              {modified ? <Text color="yellow"> ●</Text> : null}
             </Text>
           );
         })}
