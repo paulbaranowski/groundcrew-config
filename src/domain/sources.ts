@@ -76,6 +76,38 @@ function isManaged(source: Source): boolean {
   return isLinearKind(source) || isTodoTxtKind(source) || isShellKind(source);
 }
 
+/**
+ * The sandbox path plan-keeper writes task state under. Surfaced as a constant
+ * so the preset factory and the on-load migration agree on the same value.
+ */
+export const PLAN_KEEPER_SANDBOX_PATH = "~/plans";
+
+/**
+ * Ensure every existing PlanKeeper entry has `~/plans` in its sandboxWritePaths,
+ * preserving any user-added paths and the entry's order. Returns the same draft
+ * (referentially) when nothing needed changing, so an unrelated load is free.
+ *
+ * Run on initial load so configs that pre-date the 4.42 sandbox migrate to a
+ * working state. App keeps baseline at the raw on-disk shape so the migration
+ * surfaces as a normal `●` marker the user can save (or quit to leave alone).
+ */
+export function migratePlanKeeperSandboxPaths(draft: ConfigDraft): ConfigDraft {
+  const sources = draft.sources;
+  if (sources === undefined) return draft;
+  let changed = false;
+  const next = sources.map((source) => {
+    if (!isPlanKeeper(source)) return source;
+    const existing = readShellSandboxPaths(source);
+    if (existing.includes(PLAN_KEEPER_SANDBOX_PATH)) return source;
+    changed = true;
+    return {
+      ...source,
+      sandboxWritePaths: [PLAN_KEEPER_SANDBOX_PATH, ...existing],
+    };
+  });
+  return changed ? { ...draft, sources: next } : draft;
+}
+
 export function planKeeperSource(): ShellSource {
   return {
     kind: "shell",
@@ -87,6 +119,9 @@ export function planKeeperSource(): ShellSource {
       markInProgress: "plan-keeper crew start ${id}",
       markInReview: "plan-keeper crew review ${id}",
     },
+    // plan-keeper writes task state under ~/plans; pre-grant the sandbox so the
+    // preset works out of the box on groundcrew ≥ 4.42 without a manual edit.
+    sandboxWritePaths: [PLAN_KEEPER_SANDBOX_PATH],
   };
 }
 
@@ -272,6 +307,19 @@ export function planKeeperCommands(
   );
 }
 
+/**
+ * The sandboxWritePaths on the live plan-keeper entry, in order — or undefined
+ * when plan-keeper isn't configured. Mirrors `planKeeperCommands` so the screen
+ * shows the actual on-disk paths (including any the user added by hand).
+ */
+export function planKeeperSandboxPaths(
+  draft: ConfigDraft,
+): string[] | undefined {
+  const entry = (draft.sources ?? []).find(isPlanKeeper);
+  if (entry === undefined) return undefined;
+  return readShellSandboxPaths(entry);
+}
+
 /** Sources crew would actually run (anything not opted out with enabled:false). */
 export function enabledSourceCount(draft: ConfigDraft): number {
   return (draft.sources ?? []).filter((s) => !isDisabled(s)).length;
@@ -312,11 +360,18 @@ export interface EnvEntry {
 /** The shell source builder's editable string fields. */
 export type ShellTextField = ShellCommandField | "name" | "cwd";
 
-/** The shell source builder's editable fields: plain strings plus the env list. */
+/**
+ * The shell source builder's editable fields: plain strings plus two
+ * ordered lists (env entries and `sandboxWritePaths` rows). `sandboxWritePaths`
+ * is modelled as `string[]` to mirror groundcrew's on-disk shape; an empty
+ * entry is dropped by `applyShellFields` (matching how blank env keys are
+ * handled) and an empty list omits the key entirely.
+ */
 export interface ShellFields extends Record<ShellCommandField, string> {
   name: string;
   cwd: string;
   env: EnvEntry[];
+  sandboxWritePaths: string[];
 }
 
 export function shellSources(draft: ConfigDraft): ShellSource[] {
@@ -384,6 +439,18 @@ export function readShellEnv(source: Source | undefined): EnvEntry[] {
 }
 
 /**
+ * Read a shell source's `sandboxWritePaths` (4.42+) as a plain string[].
+ * Non-string entries (and a missing/non-array field) yield an empty list;
+ * `~` strings are preserved verbatim because groundcrew expands them at load.
+ */
+export function readShellSandboxPaths(source: Source | undefined): string[] {
+  const raw = (source as { sandboxWritePaths?: unknown } | undefined)
+    ?.sandboxWritePaths;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((entry): entry is string => typeof entry === "string");
+}
+
+/**
  * Flatten a shell source into the builder's editable fields. The preferred
  * command names win, falling back to the legacy `fetch`/`resolveOne` aliases;
  * `env` is read into an ordered entry list.
@@ -403,6 +470,7 @@ export function readShellFields(source: Source | undefined): ShellFields {
     markDone: asString(c.markDone),
     cwd: asString(s.cwd),
     env: readShellEnv(source),
+    sandboxWritePaths: readShellSandboxPaths(source),
   };
 }
 
@@ -445,6 +513,14 @@ export function applyShellFields(
   }
   if (Object.keys(env).length === 0) delete src.env;
   else src.env = env;
+  // sandboxWritePaths: trim and drop blank rows as defense-in-depth
+  // (PathEntryEditor also gates Enter on non-blank). Empty result omits the
+  // key for the minimal form.
+  const paths = fields.sandboxWritePaths
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  if (paths.length === 0) delete src.sandboxWritePaths;
+  else src.sandboxWritePaths = paths;
   return src;
 }
 

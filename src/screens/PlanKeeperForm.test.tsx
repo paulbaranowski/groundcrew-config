@@ -44,6 +44,43 @@ test("displays the integration commands wired up on the live entry", () => {
   expect(lastFrame()).toContain("/opt/homebrew/bin/plan-keeper crew fetch");
 });
 
+test("displays sandboxWritePaths from the live entry", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      {
+        kind: "shell",
+        name: "plankeeper",
+        commands: { fetch: "plan-keeper crew fetch" },
+        sandboxWritePaths: ["~/plans", "/var/log/plans"],
+      },
+    ],
+  } as never;
+  const { lastFrame } = render(
+    <PlanKeeperForm draft={draft} baseline={draft} onChange={() => {}} onBack={() => {}} />,
+  );
+  expect(lastFrame()).toContain("Sandbox write paths:");
+  expect(lastFrame()).toContain("~/plans");
+  expect(lastFrame()).toContain("/var/log/plans");
+});
+
+test("omits the sandbox section when plan-keeper has no sandboxWritePaths", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      {
+        kind: "shell",
+        name: "plankeeper",
+        commands: { fetch: "plan-keeper crew fetch" },
+      },
+    ],
+  } as never;
+  const { lastFrame } = render(
+    <PlanKeeperForm draft={draft} baseline={draft} onChange={() => {}} onBack={() => {}} />,
+  );
+  expect(lastFrame()).not.toContain("Sandbox write paths:");
+});
+
 test("marks the enable toggle with ● when enabled-ness differs from baseline", () => {
   const baseline = {
     workspace: { projectDir: "~/dev", knownRepositories: [] },

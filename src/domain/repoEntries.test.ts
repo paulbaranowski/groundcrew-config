@@ -172,6 +172,68 @@ test("duplicateEntry deep-copies all fields and assigns a unique name", () => {
   expect(original.provision!.create).toBe("graft add ${name}");
 });
 
+test("round-trips per-repo hooks.prepareWorktree through normalize/denormalize", () => {
+  const union = [
+    {
+      name: "other-org/their-repo",
+      hooks: { prepareWorktree: "uv sync --dev --frozen" },
+    },
+  ];
+  const entries = normalizeRepos(union);
+  expect(entries).toEqual([
+    {
+      name: "other-org/their-repo",
+      projectDirOverride: undefined,
+      workdir: undefined,
+      provision: undefined,
+      prepareWorktreeHook: "uv sync --dev --frozen",
+    },
+  ]);
+  expect(denormalizeRepos(entries)).toEqual(union);
+});
+
+test("denormalize drops a whitespace-only prepareWorktreeHook and stays bare-string", () => {
+  expect(
+    denormalizeRepos([
+      { name: "a/b", projectDirOverride: undefined, prepareWorktreeHook: "   " },
+    ]),
+  ).toEqual(["a/b"]);
+});
+
+test("denormalize combines hooks with workdir on the same object entry", () => {
+  expect(
+    denormalizeRepos([
+      {
+        name: "billing",
+        projectDirOverride: undefined,
+        workdir: "services/billing",
+        prepareWorktreeHook: "uv sync --dev --frozen",
+      },
+    ]),
+  ).toEqual([
+    {
+      name: "billing",
+      workdir: "services/billing",
+      hooks: { prepareWorktree: "uv sync --dev --frozen" },
+    },
+  ]);
+});
+
+test("duplicateEntry carries the per-repo hook to the copy", () => {
+  const original: RepoEntry = {
+    name: "billing",
+    projectDirOverride: undefined,
+    prepareWorktreeHook: "uv sync --dev --frozen",
+  };
+  expect(duplicateEntry(original, ["billing"])).toEqual({
+    name: "billing-copy",
+    projectDirOverride: undefined,
+    workdir: undefined,
+    provision: undefined,
+    prepareWorktreeHook: "uv sync --dev --frozen",
+  });
+});
+
 test("a duplicated scripted entry keeps both provision templates on save", () => {
   const original: RepoEntry = {
     name: "maple",

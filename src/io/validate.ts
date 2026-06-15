@@ -38,12 +38,28 @@ catch (error) { console.error(error?.message ?? String(error)); process.exit(1);
 `;
 
 export function mapSection(message: string): SectionId | undefined {
-  // groundcrew errors read "groundcrew config: <key.path> <prose>". The section
-  // identity lives in the key path; match only against it, not the whole
-  // message. Otherwise prose that happens to name a section keyword — e.g. the
-  // allowed-placeholder list "{{workspaceContinuationInstruction}}" in a
-  // prompts.initial error — hijacks the badge (here, mis-routing to workspace).
-  const keyPath = message.replace(/^groundcrew config:\s*/, "").split(/\s/, 1)[0] ?? "";
+  // groundcrew errors read "groundcrew config: [<filepath>: ]<key.path> <prose>".
+  // The filepath prefix is added by the loader when it wraps a thrown validation
+  // error (groundcrew ≥ 4.x), so we strip both the constant prefix and the
+  // optional path-then-colon, then take the first whitespace-delimited token as
+  // the key path. The section identity lives in the key path; matching the
+  // whole message would let prose that happens to name a section keyword
+  // (e.g. "{{workspaceContinuationInstruction}}" in a prompts.initial error)
+  // hijack the badge.
+  const stripped = message.replace(/^groundcrew config:\s*/, "");
+  // Strip an absolute-path prefix ("<path>:\s+") if present. The optional
+  // `[A-Za-z]:` head accepts Windows drive-letter paths (`C:\foo\bar:` …)
+  // alongside POSIX absolute paths. The leading `[^\s:]*[\\/]` keeps the
+  // slash-required anchor that distinguishes a path prefix from a bare key
+  // path (key paths contain no slash), while the post-slash `.*?` (lazy) lets
+  // the rest of the path contain spaces — paths like `/Users/My User/...` no
+  // longer leak into the keypath token. `.*?` stops at the first `:\s+`, which
+  // is groundcrew's separator between the wrapped path and the inner error.
+  const withoutPath = stripped.replace(
+    /^(?:[A-Za-z]:)?[^\s:]*[\\/].*?:\s+/,
+    "",
+  );
+  const keyPath = withoutPath.split(/\s/, 1)[0] ?? "";
   return sectionForKeyPath(keyPath);
 }
 

@@ -18,6 +18,13 @@ export interface RepoEntry {
   workdir?: string | undefined;
   /** Scripted provisioning templates; mutually exclusive with `projectDirOverride`. */
   provision?: ProvisionEntry | undefined;
+  /**
+   * Per-repo `prepareWorktree` shell command (groundcrew ≥ 4.41). Slots
+   * between a repo-committed `.groundcrew/config.json` hook (wins) and
+   * `defaults.hooks.prepareWorktree` (fallback). Edited as a single string —
+   * groundcrew's `HookCommands` only models one command today.
+   */
+  prepareWorktreeHook?: string | undefined;
 }
 
 type RepoUnion = ConfigDraft["workspace"]["knownRepositories"][number];
@@ -35,6 +42,7 @@ export function normalizeRepos(
           provision: entry.provision
             ? { create: entry.provision.create, remove: entry.provision.remove }
             : undefined,
+          prepareWorktreeHook: entry.hooks?.prepareWorktree,
         },
   );
 }
@@ -46,12 +54,14 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
     const workdir = entry.workdir?.trim();
     const create = entry.provision?.create.trim() ?? "";
     const remove = entry.provision?.remove.trim() ?? "";
+    const prepareHook = entry.prepareWorktreeHook?.trim() ?? "";
     const hasOverride = override !== undefined && override.length > 0;
     const hasWorkdir = workdir !== undefined && workdir.length > 0;
     const hasProvision = create.length > 0 || remove.length > 0;
+    const hasHook = prepareHook.length > 0;
     // The bare string is the minimal form: emit it only when no per-repo option
     // is set, so an untouched repo never bloats into the object form.
-    if (!hasOverride && !hasWorkdir && !hasProvision) {
+    if (!hasOverride && !hasWorkdir && !hasProvision && !hasHook) {
       return name;
     }
     const repo: KnownRepo = { name };
@@ -61,6 +71,7 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
     // and groundcrew's loader then reports the both-required error against this
     // entry, instead of us silently discarding the half the user did type.
     if (hasProvision) repo.provision = { create, remove };
+    if (hasHook) repo.hooks = { prepareWorktree: prepareHook };
     return repo;
   });
 }
@@ -100,6 +111,7 @@ export function duplicateEntry(
     provision: entry.provision
       ? { create: entry.provision.create, remove: entry.provision.remove }
       : undefined,
+    prepareWorktreeHook: entry.prepareWorktreeHook,
   };
 }
 

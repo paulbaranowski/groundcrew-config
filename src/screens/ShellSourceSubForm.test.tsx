@@ -167,6 +167,71 @@ test("entering the env row opens the env editor", async () => {
   await vi.waitFor(() => expect(lastFrame()).toContain("Environment variables"));
 });
 
+test("shows the sandboxWritePaths count from the source", () => {
+  const source = {
+    kind: "shell",
+    name: "jira",
+    commands: { listTasks: "jira ls" },
+    sandboxWritePaths: ["~/.cache/jira"],
+  } as never;
+  const { lastFrame } = render(
+    <ShellSourceSubForm
+      source={source}
+      baselineSource={source}
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  const f = lastFrame() ?? "";
+  expect(f).toContain("sandboxWritePaths");
+  expect(f).toContain("1 path");
+});
+
+test("save round-trips an existing sandboxWritePaths untouched", () => {
+  const source = {
+    kind: "shell",
+    name: "jira",
+    commands: { listTasks: "jira ls" },
+    sandboxWritePaths: ["~/.cache/jira", "/tmp/jira"],
+  } as never;
+  const onSave = vi.fn();
+  const { stdin } = render(
+    <ShellSourceSubForm
+      source={source}
+      baselineSource={source}
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  stdin.write("\r"); // enter on the name row saves
+  expect(onSave).toHaveBeenCalledWith({
+    kind: "shell",
+    name: "jira",
+    commands: { listTasks: "jira ls" },
+    sandboxWritePaths: ["~/.cache/jira", "/tmp/jira"],
+  });
+});
+
+test("entering the sandboxWritePaths row opens the paths editor", async () => {
+  const source = {
+    kind: "shell",
+    name: "jira",
+    commands: { listTasks: "jira ls" },
+  } as never;
+  const { lastFrame, stdin } = render(
+    <ShellSourceSubForm
+      source={source}
+      baselineSource={source}
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  // 10 text rows + env row precede sandboxWritePaths; step down to it, then enter.
+  for (let i = 0; i < 11; i++) stdin.write(DOWN);
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Sandbox write paths"));
+});
+
 test("marks a field whose buffered value differs from baseline with ●", () => {
   const baseSource = {
     kind: "shell" as const,

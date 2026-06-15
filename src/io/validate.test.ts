@@ -41,6 +41,36 @@ test("mapSection routes the session limit to usage, other orchestrator keys to o
   ).toBe("orchestrator");
 });
 
+test("mapSection routes through groundcrew 4.x's file-path-prefixed format", () => {
+  // groundcrew's loader wraps the original validation error with the absolute
+  // config filepath: "groundcrew config: <filepath>: <key.path> <prose>". The
+  // routing has to skip that prefix and still reach the key path.
+  expect(
+    mapSection(
+      "groundcrew config: /tmp/cc-validate-x/.crew.config.validate-abc.json: workspace.projectDir must be a non-empty string (got undefined)",
+    ),
+  ).toBe("workspace");
+});
+
+test("mapSection strips a Windows drive-letter path prefix", () => {
+  expect(
+    mapSection(
+      "groundcrew config: C:\\Users\\me\\.config\\groundcrew\\crew.config.json: workspace.projectDir must be a non-empty string (got undefined)",
+    ),
+  ).toBe("workspace");
+});
+
+test("mapSection strips a path prefix containing spaces", () => {
+  // groundcrew's wrapped error format keeps the absolute file path verbatim;
+  // a config under e.g. ~/Library/Application Support/... means the path itself
+  // contains spaces. The strip regex must still find the path/keypath boundary.
+  expect(
+    mapSection(
+      "groundcrew config: /Users/me/My Configs/crew.config.json: workspace.projectDir must be a non-empty string (got undefined)",
+    ),
+  ).toBe("workspace");
+});
+
 test("mapSection maps a prompts.initial error to prompts even when its prose names other sections", () => {
   // groundcrew lists allowed placeholders in the message, one of which is
   // {{workspaceContinuationInstruction}}. The badge must follow the key path

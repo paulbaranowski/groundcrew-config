@@ -172,6 +172,29 @@ test("q on a dirty draft opens QuitGuard without tripping Rules-of-Hooks", async
   unmount();
 });
 
+test("loading a pre-4.42 plankeeper config surfaces the sandbox migration as an unsaved edit", () => {
+  // groundcrew 4.42 introduced sandboxWritePaths; configs from older versions
+  // have a plankeeper entry without it. App migrates the in-memory draft on
+  // load but keeps baseline at the raw on-disk shape, so the user sees a `●`
+  // they can save (or quit to leave the file alone).
+  const stale = {
+    workspace: { projectDir: "~/dev/groundcrew", knownRepositories: ["a/b"] },
+    agents: { default: "claude", definitions: { claude: {} } },
+    sources: [
+      { kind: "shell", name: "plankeeper", commands: { fetch: "x" } },
+    ],
+  } as never;
+  const { lastFrame, unmount } = render(
+    <App initialDraft={stale} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  const line =
+    (lastFrame() ?? "")
+      .split("\n")
+      .find((l) => l.includes("Task Sources")) ?? "";
+  expect(line).toContain("(edited)");
+  unmount();
+});
+
 test("saving clears every modified marker — and the (edited) section badge", async () => {
   // saveDraft writes to disk; isolate in a per-test tmpdir so the test is
   // hermetic and doesn't pollute /tmp/crew.config.json across runs.

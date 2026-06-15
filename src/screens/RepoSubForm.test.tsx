@@ -243,6 +243,49 @@ test("the save guard's esc returns to editing", async () => {
   expect(onCancel).not.toHaveBeenCalled();
 });
 
+test("enter round-trips the per-repo prepareWorktreeHook", () => {
+  const entry: RepoEntry = {
+    name: "org/repo",
+    projectDirOverride: undefined,
+    prepareWorktreeHook: "uv sync --dev --frozen",
+  };
+  const onSave = vi.fn();
+  const { stdin } = render(
+    <RepoSubForm
+      entry={entry}
+      baselineEntry={entry}
+      projectDir="~/dev"
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  stdin.write("\r");
+  expect(onSave).toHaveBeenCalledWith({
+    name: "org/repo",
+    projectDirOverride: undefined,
+    workdir: undefined,
+    provision: undefined,
+    prepareWorktreeHook: "uv sync --dev --frozen",
+  });
+});
+
+test("shows the cascade hint copy for prepareWorktree", () => {
+  const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
+  const { lastFrame } = render(
+    <RepoSubForm
+      entry={entry}
+      baselineEntry={entry}
+      projectDir="~/dev"
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("hooks.prepareWorktree");
+  expect(frame).toContain(".groundcrew/config.json");
+  expect(frame).toContain("defaults.hooks.prepareWorktree");
+});
+
 test("marks a field that differs from baseline with ●", () => {
   const baselineEntry: RepoEntry = {
     name: "a",
