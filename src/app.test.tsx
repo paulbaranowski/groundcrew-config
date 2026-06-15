@@ -93,3 +93,44 @@ test("opens Repositories from Home", async () => {
   );
   unmount();
 });
+
+test("an edit shows (edited) on the affected Home section", async () => {
+  const { lastFrame, stdin, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  // Open Workspace (row 1 -> down once + enter).
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+  // Let the freshly-mounted TextField subscribe to stdin (its useInput effect
+  // runs after mount), otherwise the first keystroke is dropped.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Type a single char into projectDir (the focused field).
+  stdin.write("x");
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+  // Esc back to Home; the section row gets (edited).
+  stdin.write(ESC);
+  await vi.waitFor(() => {
+    const frame = lastFrame() ?? "";
+    const line = frame.split("\n").find((l) => l.includes("Workspace")) ?? "";
+    expect(line).toContain("(edited)");
+  });
+  unmount();
+});
+
+test("reverting a single field clears its marker", async () => {
+  const { lastFrame, stdin, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  stdin.write(DOWN); // -> Workspace
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  stdin.write("x"); // edit projectDir
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+  stdin.write("\x7f"); // backspace -> revert
+  await vi.waitFor(() => expect(lastFrame() ?? "").not.toContain("●"));
+  unmount();
+});
