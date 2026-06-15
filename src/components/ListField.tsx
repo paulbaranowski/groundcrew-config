@@ -7,6 +7,8 @@ export interface ListItem {
   label: string;
   note: string | undefined;
   error: string | undefined;
+  /** True when the item differs from its last-saved baseline. */
+  modified?: boolean;
 }
 
 /**
@@ -108,6 +110,7 @@ export function ListField({
         </Text>
         {item.note ? <Text dimColor> {item.note}</Text> : null}
         {item.error ? <Text color="yellow"> ⚠ {item.error}</Text> : null}
+        {item.modified ? <Text color="yellow"> ●</Text> : null}
       </Box>
     );
   }
