@@ -312,11 +312,18 @@ export interface EnvEntry {
 /** The shell source builder's editable string fields. */
 export type ShellTextField = ShellCommandField | "name" | "cwd";
 
-/** The shell source builder's editable fields: plain strings plus the env list. */
+/**
+ * The shell source builder's editable fields: plain strings plus two
+ * ordered lists (env entries and `sandboxWritePaths` rows). `sandboxWritePaths`
+ * is modelled as `string[]` to mirror groundcrew's on-disk shape; an empty
+ * entry is dropped by `applyShellFields` (matching how blank env keys are
+ * handled) and an empty list omits the key entirely.
+ */
 export interface ShellFields extends Record<ShellCommandField, string> {
   name: string;
   cwd: string;
   env: EnvEntry[];
+  sandboxWritePaths: string[];
 }
 
 export function shellSources(draft: ConfigDraft): ShellSource[] {
@@ -384,6 +391,18 @@ export function readShellEnv(source: Source | undefined): EnvEntry[] {
 }
 
 /**
+ * Read a shell source's `sandboxWritePaths` (4.42+) as a plain string[].
+ * Non-string entries (and a missing/non-array field) yield an empty list;
+ * `~` strings are preserved verbatim because groundcrew expands them at load.
+ */
+export function readShellSandboxPaths(source: Source | undefined): string[] {
+  const raw = (source as { sandboxWritePaths?: unknown } | undefined)
+    ?.sandboxWritePaths;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((entry): entry is string => typeof entry === "string");
+}
+
+/**
  * Flatten a shell source into the builder's editable fields. The preferred
  * command names win, falling back to the legacy `fetch`/`resolveOne` aliases;
  * `env` is read into an ordered entry list.
@@ -403,6 +422,7 @@ export function readShellFields(source: Source | undefined): ShellFields {
     markDone: asString(c.markDone),
     cwd: asString(s.cwd),
     env: readShellEnv(source),
+    sandboxWritePaths: readShellSandboxPaths(source),
   };
 }
 
@@ -445,6 +465,13 @@ export function applyShellFields(
   }
   if (Object.keys(env).length === 0) delete src.env;
   else src.env = env;
+  // sandboxWritePaths: blank rows dropped (the editor's half-typed state never
+  // leaks into the saved config); empty result omits the key for the minimal form.
+  const paths = fields.sandboxWritePaths
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  if (paths.length === 0) delete src.sandboxWritePaths;
+  else src.sandboxWritePaths = paths;
   return src;
 }
 

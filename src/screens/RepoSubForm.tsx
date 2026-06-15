@@ -15,7 +15,7 @@ interface Props {
   onCancel: () => void;
 }
 
-const FIELD_COUNT = 5;
+const FIELD_COUNT = 6;
 
 export function RepoSubForm({
   entry,
@@ -33,6 +33,7 @@ export function RepoSubForm({
   const [provisionRemove, setProvisionRemove] = useState(
     entry.provision?.remove ?? "",
   );
+  const [prepareHook, setPrepareHook] = useState(entry.prepareWorktreeHook ?? "");
   const [active, setActive] = useState(0);
   const guard = useEditGuard();
 
@@ -57,6 +58,12 @@ export function RepoSubForm({
   const provisionRemoveModified =
     baselineEntry === undefined ||
     !valuesEqual(provisionRemove, baselineEntry.provision?.remove ?? "");
+  const prepareHookModified =
+    baselineEntry === undefined ||
+    !valuesEqual(
+      prepareHook.length === 0 ? undefined : prepareHook,
+      baselineEntry.prepareWorktreeHook,
+    );
 
   function buildEntry(): RepoEntry {
     const hasProvision =
@@ -68,6 +75,7 @@ export function RepoSubForm({
       provision: hasProvision
         ? { create: provisionCreate, remove: provisionRemove }
         : undefined,
+      prepareWorktreeHook: prepareHook.length === 0 ? undefined : prepareHook,
     };
   }
 
@@ -156,6 +164,14 @@ export function RepoSubForm({
           disabled={provisionDisabled}
           disabledHint="(disabled — clear projectDirOverride to use)"
         />
+        <TextField
+          label="hooks.prepareWorktree"
+          value={prepareHook}
+          placeholder="shell run inside a fresh worktree (optional)"
+          isActive={active === 5}
+          modified={prepareHookModified}
+          onChange={guard.track(setPrepareHook)}
+        />
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
@@ -167,6 +183,13 @@ export function RepoSubForm({
           Settings for one repository. "name" is its folder name; everything else
           is an optional override. provision is scripted worktree setup — it needs
           both templates and can't combine with projectDirOverride.
+        </Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>
+          hooks.prepareWorktree cascade: a repo-committed
+          .groundcrew/config.json wins, then this per-repo setting, then
+          defaults.hooks.prepareWorktree.
         </Text>
       </Box>
     </Box>

@@ -65,6 +65,24 @@ test("a segment that starts with a prefix but doesn't end at a boundary does NOT
   expect(sectionForKeyPath("foo.gitConfig.url")).toBeUndefined();
 });
 
+test("a per-repo hooks.prepareWorktree path routes to repositories, not hooks", () => {
+  // `knownRepositories` is earlier in SECTION_PREFIXES than `defaults.hooks`,
+  // and only `defaults.hooks` (not bare `hooks`) routes to the Hooks badge — so
+  // an inline-on-a-repo `hooks.prepareWorktree` lands on Repositories, the
+  // screen that actually owns the per-repo cascade slot.
+  expect(
+    sectionForKeyPath(
+      "workspace.knownRepositories.0.hooks.prepareWorktree",
+    ),
+  ).toBe("repositories");
+});
+
+test("a shell source's sandboxWritePaths path routes to taskSources", () => {
+  expect(sectionForKeyPath("sources.0.sandboxWritePaths.1")).toBe(
+    "taskSources",
+  );
+});
+
 test("an unknown key path returns undefined", () => {
   expect(sectionForKeyPath("totally.unknown.path")).toBeUndefined();
 });

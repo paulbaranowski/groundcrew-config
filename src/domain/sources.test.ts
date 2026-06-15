@@ -24,6 +24,7 @@ import {
   shellListTasksCommand,
   shellSourceCount,
   shellSources,
+  readShellSandboxPaths,
   taskSourceModified,
   todoTxtSource,
 } from "./sources.ts";
@@ -444,4 +445,69 @@ test("taskSourceModified flags each row independently against baseline", () => {
     { kind: "shell", name: "jira", commands: { listTasks: "jira ls" } },
   ] as never);
   expect(taskSourceModified(shellOnly, base).shell).toBe(true);
+});
+
+test("readShellSandboxPaths reads string entries; missing/non-array → []", () => {
+  expect(
+    readShellSandboxPaths({
+      kind: "shell",
+      name: "plankeeper",
+      sandboxWritePaths: ["~/plans", "/abs/path"],
+    } as never),
+  ).toEqual(["~/plans", "/abs/path"]);
+  expect(readShellSandboxPaths(undefined)).toEqual([]);
+  expect(readShellSandboxPaths({ kind: "shell", name: "x" } as never)).toEqual([]);
+  // Non-string entries are dropped (hand-edited JSON could include junk).
+  expect(
+    readShellSandboxPaths({
+      kind: "shell",
+      name: "x",
+      sandboxWritePaths: ["~/plans", 42, null],
+    } as never),
+  ).toEqual(["~/plans"]);
+});
+
+test("readShellFields surfaces sandboxWritePaths and applyShellFields writes it back", () => {
+  const fields = readShellFields({
+    kind: "shell",
+    name: "plankeeper",
+    commands: { listTasks: "plan-keeper crew fetch" },
+    sandboxWritePaths: ["~/plans"],
+  } as never);
+  expect(fields.sandboxWritePaths).toEqual(["~/plans"]);
+
+  const built = applyShellFields(undefined, {
+    ...fields,
+    sandboxWritePaths: ["~/plans", "/abs/path"],
+  }) as { sandboxWritePaths?: string[] };
+  expect(built.sandboxWritePaths).toEqual(["~/plans", "/abs/path"]);
+});
+
+test("applyShellFields trims sandboxWritePaths rows, drops blanks, empty → no key", () => {
+  const fields = readShellFields(undefined);
+  // Whitespace-only rows are dropped; surrounding whitespace is trimmed.
+  const built = applyShellFields(undefined, {
+    ...fields,
+    name: "plankeeper",
+    listTasks: "plan-keeper crew fetch",
+    sandboxWritePaths: ["  ", "  ~/plans  ", ""],
+  }) as { sandboxWritePaths?: string[] };
+  expect(built.sandboxWritePaths).toEqual(["~/plans"]);
+
+  // An all-blank/empty list removes the key entirely (prune-friendly).
+  const cleared = applyShellFields(
+    {
+      kind: "shell",
+      name: "plankeeper",
+      commands: {},
+      sandboxWritePaths: ["~/plans"],
+    } as never,
+    {
+      ...fields,
+      name: "plankeeper",
+      listTasks: "plan-keeper crew fetch",
+      sandboxWritePaths: [],
+    },
+  ) as Record<string, unknown>;
+  expect("sandboxWritePaths" in cleared).toBe(false);
 });

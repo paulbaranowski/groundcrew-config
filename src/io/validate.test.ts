@@ -41,6 +41,17 @@ test("mapSection routes the session limit to usage, other orchestrator keys to o
   ).toBe("orchestrator");
 });
 
+test("mapSection routes through groundcrew 4.x's file-path-prefixed format", () => {
+  // groundcrew's loader wraps the original validation error with the absolute
+  // config filepath: "groundcrew config: <filepath>: <key.path> <prose>". The
+  // routing has to skip that prefix and still reach the key path.
+  expect(
+    mapSection(
+      "groundcrew config: /tmp/cc-validate-x/.crew.config.validate-abc.json: workspace.projectDir must be a non-empty string (got undefined)",
+    ),
+  ).toBe("workspace");
+});
+
 test("mapSection maps a prompts.initial error to prompts even when its prose names other sections", () => {
   // groundcrew lists allowed placeholders in the message, one of which is
   // {{workspaceContinuationInstruction}}. The badge must follow the key path
