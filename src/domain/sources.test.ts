@@ -24,6 +24,7 @@ import {
   shellListTasksCommand,
   shellSourceCount,
   shellSources,
+  taskSourceModified,
   todoTxtSource,
 } from "./sources.ts";
 
@@ -410,4 +411,37 @@ test("applyShellFields drops blank-key env entries, last write wins, empty → n
     { ...fields, name: "jira", listTasks: "jira ls", env: [] },
   ) as Record<string, unknown>;
   expect("env" in cleared).toBe(false);
+});
+
+test("taskSourceModified flags each row independently against baseline", () => {
+  // Identical draft and baseline: nothing modified.
+  expect(taskSourceModified(base, base)).toEqual({
+    linear: false,
+    todoTxt: false,
+    planKeeper: false,
+    shell: false,
+  });
+
+  // Enabling Linear flips just the linear flag (this is the bug we're fixing).
+  const linearOn = setLinearEnabled(base, true);
+  expect(taskSourceModified(linearOn, base)).toEqual({
+    linear: true,
+    todoTxt: false,
+    planKeeper: false,
+    shell: false,
+  });
+
+  // Toggling other rows is symmetric and independent.
+  expect(taskSourceModified(setTodoTxtEnabled(base, true), base).todoTxt).toBe(true);
+  expect(taskSourceModified(setPlanKeeperEnabled(base, true), base).planKeeper).toBe(true);
+
+  // Editing a Linear sub-field also counts the Linear row as modified.
+  const linearWithTeam = setLinearField(linearOn, "team", "infra");
+  expect(taskSourceModified(linearWithTeam, linearOn).linear).toBe(true);
+
+  // Shell row reacts to any change inside any shell source.
+  const shellOnly = setShellSources(base, [
+    { kind: "shell", name: "jira", commands: { listTasks: "jira ls" } },
+  ] as never);
+  expect(taskSourceModified(shellOnly, base).shell).toBe(true);
 });

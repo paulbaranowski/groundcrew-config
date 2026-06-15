@@ -5,6 +5,7 @@ import {
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
   shellSourceCount,
+  taskSourceModified,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { LinearForm } from "./LinearForm.tsx";
@@ -103,26 +104,36 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
       />
     );
 
-  const rows: Array<{ id: Sub; label: string; status: string }> = [
+  const modified = taskSourceModified(draft, baseline);
+  const rows: Array<{
+    id: Sub;
+    label: string;
+    status: string;
+    modified: boolean;
+  }> = [
     {
       id: "linear",
       label: "Linear",
       status: isLinearEnabled(draft) ? "enabled" : "disabled",
+      modified: modified.linear,
     },
     {
       id: "todoTxt",
       label: "todo-txt",
       status: isTodoTxtEnabled(draft) ? "enabled" : "disabled",
+      modified: modified.todoTxt,
     },
     {
       id: "planKeeper",
       label: "PlanKeeper",
       status: isPlanKeeperEnabled(draft) ? "enabled" : "disabled",
+      modified: modified.planKeeper,
     },
     {
       id: "shell",
       label: "Shell sources",
       status: `${shellSourceCount(draft)} source(s)`,
+      modified: modified.shell,
     },
   ];
 
@@ -141,6 +152,7 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
               </Text>
             </Box>
             <Text dimColor>{row.status}</Text>
+            {row.modified ? <Text color="yellow"> ●</Text> : null}
           </Box>
         ))}
       </Box>

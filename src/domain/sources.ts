@@ -1,3 +1,4 @@
+import { valuesEqual } from "./diff.ts";
 import type { ConfigDraft } from "./types.ts";
 
 /**
@@ -454,4 +455,34 @@ export function customSources(draft: ConfigDraft): Source[] {
 
 export function customSourceCount(draft: ConfigDraft): number {
   return customSources(draft).length;
+}
+
+/**
+ * Per-row modified flags for the Task Sources hub. Each row owns a slice of
+ * `draft.sources` (its kind's entry, or the whole shell array); a row is
+ * modified iff its slice differs from baseline's. Catches the enable toggle
+ * (entry appearing/disappearing) and any inner-field change in one pass, so the
+ * hub need not re-derive comparisons per sub-form.
+ */
+export function taskSourceModified(
+  draft: ConfigDraft,
+  baseline: ConfigDraft,
+): Record<"linear" | "todoTxt" | "planKeeper" | "shell", boolean> {
+  const draftSources = draft.sources ?? [];
+  const baseSources = baseline.sources ?? [];
+  return {
+    linear: !valuesEqual(
+      draftSources.find(isLinearKind),
+      baseSources.find(isLinearKind),
+    ),
+    todoTxt: !valuesEqual(
+      draftSources.find(isTodoTxtKind),
+      baseSources.find(isTodoTxtKind),
+    ),
+    planKeeper: !valuesEqual(
+      draftSources.find(isPlanKeeper),
+      baseSources.find(isPlanKeeper),
+    ),
+    shell: !valuesEqual(shellSources(draft), shellSources(baseline)),
+  };
 }

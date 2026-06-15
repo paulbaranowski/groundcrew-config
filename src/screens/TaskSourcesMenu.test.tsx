@@ -48,3 +48,25 @@ test("esc on the hub calls onBack", async () => {
   stdin.write(ESC);
   await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
 });
+
+test("shows the ● marker on rows whose source slice differs from baseline", () => {
+  // Baseline has Linear off; draft has it on. Only the Linear row should
+  // carry the ● — todo-txt / PlanKeeper / Shell are unchanged.
+  const draftWithLinear = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "linear" }],
+  } as never;
+  const { lastFrame } = render(
+    <TaskSourcesMenu
+      draft={draftWithLinear}
+      baseline={draft}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  const frame = lastFrame() ?? "";
+  const linearLine = frame.split("\n").find((l) => l.includes("Linear")) ?? "";
+  expect(linearLine).toContain("●");
+  const todoLine = frame.split("\n").find((l) => l.includes("todo-txt")) ?? "";
+  expect(todoLine).not.toContain("●");
+});
