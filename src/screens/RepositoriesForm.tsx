@@ -81,9 +81,11 @@ export function RepositoriesForm({
       name: "",
       projectDirOverride: undefined,
     };
+    const baselineEntry = baseEntries.find((e) => e.name === current.name);
     return (
       <RepoSubForm
         entry={current}
+        baselineEntry={baselineEntry}
         projectDir={draft.workspace.projectDir}
         onSave={(entry) => {
           const next = [...entries];

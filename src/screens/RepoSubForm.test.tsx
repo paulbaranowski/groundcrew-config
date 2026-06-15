@@ -1,14 +1,17 @@
 import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { RepoSubForm } from "./RepoSubForm.tsx";
+import type { RepoEntry } from "../domain/repoEntries.ts";
 
 const ESC = String.fromCharCode(27);
 const DOWN = "\x1b[B"; // down-arrow escape sequence
 
 test("previews resolved location using projectDir default", () => {
+  const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
   const { lastFrame } = render(
     <RepoSubForm
-      entry={{ name: "org/repo", projectDirOverride: undefined }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev/groundcrew"
       onSave={() => {}}
       onCancel={() => {}}
@@ -18,10 +21,12 @@ test("previews resolved location using projectDir default", () => {
 });
 
 test("enter saves the current entry", () => {
+  const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
   const onSave = vi.fn();
   const { stdin } = render(
     <RepoSubForm
-      entry={{ name: "org/repo", projectDirOverride: undefined }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev/groundcrew"
       onSave={onSave}
       onCancel={() => {}}
@@ -37,15 +42,17 @@ test("enter saves the current entry", () => {
 });
 
 test("enter preserves an existing workdir and provision unchanged", () => {
+  const entry: RepoEntry = {
+    name: "org/repo",
+    projectDirOverride: undefined,
+    workdir: "service",
+    provision: { create: "graft add", remove: "graft rm" },
+  };
   const onSave = vi.fn();
   const { stdin } = render(
     <RepoSubForm
-      entry={{
-        name: "org/repo",
-        projectDirOverride: undefined,
-        workdir: "service",
-        provision: { create: "graft add", remove: "graft rm" },
-      }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev/groundcrew"
       onSave={onSave}
       onCancel={() => {}}
@@ -61,10 +68,12 @@ test("enter preserves an existing workdir and provision unchanged", () => {
 });
 
 test("esc with no edits cancels immediately, no guard", async () => {
+  const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
   const onCancel = vi.fn();
   const { lastFrame, stdin } = render(
     <RepoSubForm
-      entry={{ name: "org/repo", projectDirOverride: undefined }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev"
       onSave={() => {}}
       onCancel={onCancel}
@@ -76,10 +85,12 @@ test("esc with no edits cancels immediately, no guard", async () => {
 });
 
 test("esc after an edit pops the save guard, and 's' commits the edit", async () => {
+  const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
   const onSave = vi.fn();
   const { lastFrame, stdin } = render(
     <RepoSubForm
-      entry={{ name: "org/repo", projectDirOverride: undefined }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev"
       onSave={onSave}
       onCancel={() => {}}
@@ -101,11 +112,13 @@ test("esc after an edit pops the save guard, and 's' commits the edit", async ()
 });
 
 test("the save guard's discard cancels without saving", async () => {
+  const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
   const onSave = vi.fn();
   const onCancel = vi.fn();
   const { lastFrame, stdin } = render(
     <RepoSubForm
-      entry={{ name: "org/repo", projectDirOverride: undefined }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev"
       onSave={onSave}
       onCancel={onCancel}
@@ -121,14 +134,16 @@ test("the save guard's discard cancels without saving", async () => {
 });
 
 test("projectDirOverride is inert while provision is set", async () => {
+  const entry: RepoEntry = {
+    name: "org/repo",
+    projectDirOverride: undefined,
+    provision: { create: "graft add", remove: "graft rm" },
+  };
   const onSave = vi.fn();
   const { lastFrame, stdin } = render(
     <RepoSubForm
-      entry={{
-        name: "org/repo",
-        projectDirOverride: undefined,
-        provision: { create: "graft add", remove: "graft rm" },
-      }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev"
       onSave={onSave}
       onCancel={() => {}}
@@ -150,10 +165,15 @@ test("projectDirOverride is inert while provision is set", async () => {
 });
 
 test("provision fields are inert while projectDirOverride is set", async () => {
+  const entry: RepoEntry = {
+    name: "org/repo",
+    projectDirOverride: "~/custom",
+  };
   const onSave = vi.fn();
   const { lastFrame, stdin } = render(
     <RepoSubForm
-      entry={{ name: "org/repo", projectDirOverride: "~/custom" }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev"
       onSave={onSave}
       onCancel={() => {}}
@@ -174,14 +194,16 @@ test("provision fields are inert while projectDirOverride is set", async () => {
 });
 
 test("a legacy entry with both set keeps both fields editable", async () => {
+  const entry: RepoEntry = {
+    name: "org/repo",
+    projectDirOverride: "~/custom",
+    provision: { create: "graft add", remove: "graft rm" },
+  };
   const onSave = vi.fn();
   const { lastFrame, stdin } = render(
     <RepoSubForm
-      entry={{
-        name: "org/repo",
-        projectDirOverride: "~/custom",
-        provision: { create: "graft add", remove: "graft rm" },
-      }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev"
       onSave={onSave}
       onCancel={() => {}}
@@ -201,10 +223,12 @@ test("a legacy entry with both set keeps both fields editable", async () => {
 });
 
 test("the save guard's esc returns to editing", async () => {
+  const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
   const onCancel = vi.fn();
   const { lastFrame, stdin } = render(
     <RepoSubForm
-      entry={{ name: "org/repo", projectDirOverride: undefined }}
+      entry={entry}
+      baselineEntry={entry}
       projectDir="~/dev"
       onSave={() => {}}
       onCancel={onCancel}
@@ -217,4 +241,29 @@ test("the save guard's esc returns to editing", async () => {
   stdin.write(ESC);
   await vi.waitFor(() => expect(lastFrame()).toContain("Repo located at"));
   expect(onCancel).not.toHaveBeenCalled();
+});
+
+test("marks a field that differs from baseline with ●", () => {
+  const baselineEntry: RepoEntry = {
+    name: "a",
+    projectDirOverride: undefined,
+  };
+  const entry: RepoEntry = { name: "a", projectDirOverride: "/elsewhere" };
+  const { lastFrame } = render(
+    <RepoSubForm
+      entry={entry}
+      baselineEntry={baselineEntry}
+      projectDir="/projects"
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  const line =
+    (lastFrame() ?? "")
+      .split("\n")
+      .find((l) => l.includes("projectDirOverride")) ?? "";
+  expect(line).toContain("●");
+  const nameLine =
+    (lastFrame() ?? "").split("\n").find((l) => l.match(/\sname\s/)) ?? "";
+  expect(nameLine).not.toContain("●");
 });
