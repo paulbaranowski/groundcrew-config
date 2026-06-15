@@ -307,6 +307,19 @@ export function planKeeperCommands(
   );
 }
 
+/**
+ * The sandboxWritePaths on the live plan-keeper entry, in order — or undefined
+ * when plan-keeper isn't configured. Mirrors `planKeeperCommands` so the screen
+ * shows the actual on-disk paths (including any the user added by hand).
+ */
+export function planKeeperSandboxPaths(
+  draft: ConfigDraft,
+): string[] | undefined {
+  const entry = (draft.sources ?? []).find(isPlanKeeper);
+  if (entry === undefined) return undefined;
+  return readShellSandboxPaths(entry);
+}
+
 /** Sources crew would actually run (anything not opted out with enabled:false). */
 export function enabledSourceCount(draft: ConfigDraft): number {
   return (draft.sources ?? []).filter((s) => !isDisabled(s)).length;

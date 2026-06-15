@@ -2,6 +2,7 @@ import { Box, Text, useInput } from "ink";
 import {
   isPlanKeeperEnabled,
   planKeeperCommands,
+  planKeeperSandboxPaths,
   setPlanKeeperEnabled,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
@@ -22,6 +23,7 @@ export function PlanKeeperForm({ draft, baseline, onChange, onBack }: Props) {
   const enableModified =
     isPlanKeeperEnabled(draft) !== isPlanKeeperEnabled(baseline);
   const commands = planKeeperCommands(draft);
+  const sandboxPaths = planKeeperSandboxPaths(draft);
   // Pad the integration-command names so their commands line up in a column.
   const labelWidth = (commands ?? []).reduce(
     (max, [name]) => Math.max(max, name.length),
@@ -61,6 +63,17 @@ export function PlanKeeperForm({ draft, baseline, onChange, onBack }: Props) {
             <Text key={name} dimColor>
               {"  "}
               {name.padEnd(labelWidth)} {command}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
+      {sandboxPaths && sandboxPaths.length > 0 ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text>Sandbox write paths:</Text>
+          {sandboxPaths.map((p, i) => (
+            <Text key={`${i}:${p}`} dimColor>
+              {"  "}
+              {p}
             </Text>
           ))}
         </Box>
