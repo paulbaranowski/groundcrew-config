@@ -41,7 +41,12 @@ function PathEntryEditor({
         guard.requestCancel(onCancel);
         return;
       }
-      if (k.return) onSave(path);
+      // Gate Enter on a non-blank path so blank rows never reach the parent list.
+      // ShellEnvEditor / EnvEntryEditor doesn't gate (the blank-key warning is
+      // informational there); we tighten the new sandbox editor independently
+      // because four reviewers flagged the `(unnamed)` row UX and the trim layer
+      // in applyShellFields already enforces the invariant on save.
+      if (k.return && path.trim().length > 0) onSave(path);
     },
     { isActive: !guard.guarding },
   );

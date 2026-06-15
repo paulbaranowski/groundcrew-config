@@ -47,10 +47,15 @@ export function mapSection(message: string): SectionId | undefined {
   // (e.g. "{{workspaceContinuationInstruction}}" in a prompts.initial error)
   // hijack the badge.
   const stripped = message.replace(/^groundcrew config:\s*/, "");
-  // Strip an absolute-path prefix ("<path>:\s+") if present. The path always
-  // contains a slash on the platforms we run on; a key path never does, so the
-  // slash check distinguishes the two without misfiring on the key path itself.
-  const withoutPath = stripped.replace(/^[^\s:]*[\\/][^\s:]*:\s+/, "");
+  // Strip an absolute-path prefix ("<path>:\s+") if present. The optional
+  // `[A-Za-z]:` head accepts Windows drive-letter paths (`C:\foo\bar:` …)
+  // alongside POSIX absolute paths. The remaining slash requirement still
+  // distinguishes path-prefixed wrappers from bare key paths, which never
+  // contain a slash.
+  const withoutPath = stripped.replace(
+    /^(?:[A-Za-z]:)?[^\s:]*[\\/][^\s:]*:\s+/,
+    "",
+  );
   const keyPath = withoutPath.split(/\s/, 1)[0] ?? "";
   return sectionForKeyPath(keyPath);
 }

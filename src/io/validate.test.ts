@@ -52,6 +52,14 @@ test("mapSection routes through groundcrew 4.x's file-path-prefixed format", () 
   ).toBe("workspace");
 });
 
+test("mapSection strips a Windows drive-letter path prefix", () => {
+  expect(
+    mapSection(
+      "groundcrew config: C:\\Users\\me\\.config\\groundcrew\\crew.config.json: workspace.projectDir must be a non-empty string (got undefined)",
+    ),
+  ).toBe("workspace");
+});
+
 test("mapSection maps a prompts.initial error to prompts even when its prose names other sections", () => {
   // groundcrew lists allowed placeholders in the message, one of which is
   // {{workspaceContinuationInstruction}}. The badge must follow the key path

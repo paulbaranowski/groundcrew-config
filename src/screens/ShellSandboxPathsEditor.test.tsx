@@ -85,3 +85,23 @@ test("marks a changed path row with ●", () => {
     (lastFrame() ?? "").split("\n").find((l) => l.includes("~/.cache/new")) ?? "";
   expect(line).toContain("●");
 });
+
+test("Enter on a blank path does not commit and keeps the editor open", async () => {
+  const onChange = vi.fn();
+  const { lastFrame, stdin } = render(
+    <ShellSandboxPathsEditor
+      paths={[]}
+      baselinePaths={[]}
+      onChange={onChange}
+      onBack={() => {}}
+    />,
+  );
+  stdin.write("\r"); // open editor on "+ add path…"
+  await vi.waitFor(() => expect(lastFrame()).toContain("Sandbox write path"));
+  await new Promise((r) => setTimeout(r, 20)); // let TextField subscribe
+  stdin.write("\r"); // Enter on blank
+  // Editor still open, warning visible, parent never notified.
+  expect(lastFrame()).toContain("Sandbox write path");
+  expect(lastFrame()).toContain("path is required");
+  expect(onChange).not.toHaveBeenCalled();
+});

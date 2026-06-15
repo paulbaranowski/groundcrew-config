@@ -500,8 +500,9 @@ export function applyShellFields(
   }
   if (Object.keys(env).length === 0) delete src.env;
   else src.env = env;
-  // sandboxWritePaths: blank rows dropped (the editor's half-typed state never
-  // leaks into the saved config); empty result omits the key for the minimal form.
+  // sandboxWritePaths: trim and drop blank rows as defense-in-depth
+  // (PathEntryEditor also gates Enter on non-blank). Empty result omits the
+  // key for the minimal form.
   const paths = fields.sandboxWritePaths
     .map((p) => p.trim())
     .filter((p) => p.length > 0);

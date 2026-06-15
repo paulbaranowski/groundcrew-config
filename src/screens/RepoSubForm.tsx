@@ -79,6 +79,10 @@ export function RepoSubForm({
     };
   }
 
+  // No activeRef mirror (cf. ShellSourceSubForm): Enter calls buildEntry() which
+  // reads name/override/workdir/provision/prepareHook — never `active` — so the
+  // usual useInput stale-closure trap doesn't apply here. If a future change
+  // makes Enter branch on the active row, add the ref pattern.
   useInput(
     (_input, key) => {
       if (key.escape) {
