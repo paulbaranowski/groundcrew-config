@@ -19,6 +19,7 @@ function Host({ initial }: { initial: ConfigDraft }) {
   return (
     <RepositoriesForm
       draft={current}
+      baseline={initial}
       onChange={setCurrent}
       onBack={() => {}}
     />
@@ -27,7 +28,7 @@ function Host({ initial }: { initial: ConfigDraft }) {
 
 test("renders the repo list and flags the duplicate", () => {
   const { lastFrame } = render(
-    <RepositoriesForm draft={draft} onChange={() => {}} onBack={() => {}} />,
+    <RepositoriesForm draft={draft} baseline={draft} onChange={() => {}} onBack={() => {}} />,
   );
   expect(lastFrame()).toContain("Repositories");
   expect(lastFrame()).toContain("a/b");
@@ -37,7 +38,7 @@ test("renders the repo list and flags the duplicate", () => {
 
 test("help line lists the duplicate shortcut", () => {
   const { lastFrame } = render(
-    <RepositoriesForm draft={draft} onChange={() => {}} onBack={() => {}} />,
+    <RepositoriesForm draft={draft} baseline={draft} onChange={() => {}} onBack={() => {}} />,
   );
   // The help line wraps in the test's terminal width, so assert on the
   // contiguous portion carrying the new confirm-on-delete copy.
@@ -146,4 +147,30 @@ test("c commits the copy immediately; esc returns to a list holding both repos",
   await vi.waitFor(() => expect(lastFrame()).toContain("Repositories"));
   expect(lastFrame()).toContain("maple");
   expect(lastFrame()).toContain("maple-copy");
+});
+
+test("marks a changed repo entry with ●", () => {
+  const baseline = {
+    workspace: { projectDir: "~/dev", knownRepositories: ["a", "b"] },
+  } as never;
+  const draft = {
+    workspace: {
+      projectDir: "~/dev",
+      knownRepositories: ["a", { name: "b", projectDirOverride: "/elsewhere" }],
+    },
+  } as never;
+  const { lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={baseline}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  const lineB =
+    (lastFrame() ?? "").split("\n").find((l) => l.includes(" b")) ?? "";
+  expect(lineB).toContain("●");
+  const lineA =
+    (lastFrame() ?? "").split("\n").find((l) => l.match(/(^|\s)a(\s|$)/)) ?? "";
+  expect(lineA).not.toContain("●");
 });

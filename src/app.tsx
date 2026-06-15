@@ -248,7 +248,12 @@ export function App({ initialDraft, target }: Props) {
         onBack={back}
       />
     ) : id === "repositories" ? (
-      <RepositoriesForm draft={draft} onChange={update} onBack={back} />
+      <RepositoriesForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "taskSources" ? (
       <TaskSourcesMenu
         draft={draft}
