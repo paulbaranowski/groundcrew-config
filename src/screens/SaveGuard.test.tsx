@@ -4,31 +4,35 @@ import { SaveGuard } from "./SaveGuard.tsx";
 
 const ESC = String.fromCharCode(27);
 
-test("renders the labelled prompt and key hints", () => {
+test("renders the prompt and key hints", () => {
   const { lastFrame } = render(
     <SaveGuard
-      label="repository"
-      onSave={() => {}}
+      onApply={() => {}}
       onDiscard={() => {}}
       onCancel={() => {}}
     />,
   );
   const f = lastFrame() ?? "";
-  expect(f).toContain("Unsaved repository");
-  expect(f).toContain("[s] Save");
+  expect(f).toContain("Save these edits to current draft config?");
+  expect(f).toContain("(will not save to disk)");
+  expect(f).toContain("[a] Apply");
   expect(f).toContain("[d] Discard");
   expect(f).toContain("[esc] Keep editing");
 });
 
-test("s saves, d discards, esc keeps editing", async () => {
-  const onSave = vi.fn();
+test("a applies, d discards, esc keeps editing", async () => {
+  const onApply = vi.fn();
   const onDiscard = vi.fn();
   const onCancel = vi.fn();
   const { stdin } = render(
-    <SaveGuard onSave={onSave} onDiscard={onDiscard} onCancel={onCancel} />,
+    <SaveGuard
+      onApply={onApply}
+      onDiscard={onDiscard}
+      onCancel={onCancel}
+    />,
   );
-  stdin.write("s");
-  await vi.waitFor(() => expect(onSave).toHaveBeenCalled());
+  stdin.write("a");
+  await vi.waitFor(() => expect(onApply).toHaveBeenCalled());
   stdin.write("d");
   await vi.waitFor(() => expect(onDiscard).toHaveBeenCalled());
   stdin.write(ESC);

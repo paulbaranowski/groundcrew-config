@@ -53,8 +53,7 @@ function EnvEntryEditor({
   if (guard.guarding) {
     return (
       <SaveGuard
-        label="variable"
-        onSave={() => onSave({ key, value })}
+        onApply={() => onSave({ key, value })}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}
       />
@@ -86,7 +85,7 @@ function EnvEntryEditor({
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>↑/↓ move · type to edit · enter save · esc cancel.</Text>
+        <Text dimColor>↑/↓ move · type to edit · enter apply · esc cancel.</Text>
       </Box>
     </Box>
   );

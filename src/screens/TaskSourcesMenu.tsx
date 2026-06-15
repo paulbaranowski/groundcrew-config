@@ -4,7 +4,7 @@ import {
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
-  shellSourceCount,
+  shellSourceNames,
   taskSourceModified,
 } from "../domain/sources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
@@ -132,7 +132,11 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
     {
       id: "shell",
       label: "Shell sources",
-      status: `${shellSourceCount(draft)} source(s)`,
+      // Names (joined) instead of a bare count so the row can be scanned without
+      // descending into the sub-form to see which sources are configured. Matches
+      // the Home summary's shape (`sections.ts` → taskSources case).
+      // `[].join(", ")` is "", so the `|| "none"` covers the empty case.
+      status: shellSourceNames(draft).join(", ") || "none",
       modified: modified.shell,
     },
   ];
