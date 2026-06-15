@@ -52,10 +52,16 @@ function PathEntryEditor({
   );
 
   if (guard.guarding) {
+    // Mirror the Enter gate on line 49: a blank path must never reach the
+    // parent buffer, even after dirty-esc → Apply. applyShellFields would drop
+    // it on save, but only after a blank `(unnamed)` row visibly sits in the
+    // parent list. If the buffer is whitespace-only, treat Apply as Discard.
+    const apply =
+      path.trim().length === 0 ? onCancel : () => onSave(path);
     return (
       <SaveGuard
         label="path"
-        onApply={() => onSave(path)}
+        onApply={apply}
         onDiscard={onCancel}
         onCancel={guard.keepEditing}
       />
