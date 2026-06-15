@@ -142,6 +142,36 @@ test("reverting a single field clears its marker", async () => {
   unmount();
 });
 
+test("q on a dirty draft opens QuitGuard without tripping Rules-of-Hooks", async () => {
+  // Regression: the modified-markers feature added a useMemo to App; if that
+  // hook sits AFTER the `if (quitting)` early return, the very first render
+  // skips it and the next render (after esc) re-adds it, tripping React's
+  // "Rendered fewer hooks than expected" check. Reproduce by going dirty, then
+  // pressing q (opens QuitGuard), then esc (returns home).
+  const { lastFrame, stdin, unmount } = render(
+    <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
+  );
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
+  stdin.write("x"); // edit -> dirty
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+  stdin.write(ESC); // esc back to Home (still dirty)
+  await vi.waitFor(() => {
+    const frame = lastFrame() ?? "";
+    const line = frame.split("\n").find((l) => l.includes("Workspace")) ?? "";
+    expect(line).toContain("(edited)");
+  });
+  stdin.write("q"); // open QuitGuard
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("Unsaved changes"));
+  stdin.write(ESC); // cancel quit -> back to Home; hook count must match
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("Workspace"));
+  expect(lastFrame() ?? "").not.toContain("Unsaved changes");
+  unmount();
+});
+
 test("saving clears every modified marker — and the (edited) section badge", async () => {
   // saveDraft writes to disk; isolate in a per-test tmpdir so the test is
   // hermetic and doesn't pollute /tmp/crew.config.json across runs.

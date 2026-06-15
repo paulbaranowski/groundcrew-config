@@ -150,6 +150,15 @@ export function App({ initialDraft, target }: Props) {
     { isActive: route.name === "home" && !quitting },
   );
 
+  // Computed BEFORE any conditional early return — Rules-of-Hooks requires
+  // every render to call the same hooks in the same order, and the `quitting`
+  // branch below would otherwise skip this one on first entry, then re-call it
+  // after cancel, tripping React's "Rendered fewer hooks than expected" check.
+  const modified = useMemo(
+    () => modifiedSections(baseline, draft),
+    [baseline, draft],
+  );
+
   if (quitting) {
     return (
       <Screen rows={rows} columns={columns}>
@@ -161,11 +170,6 @@ export function App({ initialDraft, target }: Props) {
       </Screen>
     );
   }
-
-  const modified = useMemo(
-    () => modifiedSections(baseline, draft),
-    [baseline, draft],
-  );
 
   const noSources = enabledSourceCount(draft) === 0;
   // `issues` carries only sections loadConfig flagged. Here we inject a synthetic
