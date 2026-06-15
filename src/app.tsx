@@ -61,13 +61,18 @@ export function App({ initialDraft, target }: Props) {
   const { exit } = useApp();
   const { rows, columns } = useFullscreen();
   const [draft, setDraft] = useState<ConfigDraft>(
-    initialDraft ??
+    () =>
+      initialDraft ??
       // Degenerate empty seed used when no config exists on disk; distinct from
       // defaultDraft(), the richer opinionated seed.
       ({
         workspace: { projectDir: "", knownRepositories: [] },
       } satisfies ConfigDraft),
   );
+  // The last-saved draft: the anchor for unsaved-edit markers. Seeded to the same
+  // value as `draft` so a freshly loaded config reads as "no edits yet"; reset to
+  // `draft` on successful save so every marker clears at once.
+  const [baseline, setBaseline] = useState<ConfigDraft>(() => draft);
   const [route, setRoute] = useState<Route>({ name: "home" });
   // Home's selected row lives here so it survives opening a section and
   // returning (Home unmounts while a section is on screen).
@@ -125,6 +130,7 @@ export function App({ initialDraft, target }: Props) {
   // that saveDraft renamed aside so our .json is the one groundcrew loads.
   async function save(): Promise<void> {
     const result = await saveDraft(target, draft);
+    setBaseline(draft);
     setDirty(false);
     setSaved(true);
     setShadowed(result.shadowed);
