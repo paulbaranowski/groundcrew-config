@@ -76,7 +76,14 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
       />
     );
   if (sub === "todoTxt")
-    return <TodoTxtForm draft={draft} onChange={onChange} onBack={back} />;
+    return (
+      <TodoTxtForm
+        draft={draft}
+        baseline={baseline}
+        onChange={onChange}
+        onBack={back}
+      />
+    );
   if (sub === "planKeeper")
     return <PlanKeeperForm draft={draft} onChange={onChange} onBack={back} />;
   if (sub === "shell")
