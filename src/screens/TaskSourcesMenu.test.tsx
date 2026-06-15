@@ -7,7 +7,7 @@ const ESC = "";
 
 test("lists Linear, todo-txt, PlanKeeper and Shell sources", () => {
   const { lastFrame } = render(
-    <TaskSourcesMenu draft={draft} onChange={() => {}} onBack={() => {}} />,
+    <TaskSourcesMenu draft={draft} baseline={draft} onChange={() => {}} onBack={() => {}} />,
   );
   expect(lastFrame()).toContain("Task Sources");
   expect(lastFrame()).toContain("Linear");
@@ -23,7 +23,7 @@ test("lists the Shell sources row with its source count", () => {
     sources: [{ kind: "shell", name: "jira", commands: { listTasks: "jira ls" } }],
   } as never;
   const { lastFrame } = render(
-    <TaskSourcesMenu draft={draftWithShell} onChange={() => {}} onBack={() => {}} />,
+    <TaskSourcesMenu draft={draftWithShell} baseline={draftWithShell} onChange={() => {}} onBack={() => {}} />,
   );
   expect(lastFrame()).toContain("Shell sources");
   expect(lastFrame()).toContain("1 source(s)");
@@ -31,7 +31,7 @@ test("lists the Shell sources row with its source count", () => {
 
 test("enter opens todo-txt; esc returns to the hub", async () => {
   const { lastFrame, stdin } = render(
-    <TaskSourcesMenu draft={draft} onChange={() => {}} onBack={() => {}} />,
+    <TaskSourcesMenu draft={draft} baseline={draft} onChange={() => {}} onBack={() => {}} />,
   );
   stdin.write("[B"); // down to todo-txt (row 2)
   stdin.write("\r");
@@ -43,7 +43,7 @@ test("enter opens todo-txt; esc returns to the hub", async () => {
 test("esc on the hub calls onBack", async () => {
   const onBack = vi.fn();
   const { stdin } = render(
-    <TaskSourcesMenu draft={draft} onChange={() => {}} onBack={onBack} />,
+    <TaskSourcesMenu draft={draft} baseline={draft} onChange={() => {}} onBack={onBack} />,
   );
   stdin.write(ESC);
   await vi.waitFor(() => expect(onBack).toHaveBeenCalled());

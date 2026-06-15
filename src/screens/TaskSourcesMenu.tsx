@@ -14,6 +14,8 @@ import { TodoTxtForm } from "./TodoTxtForm.tsx";
 
 interface Props {
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `modified` markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
 }
@@ -32,7 +34,7 @@ const ROWS: Array<Exclude<Sub, "hub">> = [
  * task-source screen, extend `Sub`/`ROWS` and the dispatch here — not app.tsx,
  * which only routes the `taskSources` SectionId to this hub.
  */
-export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
+export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
   const [sub, setSub] = useState<Sub>("hub");
   const [cursor, setCursor] = useState(0);
   // Mirror the cursor in a ref so a down+enter burst in one render opens the
@@ -65,7 +67,14 @@ export function TaskSourcesMenu({ draft, onChange, onBack }: Props) {
   const back = () => setSub("hub");
 
   if (sub === "linear")
-    return <LinearForm draft={draft} onChange={onChange} onBack={back} />;
+    return (
+      <LinearForm
+        draft={draft}
+        baseline={baseline}
+        onChange={onChange}
+        onBack={back}
+      />
+    );
   if (sub === "todoTxt")
     return <TodoTxtForm draft={draft} onChange={onChange} onBack={back} />;
   if (sub === "planKeeper")
