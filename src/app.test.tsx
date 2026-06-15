@@ -94,6 +94,12 @@ test("opens Repositories from Home", async () => {
   unmount();
 });
 
+// Generous so the freshly-mounted TextField's useInput effect has subscribed to
+// stdin before we start typing — the docs-prescribed pattern. 20ms is enough in
+// isolation, but the full suite running 47 files concurrently can starve the
+// timer, so we use a longer wait.
+const SETTLE_AFTER_MOUNT_MS = 100;
+
 test("an edit shows (edited) on the affected Home section", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
@@ -103,9 +109,7 @@ test("an edit shows (edited) on the affected Home section", async () => {
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
   stdin.write("\r");
   await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
-  // Let the freshly-mounted TextField subscribe to stdin (its useInput effect
-  // runs after mount), otherwise the first keystroke is dropped.
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
   // Type a single char into projectDir (the focused field).
   stdin.write("x");
   await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
@@ -127,7 +131,7 @@ test("reverting a single field clears its marker", async () => {
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
   stdin.write("\r");
   await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
   stdin.write("x"); // edit projectDir
   await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
   stdin.write("\x7f"); // backspace -> revert

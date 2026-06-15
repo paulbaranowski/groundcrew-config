@@ -49,6 +49,22 @@ test("logging routes to advanced", () => {
   expect(sectionForKeyPath("logging.file")).toBe("advanced");
 });
 
+test("bare git routes to git", () => {
+  expect(sectionForKeyPath("git.remote")).toBe("git");
+});
+
+test("a key whose first segment merely starts with a prefix does NOT match", () => {
+  // 'linear' must not match 'defaultLinearFoo' — the prefix table is a
+  // segment-boundary match, not a substring match.
+  expect(sectionForKeyPath("defaultLinearFoo")).toBeUndefined();
+});
+
+test("a segment that starts with a prefix but doesn't end at a boundary does NOT match", () => {
+  // 'git' must not match the 'gitConfig' segment — the prefix has to abut
+  // a `.`/`[` (or end-of-path) on the right too.
+  expect(sectionForKeyPath("foo.gitConfig.url")).toBeUndefined();
+});
+
 test("an unknown key path returns undefined", () => {
   expect(sectionForKeyPath("totally.unknown.path")).toBeUndefined();
 });

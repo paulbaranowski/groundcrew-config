@@ -1,19 +1,16 @@
 import type { SectionId } from "./types.ts";
 
 /**
- * Most-specific-first ordering: a longer key containing a shorter one MUST be
- * tested first (e.g. `workspaceKind` before `workspace` —
- * `"workspaceKind".includes("workspace")` is true; `defaults.hooks` before any
- * bare `hooks`).
+ * Most-specific-first ordering: when two prefixes both match a key path, the
+ * longer / more specific entry MUST appear first (e.g.
+ * `orchestrator.sessionLimitPercentage` before bare `orchestrator`;
+ * `defaults.hooks` before any bare `hooks`).
  *
  * `usage` precedes `agents` on purpose: groundcrew has no top-level `usage`
- * key, but `agents.definitions.<name>.usage.*` contains both substrings.
- * Routing those errors to the Usage badge points the user at the screen where
- * the `usage.disabled` toggle lives.
- *
- * `orchestrator.sessionLimitPercentage` precedes bare `orchestrator` for the
- * same reason: that one field is edited on the Usage Limits screen even though
- * its config path is under orchestrator.
+ * key, but `agents.definitions.<name>.usage.*` keys end up routing through the
+ * Usage badge — `usage` matches deeper in the path before `agents` matches at
+ * the root — so the user lands on the screen that owns the `usage.disabled`
+ * toggle.
  */
 export const SECTION_PREFIXES: Array<[string, SectionId]> = [
   ["knownRepositories", "repositories"],
@@ -37,10 +34,32 @@ export const SECTION_PREFIXES: Array<[string, SectionId]> = [
  * to the owning `SectionId` via SECTION_PREFIXES. Shared by validity badge
  * routing (io/validate) and modified-marker routing (domain/modified) so both
  * draw from one table.
+ *
+ * Matches a prefix anywhere in the path on segment boundaries — i.e. the prefix
+ * must abut either the start of the path or a `.`/`[`, and must end at the
+ * path end or a `.`/`[`. This catches both top-level keys (`workspace.foo`) and
+ * nested ones (`agents.definitions.claude.usage.foo` matches the `usage` row),
+ * while rejecting substring false positives like `linear` matching
+ * `defaultLinearFoo` or `git` matching `agents.definitions.foo.gitConfig`.
  */
 export function sectionForKeyPath(keyPath: string): SectionId | undefined {
   for (const [prefix, section] of SECTION_PREFIXES) {
-    if (keyPath.includes(prefix)) return section;
+    if (containsSegment(keyPath, prefix)) return section;
   }
   return undefined;
+}
+
+function containsSegment(path: string, segment: string): boolean {
+  let from = 0;
+  while (from <= path.length - segment.length) {
+    const idx = path.indexOf(segment, from);
+    if (idx === -1) return false;
+    const before = idx === 0 ? "." : path[idx - 1];
+    const after = idx + segment.length === path.length ? "." : path[idx + segment.length];
+    if ((before === "." || before === "[") && (after === "." || after === "[")) {
+      return true;
+    }
+    from = idx + 1;
+  }
+  return false;
 }
