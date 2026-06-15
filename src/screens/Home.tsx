@@ -82,7 +82,7 @@ export function Home({
         </Box>
         <Text color={bad ? "yellow" : "green"}>{bad ? "⚠" : "✓"} </Text>
         <Text dimColor>{sectionSummary(id, draft)}</Text>
-        {edited ? <Text dimColor> (edited)</Text> : null}
+        {edited ? <Text color="yellow"> (edited)</Text> : null}
       </Box>
     );
   }
