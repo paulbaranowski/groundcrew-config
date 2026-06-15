@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { App } from "./app.tsx";
@@ -137,4 +140,37 @@ test("reverting a single field clears its marker", async () => {
   stdin.write("\x7f"); // backspace -> revert
   await vi.waitFor(() => expect(lastFrame() ?? "").not.toContain("●"));
   unmount();
+});
+
+test("saving clears every modified marker — and the (edited) section badge", async () => {
+  // saveDraft writes to disk; isolate in a per-test tmpdir so the test is
+  // hermetic and doesn't pollute /tmp/crew.config.json across runs.
+  const dir = mkdtempSync(path.join(tmpdir(), "cc-app-save-test-"));
+  try {
+    const { lastFrame, stdin, unmount } = render(
+      <App initialDraft={draft} target={{ scope: "local", cwd: dir }} />,
+    );
+    // Make an edit so a `●` and an `(edited)` badge both appear, then esc home.
+    stdin.write(DOWN);
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+    stdin.write("\r");
+    await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+    await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
+    stdin.write("x");
+    await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+    stdin.write(ESC);
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? "";
+      const line = frame.split("\n").find((l) => l.includes("Workspace")) ?? "";
+      expect(line).toContain("(edited)");
+    });
+    // Save. After the async write resolves, baseline = draft, so every marker
+    // (the row dot and the (edited) suffix) must clear.
+    stdin.write("s");
+    await vi.waitFor(() => expect(lastFrame() ?? "").not.toContain("(edited)"));
+    expect(lastFrame() ?? "").not.toContain("●");
+    unmount();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
