@@ -241,7 +241,12 @@ export function App({ initialDraft, target }: Props) {
   // validate.ts's SECTION_PREFIXES, or its error badge mis-routes.
   const form =
     id === "workspace" ? (
-      <WorkspaceForm draft={draft} onChange={update} onBack={back} />
+      <WorkspaceForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "repositories" ? (
       <RepositoriesForm draft={draft} onChange={update} onBack={back} />
     ) : id === "taskSources" ? (
