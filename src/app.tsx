@@ -252,7 +252,12 @@ export function App({ initialDraft, target }: Props) {
     ) : id === "taskSources" ? (
       <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />
     ) : id === "usage" ? (
-      <UsageForm draft={draft} onChange={update} onBack={back} />
+      <UsageForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "agents" ? (
       <AgentsForm draft={draft} onChange={update} onBack={back} />
     ) : (
