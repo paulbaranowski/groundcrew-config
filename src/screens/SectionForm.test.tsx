@@ -1,6 +1,6 @@
 import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
-import type { FieldSpec } from "../domain/sections.ts";
+import { simpleSectionSpec, type FieldSpec } from "../domain/sections.ts";
 import { SectionForm } from "./SectionForm.tsx";
 
 const spec: FieldSpec[] = [
@@ -20,13 +20,18 @@ const spec: FieldSpec[] = [
   },
 ];
 
+const emptyDraft = {
+  workspace: { projectDir: "~/d", knownRepositories: [] },
+} as never;
+
 test("renders fields and the focused field's help", () => {
   const { lastFrame } = render(
     <SectionForm
       title="Git"
       description="What this section is for."
       spec={spec}
-      draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
+      draft={emptyDraft}
+      baseline={emptyDraft}
       onChange={() => {}}
       onBack={() => {}}
     />,
@@ -43,7 +48,8 @@ test("typing into the active text field emits an updated draft", () => {
       title="Git"
       description="What this section is for."
       spec={spec}
-      draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
+      draft={emptyDraft}
+      baseline={emptyDraft}
       onChange={onChange}
       onBack={() => {}}
     />,
@@ -69,7 +75,8 @@ test("a non-numeric value in a number field does not emit NaN", () => {
       title="Orchestrator"
       description="What this section is for."
       spec={numberSpec}
-      draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
+      draft={emptyDraft}
+      baseline={emptyDraft}
       onChange={onChange}
       onBack={() => {}}
     />,
@@ -85,13 +92,42 @@ test("esc calls onBack", async () => {
       title="Git"
       description="What this section is for."
       spec={spec}
-      draft={{ workspace: { projectDir: "~/d", knownRepositories: [] } } as never}
+      draft={emptyDraft}
+      baseline={emptyDraft}
       onChange={() => {}}
       onBack={onBack}
     />,
   );
-  stdin.write(""); // escape
+  stdin.write("\x1b"); // escape
   // ink buffers a lone ESC briefly to disambiguate it from escape sequences
   // (arrows etc.), so wait for the handler rather than asserting synchronously.
   await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
+});
+
+test("marks a changed scalar field with ●", () => {
+  const baseline = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+    git: { remote: "origin", defaultBranch: "main" },
+  } as never;
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+    git: { remote: "origin", defaultBranch: "dev" },
+  } as never;
+  const { lastFrame } = render(
+    <SectionForm
+      title="Git"
+      description="Git settings"
+      spec={simpleSectionSpec("git")}
+      draft={draft}
+      baseline={baseline}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  const frame = lastFrame() ?? "";
+  const branchLine =
+    frame.split("\n").find((l) => l.includes("defaultBranch")) ?? "";
+  expect(branchLine).toContain("●");
+  const remoteLine = frame.split("\n").find((l) => l.includes("remote")) ?? "";
+  expect(remoteLine).not.toContain("●");
 });

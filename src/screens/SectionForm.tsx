@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { SelectField } from "../components/SelectField.tsx";
 import { TextField } from "../components/TextField.tsx";
+import { valuesEqual } from "../domain/diff.ts";
 import { getByPath, setByPath } from "../domain/draftPath.ts";
 import type { FieldSpec } from "../domain/sections.ts";
 import type { ConfigDraft } from "../domain/types.ts";
@@ -12,6 +13,8 @@ interface Props {
   description: string;
   spec: FieldSpec[];
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `modified` markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
 }
@@ -31,6 +34,7 @@ export function SectionForm({
   description,
   spec,
   draft,
+  baseline,
   onChange,
   onBack,
 }: Props) {
@@ -72,8 +76,12 @@ export function SectionForm({
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>{title}</Text>
       <Box flexDirection="column" marginTop={1}>
-        {spec.map((field, index) =>
-          field.kind === "select" ? (
+        {spec.map((field, index) => {
+          const modified = !valuesEqual(
+            getByPath(baseline, field.path),
+            getByPath(draft, field.path),
+          );
+          return field.kind === "select" ? (
             <SelectField
               key={field.path}
               label={field.label}
@@ -82,6 +90,7 @@ export function SectionForm({
                 getByPath(draft, field.path) ?? field.options?.[0],
               )}
               isActive={index === active}
+              modified={modified}
               onChange={(v) => update(field, v)}
             />
           ) : (
@@ -91,10 +100,11 @@ export function SectionForm({
               value={asString(getByPath(draft, field.path))}
               placeholder={field.placeholder}
               isActive={index === active}
+              modified={modified}
               onChange={(v) => update(field, v)}
             />
-          ),
-        )}
+          );
+        })}
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>{description}</Text>

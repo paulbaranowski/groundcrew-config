@@ -256,6 +256,7 @@ export function App({ initialDraft, target }: Props) {
         description={SECTION_DESCRIPTION[id]}
         spec={simpleSectionSpec(id)}
         draft={draft}
+        baseline={baseline}
         onChange={update}
         onBack={back}
       />
