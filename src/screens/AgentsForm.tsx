@@ -91,6 +91,11 @@ export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
       <AgentSubForm
         name={editing}
         def={getAgentDef(agents, editing)}
+        baselineDef={
+          Object.hasOwn(baseDefinitions, editing)
+            ? getAgentDef(baseAgents, editing)
+            : undefined
+        }
         sandboxRequired={sandboxRequired}
         onSave={(def) => {
           onChange({ ...draft, agents: setAgentDef(agents, editing, def) });
