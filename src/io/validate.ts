@@ -49,11 +49,14 @@ export function mapSection(message: string): SectionId | undefined {
   const stripped = message.replace(/^groundcrew config:\s*/, "");
   // Strip an absolute-path prefix ("<path>:\s+") if present. The optional
   // `[A-Za-z]:` head accepts Windows drive-letter paths (`C:\foo\bar:` …)
-  // alongside POSIX absolute paths. The remaining slash requirement still
-  // distinguishes path-prefixed wrappers from bare key paths, which never
-  // contain a slash.
+  // alongside POSIX absolute paths. The leading `[^\s:]*[\\/]` keeps the
+  // slash-required anchor that distinguishes a path prefix from a bare key
+  // path (key paths contain no slash), while the post-slash `.*?` (lazy) lets
+  // the rest of the path contain spaces — paths like `/Users/My User/...` no
+  // longer leak into the keypath token. `.*?` stops at the first `:\s+`, which
+  // is groundcrew's separator between the wrapped path and the inner error.
   const withoutPath = stripped.replace(
-    /^(?:[A-Za-z]:)?[^\s:]*[\\/][^\s:]*:\s+/,
+    /^(?:[A-Za-z]:)?[^\s:]*[\\/].*?:\s+/,
     "",
   );
   const keyPath = withoutPath.split(/\s/, 1)[0] ?? "";
