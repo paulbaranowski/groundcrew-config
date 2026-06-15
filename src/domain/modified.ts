@@ -24,17 +24,23 @@ export function modifiedSections(
  * Index-aligned per-item modified flags for a list. An item is modified when
  * no baseline item shares its key (new or renamed) or when the matched baseline
  * item is not deep-equal. `baseline` undefined means every item is modified.
+ *
+ * `keyOf` receives the item's index so callers can disambiguate colliding
+ * synthetic keys — e.g. a list whose user-typed key is sometimes blank can use
+ * `(item, i) => item.key || \`__blank__${i}\`` to force positional matching
+ * for the blanks while still keying named entries by their key (so reorders
+ * are still detected as equal).
  */
 export function modifiedByKey<T>(
   current: readonly T[],
   baseline: readonly T[] | undefined,
-  keyOf: (item: T) => string,
+  keyOf: (item: T, index: number) => string,
 ): boolean[] {
   if (baseline === undefined) return current.map(() => true);
   const byKey = new Map<string, T>();
-  for (const item of baseline) byKey.set(keyOf(item), item);
-  return current.map((item) => {
-    const match = byKey.get(keyOf(item));
+  baseline.forEach((item, i) => byKey.set(keyOf(item, i), item));
+  return current.map((item, i) => {
+    const match = byKey.get(keyOf(item, i));
     return match === undefined || !valuesEqual(item, match);
   });
 }

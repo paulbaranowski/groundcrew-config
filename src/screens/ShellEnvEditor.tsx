@@ -100,7 +100,11 @@ function EnvEntryEditor({
  */
 export function ShellEnvEditor({ env, baselineEnv, onChange, onBack }: Props) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
-  const modified = modifiedByKey(env, baselineEnv, (e) => e.key);
+  // Use the index as a positional fallback for blank-keyed entries — without it,
+  // two rows whose key the user hasn't typed yet would collide in modifiedByKey's
+  // map, and only one of them would be diffed against. (Blank-key entries are
+  // dropped on save by applyShellFields, so this only matters while editing.)
+  const modified = modifiedByKey(env, baselineEnv, (e, i) => e.key || `__blank__${i}`);
 
   useInput(
     (_input, key) => {
