@@ -85,7 +85,14 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
       />
     );
   if (sub === "planKeeper")
-    return <PlanKeeperForm draft={draft} onChange={onChange} onBack={back} />;
+    return (
+      <PlanKeeperForm
+        draft={draft}
+        baseline={baseline}
+        onChange={onChange}
+        onBack={back}
+      />
+    );
   if (sub === "shell")
     return <ShellSourcesForm draft={draft} onChange={onChange} onBack={back} />;
 

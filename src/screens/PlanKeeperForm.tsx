@@ -8,6 +8,8 @@ import type { ConfigDraft } from "../domain/types.ts";
 
 interface Props {
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `modified` markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
 }
@@ -15,8 +17,10 @@ interface Props {
 // Section editor for the PlanKeeper task source (a `kind:"shell"` preset feeding
 // saved ~/plans in as tasks): an enable toggle that shows its preset commands.
 // Follows the screen contract — see SectionForm.
-export function PlanKeeperForm({ draft, onChange, onBack }: Props) {
+export function PlanKeeperForm({ draft, baseline, onChange, onBack }: Props) {
   const enabled = isPlanKeeperEnabled(draft);
+  const enableModified =
+    isPlanKeeperEnabled(draft) !== isPlanKeeperEnabled(baseline);
   const commands = planKeeperCommands(draft);
   // Pad the integration-command names so their commands line up in a column.
   const labelWidth = (commands ?? []).reduce(
@@ -38,6 +42,7 @@ export function PlanKeeperForm({ draft, onChange, onBack }: Props) {
           <Text color={enabled ? "green" : "yellow"}>
             {enabled ? "enabled" : "disabled"}
           </Text>
+          {enableModified ? <Text color="yellow"> ●</Text> : null}
         </Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
