@@ -32,7 +32,15 @@ export function ShellSourcesForm({
   const [editing, setEditing] = useState<number | undefined>(undefined);
   const entries = shellSources(draft);
   const baseEntries = shellSources(baseline);
-  const modified = modifiedByKey(entries, baseEntries, (s) => s.name ?? "");
+  // Same positional fallback as ShellEnvEditor: a freshly-added source has no
+  // name yet, and two unnamed sources would otherwise collide in modifiedByKey's
+  // map (only the last would be diffed). Sources can't be saved without a name,
+  // but the markers must still read correctly during that transient state.
+  const modified = modifiedByKey(
+    entries,
+    baseEntries,
+    (s, i) => s.name || `__blank__${i}`,
+  );
 
   useInput(
     (_input, key) => {

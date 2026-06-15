@@ -1,16 +1,22 @@
 import type { SectionId } from "./types.ts";
 
 /**
- * Most-specific-first ordering: when two prefixes both match a key path, the
- * longer / more specific entry MUST appear first (e.g.
- * `orchestrator.sessionLimitPercentage` before bare `orchestrator`;
- * `defaults.hooks` before any bare `hooks`).
+ * Order is load-bearing only where two prefixes can both segment-match the same
+ * key path; everywhere else the grouping below is just for legibility.
  *
- * `usage` precedes `agents` on purpose: groundcrew has no top-level `usage`
- * key, but `agents.definitions.<name>.usage.*` keys end up routing through the
- * Usage badge — `usage` matches deeper in the path before `agents` matches at
- * the root — so the user lands on the screen that owns the `usage.disabled`
- * toggle.
+ * Required orderings (don't reshuffle without re-checking):
+ *
+ *   `usage` before `agents` — `agents.definitions.<name>.usage.*` keys must
+ *     route to the Usage badge (the screen that owns `usage.disabled`), not to
+ *     Agents. Both prefixes segment-match these paths; first match wins.
+ *
+ *   `orchestrator.sessionLimitPercentage` before `orchestrator` — that one
+ *     field is edited on the Usage Limits screen even though its config path
+ *     lives under orchestrator.
+ *
+ * Other entries that happen to share a starting substring (e.g. `workspaceKind`
+ * vs `workspace`) are independent under the new segment-boundary matcher and
+ * their relative order does not matter.
  */
 export const SECTION_PREFIXES: Array<[string, SectionId]> = [
   ["knownRepositories", "repositories"],
@@ -50,6 +56,7 @@ export function sectionForKeyPath(keyPath: string): SectionId | undefined {
 }
 
 function containsSegment(path: string, segment: string): boolean {
+  if (segment.length > path.length) return false;
   let from = 0;
   while (from <= path.length - segment.length) {
     const idx = path.indexOf(segment, from);

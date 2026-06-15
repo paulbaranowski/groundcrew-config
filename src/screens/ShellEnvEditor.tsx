@@ -106,6 +106,10 @@ export function ShellEnvEditor({ env, baselineEnv, onChange, onBack }: Props) {
   // dropped on save by applyShellFields, so this only matters while editing.)
   const modified = modifiedByKey(env, baselineEnv, (e, i) => e.key || `__blank__${i}`);
 
+  // No SaveGuard here: this list view holds nothing dirty of its own — every
+  // committed edit has already flowed through onChange into the parent
+  // ShellSourceSubForm's `fields.env` buffer (which has its own guard). The
+  // dirty state lives in EnvEntryEditor while a single row is being edited.
   useInput(
     (_input, key) => {
       if (key.escape) onBack();
