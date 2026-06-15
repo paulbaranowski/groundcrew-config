@@ -10,7 +10,10 @@ import {
 } from "./domain/sections.ts";
 import type { ConfigDraft } from "./domain/types.ts";
 import { modifiedSections } from "./domain/modified.ts";
-import { enabledSourceCount } from "./domain/sources.ts";
+import {
+  enabledSourceCount,
+  migratePlanKeeperSandboxPaths,
+} from "./domain/sources.ts";
 import path from "node:path";
 import { saveDraft, targetPath, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
@@ -61,19 +64,25 @@ function Screen({
 export function App({ initialDraft, target }: Props) {
   const { exit } = useApp();
   const { rows, columns } = useFullscreen();
-  const [draft, setDraft] = useState<ConfigDraft>(
-    () =>
-      initialDraft ??
-      // Degenerate empty seed used when no config exists on disk; distinct from
-      // defaultDraft(), the richer opinionated seed.
-      ({
-        workspace: { projectDir: "", knownRepositories: [] },
-      } satisfies ConfigDraft),
+  // Raw on-disk shape (degenerate empty seed if no config exists). Used as the
+  // baseline anchor so any in-memory migrations applied to `draft` surface as
+  // normal `●` unsaved-edit markers.
+  const rawInitial =
+    initialDraft ??
+    // Degenerate empty seed used when no config exists on disk; distinct from
+    // defaultDraft(), the richer opinionated seed.
+    ({
+      workspace: { projectDir: "", knownRepositories: [] },
+    } satisfies ConfigDraft);
+  const [draft, setDraft] = useState<ConfigDraft>(() =>
+    migratePlanKeeperSandboxPaths(rawInitial),
   );
-  // The last-saved draft: the anchor for unsaved-edit markers. Seeded to the same
-  // value as `draft` so a freshly loaded config reads as "no edits yet"; reset to
-  // `draft` on successful save so every marker clears at once.
-  const [baseline, setBaseline] = useState<ConfigDraft>(() => draft);
+  // The last-saved draft: the anchor for unsaved-edit markers. Seeded from the
+  // RAW load (not the migrated draft) so an automatic migration — e.g. backfilling
+  // ~/plans into a pre-4.42 PlanKeeper entry — shows up as a normal `●` the user
+  // can choose to save (or quit to leave the file as-is). Reset to `draft` on
+  // successful save so every marker clears at once.
+  const [baseline, setBaseline] = useState<ConfigDraft>(() => rawInitial);
   const [route, setRoute] = useState<Route>({ name: "home" });
   // Home's selected row lives here so it survives opening a section and
   // returning (Home unmounts while a section is on screen).

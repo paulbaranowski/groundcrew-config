@@ -9,6 +9,7 @@ import {
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
+  migratePlanKeeperSandboxPaths,
   planKeeperCommands,
   planKeeperSource,
   applyShellFields,
@@ -160,6 +161,62 @@ test("planKeeperSource pre-grants ~/plans in sandboxWritePaths", () => {
   // preset would error out under groundcrew's 4.42 sandbox on first use.
   const s = planKeeperSource() as { sandboxWritePaths?: string[] };
   expect(s.sandboxWritePaths).toEqual(["~/plans"]);
+});
+
+test("migratePlanKeeperSandboxPaths backfills ~/plans on an existing entry", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "shell", name: "plankeeper", commands: { fetch: "x" } }],
+  } as never;
+  const migrated = migratePlanKeeperSandboxPaths(draft);
+  expect(migrated.sources?.[0]).toMatchObject({
+    kind: "shell",
+    name: "plankeeper",
+    sandboxWritePaths: ["~/plans"],
+  });
+});
+
+test("migratePlanKeeperSandboxPaths preserves user-added paths and prepends ~/plans", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      {
+        kind: "shell",
+        name: "plankeeper",
+        commands: { fetch: "x" },
+        sandboxWritePaths: ["/var/log/plans"],
+      },
+    ],
+  } as never;
+  const migrated = migratePlanKeeperSandboxPaths(draft);
+  expect(
+    (migrated.sources?.[0] as { sandboxWritePaths: string[] }).sandboxWritePaths,
+  ).toEqual(["~/plans", "/var/log/plans"]);
+});
+
+test("migratePlanKeeperSandboxPaths returns the same draft when ~/plans is already set", () => {
+  // Referential equality matters: an unrelated load shouldn't allocate or shift
+  // the baseline anchor, which would silently flag every config as edited.
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      {
+        kind: "shell",
+        name: "plankeeper",
+        commands: { fetch: "x" },
+        sandboxWritePaths: ["~/plans", "/extra"],
+      },
+    ],
+  } as never;
+  expect(migratePlanKeeperSandboxPaths(draft)).toBe(draft);
+});
+
+test("migratePlanKeeperSandboxPaths leaves non-plankeeper shell sources untouched", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "shell", name: "jira", commands: { listTasks: "j ls" } }],
+  } as never;
+  expect(migratePlanKeeperSandboxPaths(draft)).toBe(draft);
 });
 
 test("isPlanKeeperEnabled / setPlanKeeperEnabled round-trip", () => {

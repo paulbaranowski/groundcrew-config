@@ -76,6 +76,38 @@ function isManaged(source: Source): boolean {
   return isLinearKind(source) || isTodoTxtKind(source) || isShellKind(source);
 }
 
+/**
+ * The sandbox path plan-keeper writes task state under. Surfaced as a constant
+ * so the preset factory and the on-load migration agree on the same value.
+ */
+export const PLAN_KEEPER_SANDBOX_PATH = "~/plans";
+
+/**
+ * Ensure every existing PlanKeeper entry has `~/plans` in its sandboxWritePaths,
+ * preserving any user-added paths and the entry's order. Returns the same draft
+ * (referentially) when nothing needed changing, so an unrelated load is free.
+ *
+ * Run on initial load so configs that pre-date the 4.42 sandbox migrate to a
+ * working state. App keeps baseline at the raw on-disk shape so the migration
+ * surfaces as a normal `●` marker the user can save (or quit to leave alone).
+ */
+export function migratePlanKeeperSandboxPaths(draft: ConfigDraft): ConfigDraft {
+  const sources = draft.sources;
+  if (sources === undefined) return draft;
+  let changed = false;
+  const next = sources.map((source) => {
+    if (!isPlanKeeper(source)) return source;
+    const existing = readShellSandboxPaths(source);
+    if (existing.includes(PLAN_KEEPER_SANDBOX_PATH)) return source;
+    changed = true;
+    return {
+      ...source,
+      sandboxWritePaths: [PLAN_KEEPER_SANDBOX_PATH, ...existing],
+    };
+  });
+  return changed ? { ...draft, sources: next } : draft;
+}
+
 export function planKeeperSource(): ShellSource {
   return {
     kind: "shell",
@@ -89,7 +121,7 @@ export function planKeeperSource(): ShellSource {
     },
     // plan-keeper writes task state under ~/plans; pre-grant the sandbox so the
     // preset works out of the box on groundcrew ≥ 4.42 without a manual edit.
-    sandboxWritePaths: ["~/plans"],
+    sandboxWritePaths: [PLAN_KEEPER_SANDBOX_PATH],
   };
 }
 
