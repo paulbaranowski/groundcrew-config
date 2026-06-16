@@ -3,6 +3,11 @@ import { Box, Text, useInput } from "ink";
 
 const CARET_BLINK_MS = 530;
 
+// The value sits on its own row, indented by this many cols under the label.
+// Visually nests wrapped lines so the eye reads them as belonging to the field
+// above without having to track a hanging indent that varies with label length.
+const VALUE_INDENT = 4;
+
 interface Props {
   label: string;
   value: string;
@@ -22,7 +27,10 @@ interface Props {
 }
 
 // Controlled single-line input with a blinking caret. Supports an inert
-// `disabled` mode (focusable but ignores keystrokes) for mutually-exclusive fields.
+// `disabled` mode (focusable but ignores keystrokes) for mutually-exclusive
+// fields. Renders as two rows — label on row 1, value (which wraps naturally)
+// on row 2 — so a long value never mangles the label's position, the regression
+// that drove this layout.
 export function TextField({
   label,
   value,
@@ -98,15 +106,23 @@ export function TextField({
     return () => clearInterval(timer);
   }, [isActive, disabled]);
 
+  const labelRow = (
+    <Box>
+      <Text color={isActive ? "cyan" : undefined}>
+        {isActive ? "› " : "  "}
+        {label}{" "}
+      </Text>
+      {modified ? <Text color="yellow">●</Text> : null}
+    </Box>
+  );
+
   if (disabled) {
     return (
-      <Box>
-        <Text color={isActive ? "cyan" : undefined}>
-          {isActive ? "› " : "  "}
-          {label}{" "}
-        </Text>
-        <Text dimColor>{disabledHint ?? "(disabled)"}</Text>
-        {modified ? <Text color="yellow"> ●</Text> : null}
+      <Box flexDirection="column">
+        {labelRow}
+        <Box paddingLeft={VALUE_INDENT}>
+          <Text dimColor>{disabledHint ?? "(disabled)"}</Text>
+        </Box>
       </Box>
     );
   }
@@ -116,8 +132,8 @@ export function TextField({
   // The caret has two renderings depending on where it sits:
   //   • At the end of the value (or on an empty field) there is no character to
   //     mark, so draw a thin bar in its own column. A trailing bar is harmless —
-  //     it never splits the text — and a space when "off" holds the column so the
-  //     text doesn't jitter as it blinks.
+  //     it never splits the text — and a space when "off" holds the column so
+  //     the text doesn't jitter as it blinks.
   //   • In the *interior*, drawing a bar would insert a column and visibly split
   //     the word (e.g. "flawless-inve▏ntory"). Instead, highlight the character
   //     the caret sits on with inverse video — a block cursor that occupies no
@@ -127,29 +143,27 @@ export function TextField({
   ) : null;
   const atEnd = pos >= value.length;
   return (
-    <Box>
-      <Text color={isActive ? "cyan" : undefined}>
-        {isActive ? "› " : "  "}
-        {label}{" "}
-      </Text>
-      {!hasValue ? (
-        <Text>
-          {endBar}
-          <Text dimColor>{placeholder ?? ""}</Text>
-        </Text>
-      ) : atEnd ? (
-        <Text>
-          {value}
-          {endBar}
-        </Text>
-      ) : (
-        <Text>
-          {value.slice(0, pos)}
-          <Text inverse={isActive && caretOn}>{value[pos]}</Text>
-          {value.slice(pos + 1)}
-        </Text>
-      )}
-      {modified ? <Text color="yellow"> ●</Text> : null}
+    <Box flexDirection="column">
+      {labelRow}
+      <Box paddingLeft={VALUE_INDENT}>
+        {!hasValue ? (
+          <Text>
+            {endBar}
+            <Text dimColor>{placeholder ?? ""}</Text>
+          </Text>
+        ) : atEnd ? (
+          <Text>
+            {value}
+            {endBar}
+          </Text>
+        ) : (
+          <Text>
+            {value.slice(0, pos)}
+            <Text inverse={isActive && caretOn}>{value[pos]}</Text>
+            {value.slice(pos + 1)}
+          </Text>
+        )}
+      </Box>
     </Box>
   );
 }

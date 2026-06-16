@@ -172,3 +172,52 @@ test("does not render ● when not modified", () => {
   );
   expect(lastFrame() ?? "").not.toContain("●");
 });
+
+test("renders the label on its own row above the value", () => {
+  // The whole point of the two-row layout: the label sits alone on row 1 so a
+  // long value below it can wrap freely without ever pushing the label aside.
+  const { lastFrame } = render(
+    <TextField
+      label="provision.create"
+      value="graft new ${branch} catalog/admin"
+      isActive
+      onChange={() => {}}
+    />,
+  );
+  const lines = (lastFrame() ?? "").split("\n");
+  const labelIdx = lines.findIndex((l) => l.includes("provision.create"));
+  const valueIdx = lines.findIndex((l) => l.includes("graft new"));
+  expect(labelIdx).toBeGreaterThanOrEqual(0);
+  expect(valueIdx).toBeGreaterThan(labelIdx);
+  // The label row carries only the label (no value text leaked onto it).
+  expect(lines[labelIdx]).not.toContain("graft new");
+});
+
+test("the value row is indented under the label", () => {
+  const { lastFrame } = render(
+    <TextField label="cmd" value="hello" isActive onChange={() => {}} />,
+  );
+  const lines = (lastFrame() ?? "").split("\n");
+  const valueLine = lines.find((l) => l.includes("hello")) ?? "";
+  // The 4-col indent on the value row sets it visually under the label,
+  // distinct from the label's `›`/`  ` 2-col prefix.
+  expect(valueLine).toMatch(/^ {4}/);
+});
+
+test("a disabled field still shows its hint on the value row", () => {
+  const { lastFrame } = render(
+    <TextField
+      label="projectDirOverride"
+      value=""
+      isActive={false}
+      disabled
+      disabledHint="(disabled — clear provision to use)"
+      onChange={() => {}}
+    />,
+  );
+  const lines = (lastFrame() ?? "").split("\n");
+  const labelIdx = lines.findIndex((l) => l.includes("projectDirOverride"));
+  const hintIdx = lines.findIndex((l) => l.includes("clear provision"));
+  expect(labelIdx).toBeGreaterThanOrEqual(0);
+  expect(hintIdx).toBeGreaterThan(labelIdx);
+});
