@@ -134,7 +134,8 @@ test("an interior caret does not split the value with a column", async () => {
   stdin.write(LEFT);
   stdin.write(LEFT);
   stdin.write(LEFT); // caret now inside "inventory"
-  // Let the caret blink toggle a few times; the word must stay intact in every frame.
+  // Settle briefly so the keystrokes apply; the word must stay intact after focus
+  // settles (the inverse-video caret occupies no extra column).
   await new Promise((r) => setTimeout(r, 50));
   expect(lastFrame() ?? "").toContain("flawless-inventory");
 });

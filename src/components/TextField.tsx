@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 
-const CARET_BLINK_MS = 530;
-
 // The value sits on its own row, indented by this many cols under the label.
 // Visually nests wrapped lines so the eye reads them as belonging to the field
 // above without having to track a hanging indent that varies with label length.
@@ -26,11 +24,14 @@ interface Props {
   modified?: boolean;
 }
 
-// Controlled single-line input with a blinking caret. Supports an inert
+// Controlled single-line input with a static caret. Supports an inert
 // `disabled` mode (focusable but ignores keystrokes) for mutually-exclusive
 // fields. Renders as two rows — label on row 1, value (which wraps naturally)
-// on row 2 — so a long value never mangles the label's position, the regression
-// that drove this layout.
+// on row 2 — so a long value never mangles the label's position.
+// The caret is intentionally non-blinking: a 530ms re-render loop kept iTerm2
+// (and likely other terminals) from holding an active text selection — every
+// blink wrote the caret cell, which invalidates the selection. Static caret =
+// native click-and-drag-to-copy survives idle.
 export function TextField({
   label,
   value,
@@ -87,25 +88,6 @@ export function TextField({
     { isActive: isActive && !disabled },
   );
 
-  // Blink a bright caret at the input origin so an empty active field reads as
-  // "type here". The interval is unref'd: it fires while Ink keeps the app alive
-  // but never blocks process/test exit on its own, and is cleared on unmount or
-  // when the field deactivates.
-  const [caretOn, setCaretOn] = useState(true);
-  useEffect(() => {
-    if (!isActive || disabled) {
-      setCaretOn(true);
-      return;
-    }
-    const timer = setInterval(() => setCaretOn((on) => !on), CARET_BLINK_MS);
-    // `unref()` is required, not cosmetic: an active interval keeps Node's event
-    // loop alive, so without this the blink would block process/test exit (a
-    // headless test rendering a TextField would hang). Keep the optional call —
-    // it is a no-op where timers lack `unref` but load-bearing under Node.
-    timer.unref?.();
-    return () => clearInterval(timer);
-  }, [isActive, disabled]);
-
   const labelRow = (
     <Box>
       <Text color={isActive ? "cyan" : undefined}>
@@ -132,15 +114,12 @@ export function TextField({
   // The caret has two renderings depending on where it sits:
   //   • At the end of the value (or on an empty field) there is no character to
   //     mark, so draw a thin bar in its own column. A trailing bar is harmless —
-  //     it never splits the text — and a space when "off" holds the column so
-  //     the text doesn't jitter as it blinks.
+  //     it never splits the text.
   //   • In the *interior*, drawing a bar would insert a column and visibly split
   //     the word (e.g. "flawless-inve▏ntory"). Instead, highlight the character
   //     the caret sits on with inverse video — a block cursor that occupies no
   //     extra column, so the text stays contiguous.
-  const endBar = isActive ? (
-    <Text color="cyan">{caretOn ? "▏" : " "}</Text>
-  ) : null;
+  const endBar = isActive ? <Text color="cyan">▏</Text> : null;
   const atEnd = pos >= value.length;
   return (
     <Box flexDirection="column">
@@ -159,7 +138,7 @@ export function TextField({
         ) : (
           <Text>
             {value.slice(0, pos)}
-            <Text inverse={isActive && caretOn}>{value[pos]}</Text>
+            <Text inverse={isActive}>{value[pos]}</Text>
             {value.slice(pos + 1)}
           </Text>
         )}
