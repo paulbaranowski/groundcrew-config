@@ -83,6 +83,11 @@ test("a shell source's sandboxWritePaths path routes to taskSources", () => {
   );
 });
 
+test("local.runner and local.networkEgress both route to sandbox", () => {
+  expect(sectionForKeyPath("local.runner")).toBe("sandbox");
+  expect(sectionForKeyPath("local.networkEgress")).toBe("sandbox");
+});
+
 test("an unknown key path returns undefined", () => {
   expect(sectionForKeyPath("totally.unknown.path")).toBeUndefined();
 });

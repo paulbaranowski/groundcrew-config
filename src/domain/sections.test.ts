@@ -152,10 +152,29 @@ test("usage summary shows the configured session limit when tracking is on", () 
   ).toBe("tracking enabled · limit 50%");
 });
 
-test("sandbox is a select field spec over the runner enum", () => {
+test("sandbox is a runner + networkEgress select spec", () => {
   const spec = simpleSectionSpec("sandbox");
+  expect(spec.map((f) => f.path)).toEqual([
+    "local.runner",
+    "local.networkEgress",
+  ]);
   expect(spec[0]?.kind).toBe("select");
   expect(spec[0]?.options).toEqual(["auto", "safehouse", "srt", "sdx", "none"]);
+  expect(spec[1]?.kind).toBe("select");
+  expect(spec[1]?.options).toEqual(["allowlisted", "open"]);
+});
+
+test("sandbox summary always shows runner and egress, with defaults when unset", () => {
+  const base = { workspace: { projectDir: "~/d", knownRepositories: [] } };
+  expect(sectionSummary("sandbox", base as never)).toBe(
+    "runner: auto · egress: allowlisted",
+  );
+  expect(
+    sectionSummary("sandbox", {
+      ...base,
+      local: { runner: "safehouse", networkEgress: "open" },
+    } as never),
+  ).toBe("runner: safehouse · egress: open");
 });
 
 test("taskSources summary lists enabled source kinds", () => {
