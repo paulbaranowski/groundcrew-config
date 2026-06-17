@@ -1,5 +1,6 @@
 import {
   GIT_DEFAULTS,
+  NETWORK_EGRESS,
   ORCHESTRATOR_DEFAULTS,
   RUNNERS,
   WORKSPACE_KINDS,
@@ -74,7 +75,7 @@ export const SECTION_DESCRIPTION: Record<SectionId, string> = {
   terminal:
     "Which terminal multiplexer hosts the running agents (tmux, cmux, or zellij).",
   sandbox:
-    "Pick the sandbox that isolates each agent from the rest of your machine while it runs.",
+    "Pick the sandbox that isolates each agent from the rest of your machine while it runs. networkEgress controls the agent's network access (safehouse runner only).",
   prompts:
     "The instructions groundcrew gives the agent at the start of every task.",
   advanced: "Where groundcrew writes its log file.",
@@ -94,6 +95,7 @@ export type FieldPath =
   | "git.defaultBranch"
   | "git.branchPrefix"
   | "local.runner"
+  | "local.networkEgress"
   | "prompts.initial"
   | "prompts.promptFile"
   | "workspaceKind"
@@ -178,6 +180,17 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
             "• srt — Anthropic sandbox-runtime, fast & no Docker, macOS + Linux/WSL",
             "• sdx — Docker Sandboxes, needs Docker, macOS + Linux",
             "• none — no sandbox (unsafe)",
+          ].join("\n"),
+        },
+        {
+          path: "local.networkEgress",
+          label: "networkEgress",
+          kind: "select",
+          options: NETWORK_EGRESS,
+          help: [
+            "Network access for agents. Only the safehouse runner uses this; srt/sdx/none ignore it.",
+            "• allowlisted — Clearance-wrapped: deny network except the egress allowlist (default)",
+            "• open — keep the filesystem sandbox but open network egress (no Clearance)",
           ].join("\n"),
         },
       ];
@@ -272,7 +285,9 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
     case "git":
       return `${draft.git?.remote ?? GIT_DEFAULTS.remote} · ${draft.git?.defaultBranch ?? GIT_DEFAULTS.defaultBranch}`;
     case "sandbox":
-      return `runner: ${draft.local?.runner ?? "auto"}`;
+      return `runner: ${draft.local?.runner ?? "auto"} · egress: ${
+        draft.local?.networkEgress ?? "allowlisted"
+      }`;
     case "prompts": {
       const prompts = draft.prompts ?? {};
       if (prompts.promptFile) return `file: ${prompts.promptFile}`;

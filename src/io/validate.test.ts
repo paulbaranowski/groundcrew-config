@@ -28,6 +28,14 @@ test("mapSection maps usage errors to usage", () => {
   );
 });
 
+test("mapSection maps local.networkEgress errors to sandbox", () => {
+  expect(
+    mapSection(
+      'groundcrew config: local.networkEgress must be one of allowlisted, open (got "nope")',
+    ),
+  ).toBe("sandbox");
+});
+
 test("mapSection routes the session limit to usage, other orchestrator keys to orchestrator", () => {
   // sessionLimitPercentage is edited on the Usage Limits screen, so its error
   // badge follows the field, not its orchestrator.* config path.
