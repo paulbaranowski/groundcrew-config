@@ -56,8 +56,10 @@ echo "Downloading crew-config..."
 curl -fsSL "$TARBALL" | tar -xz -C "$tmpdir" --strip-components=1
 
 echo "Node $(node --version) — installing globally..."
-# Local directory install avoids npm's "git dep preparation" which
-# re-installs devDependencies into the global prefix and tends to corrupt it.
-npm install -g "$tmpdir"
+# Pack to a real tarball first. npm install -g <local-path> on Linux
+# creates a symlink instead of copying, so when the trap deletes tmpdir
+# the global module becomes a dangling symlink. A packed .tgz is copied.
+tgz=$(cd "$tmpdir" && npm pack --quiet 2>/dev/null)
+npm install -g "$tmpdir/$tgz"
 echo ""
 echo "Done! Run: crew-config"
