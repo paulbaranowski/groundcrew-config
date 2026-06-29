@@ -1,6 +1,7 @@
-// Lists the packaged prompts on the left, previews the focused one on the
-// right. Enter installs the focused prompt (writes it next to crew.config.json
-// and updates the draft); esc returns to the Prompts screen.
+// Two-mode screen for the packaged-prompts catalog:
+//   list   — pick a prompt; shows title + description per row, no body preview
+//   reader — read the prompt body with scroll; `i` installs, esc returns to list
+// Install writes the prompt next to crew.config.json and updates the draft.
 
 import { useMemo, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
@@ -10,6 +11,7 @@ import {
   type PackagedPrompt,
 } from "../prompts/loader.ts";
 import type { ConfigDraft } from "../domain/types.ts";
+import { PromptsReader } from "./PromptsReader.tsx";
 
 interface Props {
   draft: ConfigDraft;
@@ -18,7 +20,7 @@ interface Props {
   onBack: () => void;
 }
 
-const PREVIEW_LINES = 18;
+type Mode = "list" | "reader";
 
 export function PromptsBrowser({
   draft,
@@ -31,6 +33,7 @@ export function PromptsBrowser({
   const prompts = useMemo(() => safeList(), []);
   const [cursor, setCursor] = useState(0);
   const cursorRef = useRef(0);
+  const [mode, setMode] = useState<Mode>("list");
   const [error, setError] = useState<string | undefined>(undefined);
 
   function moveCursor(next: number): void {
@@ -38,28 +41,47 @@ export function PromptsBrowser({
     setCursor(next);
   }
 
-  useInput((_input, key) => {
-    if (key.escape) {
-      onBack();
-      return;
+  function install(prompt: PackagedPrompt): void {
+    try {
+      const result = installPrompt(draft, configDir, prompt);
+      onInstalled(result.draft, result.relativePath);
+    } catch (e) {
+      setError((e as Error).message);
+      setMode("list");
     }
-    if (prompts.length === 0) return;
-    if (key.downArrow)
-      moveCursor(Math.min(prompts.length - 1, cursorRef.current + 1));
-    if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
-    if (key.return) {
-      const focused = prompts[cursorRef.current];
-      if (!focused) return;
-      try {
-        const result = installPrompt(draft, configDir, focused);
-        onInstalled(result.draft, result.relativePath);
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    }
-  });
+  }
 
-  const focused = prompts[cursor];
+  useInput(
+    (_input, key) => {
+      if (key.escape) {
+        onBack();
+        return;
+      }
+      if (prompts.length === 0) return;
+      if (key.downArrow)
+        moveCursor(Math.min(prompts.length - 1, cursorRef.current + 1));
+      if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
+      if (key.return) setMode("reader");
+    },
+    { isActive: mode === "list" },
+  );
+
+  if (mode === "reader") {
+    const focused = prompts[cursor];
+    // Defensive: should be unreachable since Enter is gated on prompts.length>0,
+    // but typescript can't prove cursor stays in bounds.
+    if (!focused) {
+      setMode("list");
+      return null;
+    }
+    return (
+      <PromptsReader
+        prompt={focused}
+        onInstall={() => install(focused)}
+        onBack={() => setMode("list")}
+      />
+    );
+  }
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
@@ -69,20 +91,20 @@ export function PromptsBrowser({
           <Text dimColor>No packaged prompts found.</Text>
         </Box>
       ) : (
-        <Box marginTop={1}>
-          <Box flexDirection="column" width={28} marginRight={2}>
-            {prompts.map((p, index) => (
-              <Box key={p.slug}>
-                <Text color={cursor === index ? "cyan" : undefined}>
-                  {cursor === index ? "▸ " : "  "}
-                  {p.title}
-                </Text>
-              </Box>
-            ))}
-          </Box>
-          <Box flexDirection="column" flexGrow={1}>
-            {focused ? <Preview prompt={focused} /> : null}
-          </Box>
+        <Box flexDirection="column" marginTop={1}>
+          {prompts.map((p, index) => (
+            <Box key={p.slug} flexDirection="column" marginBottom={1}>
+              <Text color={cursor === index ? "cyan" : undefined}>
+                {cursor === index ? "▸ " : "  "}
+                <Text bold>{p.title}</Text>
+              </Text>
+              {p.description ? (
+                <Box marginLeft={2}>
+                  <Text dimColor>{p.description}</Text>
+                </Box>
+              ) : null}
+            </Box>
+          ))}
         </Box>
       )}
       {error ? (
@@ -92,37 +114,11 @@ export function PromptsBrowser({
       ) : null}
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          Each entry is a pre-written initial prompt. Enter installs it under
-          <Text> </Text>
-          {configDir}
-          <Text>/prompts/ and points </Text>
-          promptFile<Text> at it.</Text>
+          Each entry is a pre-written initial prompt. Installing one writes it
+          under {configDir}/prompts/ and points promptFile at it.
         </Text>
-        <Text dimColor>↑/↓ select · enter install · esc back</Text>
+        <Text dimColor>↑/↓ select · enter read · esc back</Text>
       </Box>
-    </Box>
-  );
-}
-
-function Preview({ prompt }: { prompt: PackagedPrompt }) {
-  const lines = prompt.body.split("\n");
-  const shown = lines.slice(0, PREVIEW_LINES);
-  const overflow = lines.length - shown.length;
-  return (
-    <Box flexDirection="column">
-      {prompt.description ? (
-        <Box marginBottom={1}>
-          <Text>{prompt.description}</Text>
-        </Box>
-      ) : null}
-      {shown.map((line, index) => (
-        <Text key={index} dimColor>
-          {line === "" ? " " : line}
-        </Text>
-      ))}
-      {overflow > 0 ? (
-        <Text dimColor>… {overflow} more line{overflow === 1 ? "" : "s"}</Text>
-      ) : null}
     </Box>
   );
 }

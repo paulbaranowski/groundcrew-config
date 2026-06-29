@@ -27,7 +27,7 @@ test("lists the bundled autonomous prompt with its title", () => {
   expect(f).toContain("Autonomous task → PR");
 });
 
-test("esc calls onBack", async () => {
+test("esc on the list calls onBack", async () => {
   const onBack = vi.fn();
   const { stdin } = render(
     <PromptsBrowser
@@ -41,10 +41,42 @@ test("esc calls onBack", async () => {
   await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
 });
 
-test("enter installs the focused prompt (writes file + reports relative path)", async () => {
+test("enter opens the reader view (shows prompt body, not list footer)", async () => {
+  const { lastFrame, stdin } = render(
+    <PromptsBrowser
+      draft={draft}
+      configDir={tmpConfigDir()}
+      onInstalled={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  stdin.write("\r");
+  await vi.waitFor(() => {
+    const f = lastFrame() ?? "";
+    expect(f).toContain("i install");
+    expect(f).toContain("# Autonomous task → PR prompt");
+  });
+});
+
+test("esc from the reader returns to the list", async () => {
+  const { lastFrame, stdin } = render(
+    <PromptsBrowser
+      draft={draft}
+      configDir={tmpConfigDir()}
+      onInstalled={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("i install"));
+  stdin.write("\x1b");
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("enter read"));
+});
+
+test("pressing `i` in the reader installs the focused prompt", async () => {
   const configDir = tmpConfigDir();
   const onInstalled = vi.fn();
-  const { stdin } = render(
+  const { lastFrame, stdin } = render(
     <PromptsBrowser
       draft={draft}
       configDir={configDir}
@@ -53,6 +85,8 @@ test("enter installs the focused prompt (writes file + reports relative path)", 
     />,
   );
   stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("i install"));
+  stdin.write("i");
   await vi.waitFor(() => expect(onInstalled).toHaveBeenCalled());
   const [nextDraft, relativePath] = onInstalled.mock.calls[0] ?? [];
   expect(relativePath).toBe("prompts/autonomous.md");
