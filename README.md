@@ -16,12 +16,6 @@ brew install paulbaranowski/tap/crew-config
 curl -fsSL https://github.com/paulbaranowski/groundcrew-config/releases/latest/download/install.sh | bash
 ```
 
-Or install directly via npm if you already have Node 24+:
-
-```bash
-npm install -g paulbaranowski/groundcrew-config
-```
-
 ## Use
 
 ```bash

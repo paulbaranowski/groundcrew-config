@@ -2,7 +2,8 @@
 set -euo pipefail
 
 MIN_NODE=24
-PKG="paulbaranowski/groundcrew-config"
+REPO="paulbaranowski/groundcrew-config"
+TARBALL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
 
 node_major() {
   node --version 2>/dev/null | sed 's/v//' | cut -d. -f1
@@ -48,7 +49,15 @@ EOF
   fi
 fi
 
-echo "Node $(node --version) — installing $PKG..."
-npm install -g "$PKG"
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+echo "Downloading crew-config..."
+curl -fsSL "$TARBALL" | tar -xz -C "$tmpdir" --strip-components=1
+
+echo "Node $(node --version) — installing globally..."
+# Local directory install avoids npm's "git dep preparation" which
+# re-installs devDependencies into the global prefix and tends to corrupt it.
+npm install -g "$tmpdir"
 echo ""
 echo "Done! Run: crew-config"
