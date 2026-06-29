@@ -1,9 +1,9 @@
 ---
-title: Autonomous task → PR
-description: Take a task all the way to an opened PR autonomously — implement → test → review → PR → tend, no human in the loop.
+title: Coding task → PR
+description: For self-contained, specified coding tasks like bug fixes or small features. Takes one all the way to an opened PR: implement → test → review → PR → tend.
 ---
 
-# Autonomous task → PR prompt
+# Coding task → PR prompt
 
 Take the task below all the way to an opened pull request, with no human in the
 loop. Resolve the task, then run an implement → test → review → PR → tend loop

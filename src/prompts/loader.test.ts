@@ -29,13 +29,13 @@ test("parseFrontmatter keeps colons that appear inside the value", () => {
   expect(frontmatter.description).toBe("ratio 1:2:3");
 });
 
-test("listPackagedPrompts surfaces the bundled autonomous prompt", () => {
+test("listPackagedPrompts surfaces the bundled coding-task prompt", () => {
   const prompts = listPackagedPrompts();
   const autonomous = prompts.find((p) => p.slug === "autonomous");
   expect(autonomous).toBeDefined();
-  expect(autonomous?.title).toBe("Autonomous task → PR");
-  expect(autonomous?.description).toMatch(/autonomously/);
+  expect(autonomous?.title).toBe("Coding task → PR");
+  expect(autonomous?.description).toMatch(/self-contained/);
   // Frontmatter should not leak into the body that gets installed.
   expect(autonomous?.body.startsWith("---")).toBe(false);
-  expect(autonomous?.body).toContain("# Autonomous task → PR prompt");
+  expect(autonomous?.body).toContain("# Coding task → PR prompt");
 });

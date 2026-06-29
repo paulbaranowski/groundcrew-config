@@ -42,7 +42,7 @@ crew-config ./path/to/crew.config.json
   - **Shell sources** — managed shell adapters. Any other (unmanaged) shell sources are authored by hand in `crew.config.json`; the TUI preserves them on save but no longer surfaces a screen for them.
 - **Orchestrator** — concurrency + polling (`maximumInProgress`, `pollIntervalMilliseconds`).
 - **Usage Limits** — toggle per-agent usage tracking and set the session-usage ceiling (`sessionLimitPercentage`) above which groundcrew stops launching. Tracking requires the [codexbar](https://codexbar.app/) menu-bar app on Mac (`brew install --cask steipete/tap/codexbar`); groundcrew reads usage via its bundled `codexbar` CLI. (The limit is still stored as `orchestrator.sessionLimitPercentage` in the file.)
-- **Prompts** — the initial agent prompt, set inline (`initial`) or loaded from a file (`promptFile`); the two are mutually exclusive. The screen also has a **Browse packaged prompts →** entry: pick one from the bundled list (e.g. _Autonomous task → PR_) and `crew-config` writes the prompt to `<config-dir>/prompts/<slug>.md` and points `promptFile` at it. Installed prompts are plain Markdown — edit them in place.
+- **Prompts** — the initial agent prompt, set inline (`initial`) or loaded from a file (`promptFile`); the two are mutually exclusive. The screen also has a **Browse packaged prompts →** entry: pick one from the bundled list (e.g. _Coding task → PR_) and `crew-config` writes the prompt to `<config-dir>/prompts/<slug>.md` and points `promptFile` at it. Installed prompts are plain Markdown — edit them in place.
 - **Hooks / Git / Terminal / Sandbox / Advanced** — the rest of `crew.config.json` (Terminal = `workspaceKind`, which now includes `zellij`).
 
 ## Full-screen

@@ -24,7 +24,7 @@ test("lists the bundled autonomous prompt with its title", () => {
   );
   const f = lastFrame() ?? "";
   expect(f).toContain("Packaged prompts");
-  expect(f).toContain("Autonomous task → PR");
+  expect(f).toContain("Coding task → PR");
 });
 
 test("esc on the list calls onBack", async () => {
@@ -54,7 +54,7 @@ test("enter opens the reader view (shows prompt body, not list footer)", async (
   await vi.waitFor(() => {
     const f = lastFrame() ?? "";
     expect(f).toContain("i install");
-    expect(f).toContain("# Autonomous task → PR prompt");
+    expect(f).toContain("# Coding task → PR prompt");
   });
 });
 
@@ -119,6 +119,6 @@ test("pressing `i` in the reader installs the focused prompt", async () => {
   const installedAt = path.join(configDir, "prompts", "autonomous.md");
   expect(existsSync(installedAt)).toBe(true);
   expect(readFileSync(installedAt, "utf8")).toContain(
-    "# Autonomous task → PR prompt",
+    "# Coding task → PR prompt",
   );
 });
