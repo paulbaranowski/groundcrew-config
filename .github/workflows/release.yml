@@ -78,7 +78,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ver.outputs.tag }}
-        run: gh release create "$TAG" --title "$TAG" --generate-notes
+        run: gh release create "$TAG" --title "$TAG" --generate-notes install.sh
 
       - name: Hash source tarball
         if: steps.check.outputs.release == 'true'
