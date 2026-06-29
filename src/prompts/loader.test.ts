@@ -23,6 +23,14 @@ test("parseFrontmatter returns the original text as body when no fence is presen
   expect(body).toBe(text);
 });
 
+test("parseFrontmatter accepts CRLF line endings (Windows checkout)", () => {
+  const text = "---\r\ntitle: Hello\r\ndescription: A short note.\r\n---\r\nbody line\r\n";
+  const { frontmatter, body } = parseFrontmatter(text);
+  expect(frontmatter.title).toBe("Hello");
+  expect(frontmatter.description).toBe("A short note.");
+  expect(body).toBe("body line\r\n");
+});
+
 test("parseFrontmatter keeps colons that appear inside the value", () => {
   const text = "---\ndescription: ratio 1:2:3\n---\nbody";
   const { frontmatter } = parseFrontmatter(text);

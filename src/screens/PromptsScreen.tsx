@@ -81,7 +81,7 @@ export function PromptsScreen({
           onChange(next);
           setInstalled(relativePath);
           setMode("form");
-          setCursor(PROMPT_FILE_ROW);
+          moveCursor(PROMPT_FILE_ROW);
         }}
         onBack={() => setMode("form")}
       />

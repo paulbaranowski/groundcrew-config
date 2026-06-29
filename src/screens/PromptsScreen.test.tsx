@@ -32,7 +32,7 @@ test("renders the two prompt fields plus a browse entry", () => {
 
 test("esc on the form calls onBack", async () => {
   const onBack = vi.fn();
-  const { stdin } = render(
+  const { lastFrame, stdin } = render(
     <PromptsScreen
       draft={draft}
       baseline={draft}
@@ -41,6 +41,10 @@ test("esc on the form calls onBack", async () => {
       configDir={tmpConfigDir()}
     />,
   );
+  // Let Ink commit and the useInput effect subscribe before the first keystroke,
+  // otherwise it can be dropped (CLAUDE.md: "type immediately and the first
+  // keystroke is dropped").
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("Prompts"));
   stdin.write("\x1b");
   await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
 });
@@ -55,6 +59,10 @@ test("down twice + enter opens the packaged-prompts browser", async () => {
       configDir={tmpConfigDir()}
     />,
   );
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("Prompts"));
+  // The two ↓ presses can stay back-to-back since `cursorRef` updates
+  // synchronously inside `moveCursor` — only the first keystroke needs the
+  // post-render settle.
   stdin.write("\x1b[B");
   stdin.write("\x1b[B");
   stdin.write("\r");

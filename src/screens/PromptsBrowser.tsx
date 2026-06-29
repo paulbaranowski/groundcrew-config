@@ -30,7 +30,7 @@ export function PromptsBrowser({
 }: Props) {
   // listPackagedPrompts hits the filesystem; memoize so navigation between
   // entries doesn't re-read every render.
-  const prompts = useMemo(() => safeList(), []);
+  const { prompts, error: listError } = useMemo(() => safeList(), []);
   const [cursor, setCursor] = useState(0);
   const cursorRef = useRef(0);
   const [mode, setMode] = useState<Mode>("list");
@@ -90,7 +90,11 @@ export function PromptsBrowser({
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Packaged prompts</Text>
-      {prompts.length === 0 ? (
+      {listError ? (
+        <Box marginTop={1}>
+          <Text color="red">Could not load packaged prompts: {listError}</Text>
+        </Box>
+      ) : prompts.length === 0 ? (
         <Box marginTop={1}>
           <Text dimColor>No packaged prompts found.</Text>
         </Box>
@@ -127,12 +131,16 @@ export function PromptsBrowser({
   );
 }
 
-function safeList(): PackagedPrompt[] {
+function safeList(): { prompts: PackagedPrompt[]; error?: string } {
   try {
-    return listPackagedPrompts();
-  } catch {
-    // The packaged-prompts dir is missing in some dev/test contexts. The empty
-    // list is rendered with a "no prompts found" hint above.
-    return [];
+    return { prompts: listPackagedPrompts() };
+  } catch (e) {
+    // ENOENT on the packaged-prompts dir is expected in some dev/test contexts
+    // (e.g. running against a partial dist) — fall back to the "no prompts found"
+    // hint. Anything else (malformed frontmatter, EACCES, corrupt copy) is a
+    // real problem and should surface, not silently render as empty.
+    const err = e as NodeJS.ErrnoException;
+    if (err.code === "ENOENT") return { prompts: [] };
+    return { prompts: [], error: err.message };
   }
 }

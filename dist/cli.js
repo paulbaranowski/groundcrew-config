@@ -1455,13 +1455,12 @@ function readPackagedPrompt(filepath) {
   };
 }
 function parseFrontmatter(text) {
-  if (!text.startsWith("---\n")) return { frontmatter: {}, body: text };
-  const end = text.indexOf("\n---\n", 4);
-  if (end === -1) return { frontmatter: {}, body: text };
-  const fm = text.slice(4, end);
-  const body = text.slice(end + 5);
+  const fence = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!fence) return { frontmatter: {}, body: text };
+  const fm = fence[1] ?? "";
+  const body = text.slice(fence[0].length);
   const frontmatter = {};
-  for (const line of fm.split("\n")) {
+  for (const line of fm.split(/\r?\n/)) {
     const match = line.match(/^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$/);
     if (!match) continue;
     const key = match[1];
@@ -1539,7 +1538,7 @@ function PromptsBrowser({
   onInstalled,
   onBack
 }) {
-  const prompts = useMemo(() => safeList(), []);
+  const { prompts, error: listError } = useMemo(() => safeList(), []);
   const [cursor, setCursor] = useState7(0);
   const cursorRef = useRef5(0);
   const [mode, setMode] = useState7("list");
@@ -1592,7 +1591,10 @@ function PromptsBrowser({
   }
   return /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
     /* @__PURE__ */ jsx9(Text9, { bold: true, children: "Packaged prompts" }),
-    prompts.length === 0 ? /* @__PURE__ */ jsx9(Box9, { marginTop: 1, children: /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: "No packaged prompts found." }) }) : /* @__PURE__ */ jsx9(Box9, { flexDirection: "column", marginTop: 1, children: prompts.map((p, index) => /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", marginBottom: 1, children: [
+    listError ? /* @__PURE__ */ jsx9(Box9, { marginTop: 1, children: /* @__PURE__ */ jsxs9(Text9, { color: "red", children: [
+      "Could not load packaged prompts: ",
+      listError
+    ] }) }) : prompts.length === 0 ? /* @__PURE__ */ jsx9(Box9, { marginTop: 1, children: /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: "No packaged prompts found." }) }) : /* @__PURE__ */ jsx9(Box9, { flexDirection: "column", marginTop: 1, children: prompts.map((p, index) => /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", marginBottom: 1, children: [
       /* @__PURE__ */ jsxs9(Text9, { color: cursor === index ? "cyan" : void 0, children: [
         cursor === index ? "\u25B8 " : "  ",
         /* @__PURE__ */ jsx9(Text9, { bold: true, children: p.title })
@@ -1615,9 +1617,11 @@ function PromptsBrowser({
 }
 function safeList() {
   try {
-    return listPackagedPrompts();
-  } catch {
-    return [];
+    return { prompts: listPackagedPrompts() };
+  } catch (e) {
+    const err = e;
+    if (err.code === "ENOENT") return { prompts: [] };
+    return { prompts: [], error: err.message };
   }
 }
 
@@ -1679,7 +1683,7 @@ function PromptsScreen({
           onChange(next);
           setInstalled(relativePath);
           setMode("form");
-          setCursor(PROMPT_FILE_ROW);
+          moveCursor(PROMPT_FILE_ROW);
         },
         onBack: () => setMode("form")
       }

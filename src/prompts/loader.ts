@@ -41,15 +41,15 @@ function readPackagedPrompt(filepath: string): PackagedPrompt {
 
 // Tiny single-purpose parser: enough for "key: value" lines wrapped in `---`
 // fences. We deliberately don't pull in a YAML dep — the frontmatter shape is
-// fixed and the file authors are us.
+// fixed and the file authors are us. Accept both LF and CRLF fences so a repo
+// checked out with autocrlf=true on Windows still parses correctly.
 export function parseFrontmatter(text: string): Frontmatter {
-  if (!text.startsWith("---\n")) return { frontmatter: {}, body: text };
-  const end = text.indexOf("\n---\n", 4);
-  if (end === -1) return { frontmatter: {}, body: text };
-  const fm = text.slice(4, end);
-  const body = text.slice(end + 5);
+  const fence = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!fence) return { frontmatter: {}, body: text };
+  const fm = fence[1] ?? "";
+  const body = text.slice(fence[0].length);
   const frontmatter: Record<string, string> = {};
-  for (const line of fm.split("\n")) {
+  for (const line of fm.split(/\r?\n/)) {
     const match = line.match(/^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$/);
     if (!match) continue;
     const key = match[1];
