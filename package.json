@@ -1,6 +1,6 @@
 {
   "name": "@clipboard-health/groundcrew-config",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "Interactive TUI to create and update groundcrew's crew.config.json",
   "license": "MIT",
   "type": "module",
@@ -14,7 +14,6 @@
     "node": ">=24"
   },
   "scripts": {
-    "prepare": "tsup",
     "build": "tsup",
     "dev": "node --import tsx src/cli.tsx",
     "test": "vitest run",
