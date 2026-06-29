@@ -1435,10 +1435,15 @@ function installPrompt(draft, configDir, prompt) {
 }
 
 // src/prompts/loader.ts
-import { readdirSync, readFileSync } from "fs";
+import { existsSync as existsSync3, readdirSync, readFileSync, statSync as statSync2 } from "fs";
 import path5 from "path";
 import { fileURLToPath } from "url";
-var PROMPTS_DIR = fileURLToPath(new URL("./", import.meta.url));
+function resolvePromptsDir(moduleUrl = import.meta.url) {
+  const bundled = fileURLToPath(new URL("./prompts/", moduleUrl));
+  if (existsSync3(bundled) && statSync2(bundled).isDirectory()) return bundled;
+  return fileURLToPath(new URL("./", moduleUrl));
+}
+var PROMPTS_DIR = resolvePromptsDir();
 function listPackagedPrompts(dir = PROMPTS_DIR) {
   const files = readdirSync(dir).filter((name) => name.endsWith(".md")).sort();
   return files.map((name) => readPackagedPrompt(path5.join(dir, name)));
@@ -3397,7 +3402,7 @@ function App({ initialDraft: initialDraft2, target: target2 }) {
 }
 
 // src/io/load.ts
-import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
+import { existsSync as existsSync4, readFileSync as readFileSync2 } from "fs";
 import path7 from "path";
 import { pathToFileURL } from "url";
 import { cosmiconfig } from "cosmiconfig";
@@ -3409,7 +3414,7 @@ var explorer = cosmiconfig("crew", {
   loaders: { ".ts": importModule, ".mjs": importModule, ".js": importModule }
 });
 async function loadDraft(filepath) {
-  if (!existsSync3(filepath)) return void 0;
+  if (!existsSync4(filepath)) return void 0;
   if (path7.extname(filepath) === ".json") {
     const text = readFileSync2(filepath, "utf8");
     try {
@@ -3426,7 +3431,7 @@ async function loadDraft(filepath) {
 }
 
 // src/io/locate.ts
-import { existsSync as existsSync4 } from "fs";
+import { existsSync as existsSync5 } from "fs";
 import path8 from "path";
 var CONFIG_BASENAMES = [
   "crew.config.ts",
@@ -3447,13 +3452,13 @@ function locate(argv2, cwd) {
   }
   const dir = path8.dirname(targetPath(target2));
   const existing = CONFIG_BASENAMES.map((name) => path8.join(dir, name)).find(
-    existsSync4
+    existsSync5
   );
   return { target: target2, path: existing ?? targetPath(target2) };
 }
 
 // src/io/seed.ts
-import { existsSync as existsSync5, mkdirSync as mkdirSync3, writeFileSync as writeFileSync4 } from "fs";
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, writeFileSync as writeFileSync4 } from "fs";
 import path9 from "path";
 
 // src/domain/defaults.ts
@@ -3502,7 +3507,7 @@ function seedNewConfig(target2) {
   const dir = path9.dirname(targetPath(target2));
   const promptPath = path9.join(dir, DEFAULT_PROMPT_FILE);
   try {
-    if (!existsSync5(promptPath)) {
+    if (!existsSync6(promptPath)) {
       mkdirSync3(dir, { recursive: true });
       writeFileSync4(promptPath, DEFAULT_INITIAL_PROMPT);
     }
