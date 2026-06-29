@@ -19,7 +19,7 @@ curl -fsSL https://github.com/paulbaranowski/groundcrew-config/releases/latest/d
 Or install directly via npm if you already have Node 24+:
 
 ```bash
-npm install -g @clipboard-health/groundcrew-config
+npm install -g paulbaranowski/groundcrew-config
 ```
 
 ## Use

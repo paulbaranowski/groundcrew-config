@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MIN_NODE=24
-PKG="@clipboard-health/groundcrew-config"
+PKG="paulbaranowski/groundcrew-config"
 
 node_major() {
   node --version 2>/dev/null | sed 's/v//' | cut -d. -f1
