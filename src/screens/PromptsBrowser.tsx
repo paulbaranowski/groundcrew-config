@@ -52,7 +52,7 @@ export function PromptsBrowser({
   }
 
   useInput(
-    (_input, key) => {
+    (input, key) => {
       if (key.escape) {
         onBack();
         return;
@@ -61,7 +61,11 @@ export function PromptsBrowser({
       if (key.downArrow)
         moveCursor(Math.min(prompts.length - 1, cursorRef.current + 1));
       if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
-      if (key.return) setMode("reader");
+      if (key.return || input === "v") setMode("reader");
+      if (input === "i") {
+        const focused = prompts[cursorRef.current];
+        if (focused) install(focused);
+      }
     },
     { isActive: mode === "list" },
   );
@@ -117,7 +121,7 @@ export function PromptsBrowser({
           Each entry is a pre-written initial prompt. Installing one writes it
           under {configDir}/prompts/ and points promptFile at it.
         </Text>
-        <Text dimColor>↑/↓ select · enter read · esc back</Text>
+        <Text dimColor>↑/↓ select · i install · v/enter view · esc back</Text>
       </Box>
     </Box>
   );

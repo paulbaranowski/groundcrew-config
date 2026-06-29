@@ -68,9 +68,32 @@ test("esc from the reader returns to the list", async () => {
     />,
   );
   stdin.write("\r");
-  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("i install"));
+  // The reader footer's "i install · esc back" includes the literal " · esc",
+  // which the list footer never does — so the substring discriminates the
+  // two modes without depending on the rest of the help text.
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("i install · esc"));
   stdin.write("\x1b");
-  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("enter read"));
+  await vi.waitFor(() => expect(lastFrame() ?? "").toContain("v/enter view"));
+});
+
+test("pressing `i` in the list installs the focused prompt directly", async () => {
+  const configDir = tmpConfigDir();
+  const onInstalled = vi.fn();
+  const { stdin } = render(
+    <PromptsBrowser
+      draft={draft}
+      configDir={configDir}
+      onInstalled={onInstalled}
+      onBack={() => {}}
+    />,
+  );
+  stdin.write("i");
+  await vi.waitFor(() => expect(onInstalled).toHaveBeenCalled());
+  const [, relativePath] = onInstalled.mock.calls[0] ?? [];
+  expect(relativePath).toBe("prompts/autonomous.md");
+  expect(
+    existsSync(path.join(configDir, "prompts", "autonomous.md")),
+  ).toBe(true);
 });
 
 test("pressing `i` in the reader installs the focused prompt", async () => {

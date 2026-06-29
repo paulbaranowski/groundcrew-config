@@ -1558,7 +1558,7 @@ function PromptsBrowser({
     }
   }
   useInput7(
-    (_input, key) => {
+    (input, key) => {
       if (key.escape) {
         onBack();
         return;
@@ -1567,7 +1567,11 @@ function PromptsBrowser({
       if (key.downArrow)
         moveCursor(Math.min(prompts.length - 1, cursorRef.current + 1));
       if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
-      if (key.return) setMode("reader");
+      if (key.return || input === "v") setMode("reader");
+      if (input === "i") {
+        const focused = prompts[cursorRef.current];
+        if (focused) install(focused);
+      }
     },
     { isActive: mode === "list" }
   );
@@ -1605,7 +1609,7 @@ function PromptsBrowser({
         configDir,
         "/prompts/ and points promptFile at it."
       ] }),
-      /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: "\u2191/\u2193 select \xB7 enter read \xB7 esc back" })
+      /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: "\u2191/\u2193 select \xB7 i install \xB7 v/enter view \xB7 esc back" })
     ] })
   ] });
 }
