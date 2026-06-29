@@ -15,6 +15,7 @@ import { saveDraft, targetPath, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
 import { Home } from "./screens/Home.tsx";
 import { AgentsForm } from "./screens/AgentsForm.tsx";
+import { PromptsScreen } from "./screens/PromptsScreen.tsx";
 import { QuitGuard } from "./screens/QuitGuard.tsx";
 import { RepositoriesForm } from "./screens/RepositoriesForm.tsx";
 import { SectionForm } from "./screens/SectionForm.tsx";
@@ -185,6 +186,7 @@ export function App({ initialDraft, target }: Props) {
 
   const id = route.id;
   const back = () => setRoute({ name: "home" });
+  const configDir = path.dirname(targetPath(target));
 
   const form =
     id === "workspace" ? (
@@ -197,6 +199,13 @@ export function App({ initialDraft, target }: Props) {
       <UsageForm draft={draft} onChange={update} onBack={back} />
     ) : id === "agents" ? (
       <AgentsForm draft={draft} onChange={update} onBack={back} />
+    ) : id === "prompts" ? (
+      <PromptsScreen
+        draft={draft}
+        onChange={update}
+        onBack={back}
+        configDir={configDir}
+      />
     ) : (
       <SectionForm
         title={SECTION_LABEL[id]}
