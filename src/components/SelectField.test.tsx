@@ -59,3 +59,17 @@ test("left arrow wraps to the last option", () => {
   stdin.write("[D"); // left arrow
   expect(onChange).toHaveBeenCalledWith("none");
 });
+
+test("renders a yellow ● when modified", () => {
+  const { lastFrame } = render(
+    <SelectField
+      label="runner"
+      value="sdx"
+      options={["auto", "sdx", "none"]}
+      isActive={false}
+      modified
+      onChange={() => {}}
+    />,
+  );
+  expect(lastFrame() ?? "").toContain("●");
+});

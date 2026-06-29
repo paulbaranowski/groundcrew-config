@@ -15,7 +15,14 @@ const explorer = cosmiconfig("crew", {
   loaders: { ".ts": importModule, ".mjs": importModule, ".js": importModule },
 });
 
-/** Read an existing config of any format into a raw draft, or undefined if absent. */
+/**
+ * Read an existing config of any format into a raw draft, or undefined if absent.
+ *
+ * The returned value is UNVALIDATED disk input: its true validity is established
+ * later by groundcrew's loadConfig (see io/validate.ts), not here. Consumers must
+ * not assume required fields are present or well-typed just because the static
+ * type says ConfigDraft.
+ */
 export async function loadDraft(
   filepath: string,
 ): Promise<ConfigDraft | undefined> {
@@ -23,6 +30,7 @@ export async function loadDraft(
   if (path.extname(filepath) === ".json") {
     const text = readFileSync(filepath, "utf8");
     try {
+      // Unvalidated: parsed JSON is asserted, not checked; validity is groundcrew's.
       return JSON.parse(text) as ConfigDraft;
     } catch (error) {
       // Fail loud with the offending file: a silent undefined would be read as
@@ -34,5 +42,6 @@ export async function loadDraft(
     }
   }
   const result = await explorer.load(filepath);
+  // Unvalidated: cosmiconfig's loaded config is asserted, not checked; validity is groundcrew's.
   return (result?.config ?? undefined) as ConfigDraft | undefined;
 }

@@ -5,12 +5,15 @@
 import { useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { TextField } from "../components/TextField.tsx";
+import { valuesEqual } from "../domain/diff.ts";
 import { getByPath, setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import { PromptsBrowser } from "./PromptsBrowser.tsx";
 
 interface Props {
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `●` modified markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
   configDir: string;
@@ -26,7 +29,13 @@ function asString(value: unknown): string {
   return value === undefined ? "" : String(value);
 }
 
-export function PromptsScreen({ draft, onChange, onBack, configDir }: Props) {
+export function PromptsScreen({
+  draft,
+  baseline,
+  onChange,
+  onBack,
+  configDir,
+}: Props) {
   const [mode, setMode] = useState<Mode>("form");
   const [cursor, setCursor] = useState(0);
   const cursorRef = useRef(0);
@@ -87,12 +96,24 @@ export function PromptsScreen({ draft, onChange, onBack, configDir }: Props) {
           label="initial"
           value={asString(getByPath(draft, "prompts.initial"))}
           isActive={cursor === INITIAL_ROW}
+          modified={
+            !valuesEqual(
+              getByPath(baseline, "prompts.initial"),
+              getByPath(draft, "prompts.initial"),
+            )
+          }
           onChange={(v) => update("prompts.initial", v)}
         />
         <TextField
           label="promptFile"
           value={asString(getByPath(draft, "prompts.promptFile"))}
           isActive={cursor === PROMPT_FILE_ROW}
+          modified={
+            !valuesEqual(
+              getByPath(baseline, "prompts.promptFile"),
+              getByPath(draft, "prompts.promptFile"),
+            )
+          }
           onChange={(v) => update("prompts.promptFile", v)}
         />
         <Box>

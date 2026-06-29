@@ -8,27 +8,39 @@ import {
 
 test("section order is the Home list order", () => {
   expect(SECTION_ORDER).toEqual([
-    "workspace",
     "repositories",
+    "workspace",
+    "taskSources",
     "agents",
-    "ticketSources",
+    "terminal",
+    "sandbox",
     "orchestrator",
     "usage",
     "hooks",
     "git",
-    "terminal",
-    "sandbox",
     "prompts",
     "advanced",
   ]);
 });
 
-test("workspace summary shows projectDir only", () => {
+test("workspace summary shows projectDir and the configured worktreeDir", () => {
+  expect(
+    sectionSummary("workspace", {
+      workspace: {
+        projectDir: "~/dev/groundcrew",
+        worktreeDir: "~/dev/worktrees",
+        knownRepositories: ["a/b"],
+      },
+    } as never),
+  ).toBe("~/dev/groundcrew · worktreeDir: ~/dev/worktrees");
+});
+
+test("workspace summary falls back to projectDir when worktreeDir is unset", () => {
   expect(
     sectionSummary("workspace", {
       workspace: { projectDir: "~/dev/groundcrew", knownRepositories: ["a/b"] },
     } as never),
-  ).toBe("~/dev/groundcrew");
+  ).toBe("~/dev/groundcrew · worktreeDir: ~/dev/groundcrew");
 });
 
 test("repositories summary shows the repo count", () => {
@@ -140,36 +152,65 @@ test("usage summary shows the configured session limit when tracking is on", () 
   ).toBe("tracking enabled · limit 50%");
 });
 
-test("sandbox is a select field spec over the runner enum", () => {
+test("sandbox is a runner + networkEgress select spec", () => {
   const spec = simpleSectionSpec("sandbox");
+  expect(spec.map((f) => f.path)).toEqual([
+    "local.runner",
+    "local.networkEgress",
+  ]);
   expect(spec[0]?.kind).toBe("select");
   expect(spec[0]?.options).toEqual(["auto", "safehouse", "srt", "sdx", "none"]);
+  expect(spec[1]?.kind).toBe("select");
+  expect(spec[1]?.options).toEqual(["allowlisted", "open"]);
 });
 
-test("ticketSources summary lists enabled source kinds", () => {
+test("sandbox summary always shows runner and egress, with defaults when unset", () => {
+  const base = { workspace: { projectDir: "~/d", knownRepositories: [] } };
+  expect(sectionSummary("sandbox", base as never)).toBe(
+    "runner: auto · egress: allowlisted",
+  );
   expect(
-    sectionSummary("ticketSources", {
+    sectionSummary("sandbox", {
+      ...base,
+      local: { runner: "safehouse", networkEgress: "open" },
+    } as never),
+  ).toBe("runner: safehouse · egress: open");
+});
+
+test("taskSources summary lists enabled source kinds", () => {
+  expect(
+    sectionSummary("taskSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
       sources: [{ kind: "linear" }, { kind: "todo-txt" }],
     } as never),
   ).toBe("linear, todo-txt");
 });
 
-test("ticketSources summary lists generic shell sources under the shell bucket", () => {
+test("taskSources summary names each generic shell source", () => {
   expect(
-    sectionSummary("ticketSources", {
+    sectionSummary("taskSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
       sources: [
         { kind: "linear", enabled: false },
         { kind: "shell", name: "jira" },
+        { kind: "shell", name: "github" },
       ],
     } as never),
-  ).toBe("1 shell");
+  ).toBe("jira, github");
 });
 
-test("ticketSources summary warns when no sources are enabled", () => {
+test("taskSources summary falls back to 'shell' for a blank-named shell source", () => {
   expect(
-    sectionSummary("ticketSources", {
+    sectionSummary("taskSources", {
+      workspace: { projectDir: "~/d", knownRepositories: [] },
+      sources: [{ kind: "shell", name: "" }],
+    } as never),
+  ).toBe("shell");
+});
+
+test("taskSources summary warns when no sources are enabled", () => {
+  expect(
+    sectionSummary("taskSources", {
       workspace: { projectDir: "~/d", knownRepositories: [] },
     } as never),
   ).toBe("none — crew won't run");

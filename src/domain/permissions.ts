@@ -1,10 +1,11 @@
 import type { ConfigDraft } from "./types.ts";
 
 type Agents = ConfigDraft["agents"];
-type Def = Record<string, unknown>;
+type Def = NonNullable<NonNullable<Agents>["definitions"]>[string];
 
 // groundcrew's built-in `claude` preset cmd. An empty `claude: {}` entry inherits
-// this, so the toggle treats a missing cmd as "claude in auto mode".
+// this, so the toggle treats a missing cmd as "claude in auto mode". Mirrors the
+// `claude` preset baked into groundcrew; it drifts if that preset's cmd changes.
 const CLAUDE_DEFAULT_CMD = "claude --permission-mode auto";
 
 /** The def's effective cmd: its own `cmd`, or the built-in default for `claude`. */

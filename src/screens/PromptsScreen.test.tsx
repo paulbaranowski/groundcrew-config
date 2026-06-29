@@ -17,6 +17,7 @@ test("renders the two prompt fields plus a browse entry", () => {
   const { lastFrame } = render(
     <PromptsScreen
       draft={draft}
+      baseline={draft}
       onChange={() => {}}
       onBack={() => {}}
       configDir={tmpConfigDir()}
@@ -34,6 +35,7 @@ test("esc on the form calls onBack", async () => {
   const { stdin } = render(
     <PromptsScreen
       draft={draft}
+      baseline={draft}
       onChange={() => {}}
       onBack={onBack}
       configDir={tmpConfigDir()}
@@ -47,6 +49,7 @@ test("down twice + enter opens the packaged-prompts browser", async () => {
   const { lastFrame, stdin } = render(
     <PromptsScreen
       draft={draft}
+      baseline={draft}
       onChange={() => {}}
       onBack={() => {}}
       configDir={tmpConfigDir()}

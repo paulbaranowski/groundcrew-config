@@ -15,7 +15,7 @@ export type ConfigDraft = Config;
  * without an ordering dependency.
  */
 export type SectionId =
-  | "workspace" | "repositories" | "agents" | "ticketSources"
+  | "workspace" | "repositories" | "agents" | "taskSources"
   | "orchestrator" | "usage" | "hooks" | "git" | "terminal"
   | "sandbox" | "prompts" | "advanced";
 
@@ -23,12 +23,17 @@ export type SectionId =
 export const RUNNERS = ["auto", "safehouse", "srt", "sdx", "none"] as const;
 export type Runner = (typeof RUNNERS)[number];
 
+/**
+ * Network egress posture for local launches. groundcrew defaults to
+ * `"allowlisted"` (Clearance-wrapped); only the safehouse runner consumes it.
+ * Listed here for the UI, mirroring groundcrew's `NetworkEgressSetting`.
+ */
+export const NETWORK_EGRESS = ["allowlisted", "open"] as const;
+export type NetworkEgress = (typeof NETWORK_EGRESS)[number];
+
 /** Terminal session managers. */
 export const WORKSPACE_KINDS = ["auto", "cmux", "tmux", "zellij"] as const;
 export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
-
-/** Built-in agent presets that enable with `{}`. */
-export const BUILT_IN_AGENTS = ["claude", "codex"] as const;
 
 /** Orchestrator defaults groundcrew applies; shown as ghost values in the UI. */
 export const ORCHESTRATOR_DEFAULTS = {

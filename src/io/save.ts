@@ -24,6 +24,10 @@ export function targetPath(target: Target): string {
   return path.join(dir, "crew.config.json");
 }
 
+// Side effect: renames any shadowing config file (crew.config.ts/.mjs/.js) to a
+// free *.bak so the crew.config.json this writes is the one groundcrew's loader
+// picks up. The returned `shadowed` array lists those backups — the Home UI reads
+// it to tell the user which files were moved aside, so the return shape matters.
 export async function saveDraft(
   target: Target,
   draft: ConfigDraft,
@@ -48,11 +52,7 @@ export async function saveDraft(
     }
   }
 
-  const json = JSON.stringify(
-    pruneEmpty(draft as unknown as Record<string, unknown>),
-    undefined,
-    2,
-  );
+  const json = JSON.stringify(pruneEmpty(draft), undefined, 2);
   writeFileSync(out, `${json}\n`);
   return { path: out, shadowed };
 }

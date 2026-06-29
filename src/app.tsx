@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { Footer } from "./components/Footer.tsx";
 import { useFullscreen } from "./hooks/useFullscreen.ts";
@@ -9,7 +9,11 @@ import {
   type SectionId,
 } from "./domain/sections.ts";
 import type { ConfigDraft } from "./domain/types.ts";
-import { enabledSourceCount } from "./domain/sources.ts";
+import { modifiedSections } from "./domain/modified.ts";
+import {
+  enabledSourceCount,
+  migratePlanKeeperSandboxPaths,
+} from "./domain/sources.ts";
 import path from "node:path";
 import { saveDraft, targetPath, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
@@ -61,10 +65,25 @@ function Screen({
 export function App({ initialDraft, target }: Props) {
   const { exit } = useApp();
   const { rows, columns } = useFullscreen();
-  const [draft, setDraft] = useState<ConfigDraft>(
+  // Raw on-disk shape (degenerate empty seed if no config exists). Used as the
+  // baseline anchor so any in-memory migrations applied to `draft` surface as
+  // normal `●` unsaved-edit markers.
+  const rawInitial =
     initialDraft ??
-      ({ workspace: { projectDir: "", knownRepositories: [] } } as ConfigDraft),
+    // Degenerate empty seed used when no config exists on disk; distinct from
+    // defaultDraft(), the richer opinionated seed.
+    ({
+      workspace: { projectDir: "", knownRepositories: [] },
+    } satisfies ConfigDraft);
+  const [draft, setDraft] = useState<ConfigDraft>(() =>
+    migratePlanKeeperSandboxPaths(rawInitial),
   );
+  // The last-saved draft: the anchor for unsaved-edit markers. Seeded from the
+  // RAW load (not the migrated draft) so an automatic migration — e.g. backfilling
+  // ~/plans into a pre-4.42 PlanKeeper entry — shows up as a normal `●` the user
+  // can choose to save (or quit to leave the file as-is). Reset to `draft` on
+  // successful save so every marker clears at once.
+  const [baseline, setBaseline] = useState<ConfigDraft>(() => rawInitial);
   const [route, setRoute] = useState<Route>({ name: "home" });
   // Home's selected row lives here so it survives opening a section and
   // returning (Home unmounts while a section is on screen).
@@ -73,10 +92,18 @@ export function App({ initialDraft, target }: Props) {
   const [valid, setValid] = useState(true);
   const [checked, setChecked] = useState(false);
   const [issues, setIssues] = useState<Set<SectionId>>(new Set());
-  const [savedAt, setSavedAt] = useState<string | undefined>(undefined);
+  const [saved, setSaved] = useState(false);
+  const [shadowed, setShadowed] = useState<string[]>([]);
   const [quitting, setQuitting] = useState(false);
 
-  // Debounced round-trip validation whenever the draft changes.
+  // Absolute path of the file we read from / write to, shown on Home so the
+  // user always knows which config they're editing (not just its scope).
+  const configPath = targetPath(target);
+
+  // Debounced round-trip validation whenever the draft changes. Each run spawns a
+  // child Node process (see validateDraft), so it is debounced to one per 150ms of
+  // quiet; do not casually widen the dependency array — extra deps mean extra child
+  // processes per keystroke.
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -97,19 +124,27 @@ export function App({ initialDraft, target }: Props) {
     };
   }, [draft]);
 
+  // The single mutation path for the draft: besides swapping in `next`, it marks
+  // the draft `dirty` (unsaved edits exist, gating the quit guard and footer) and
+  // clears `saved` (the green "✓ saved" indicator). Every screen's draft write
+  // must route through this — a bare `setDraft` would silently leave `dirty`/`saved`
+  // stale and the UI would lie about whether edits are persisted.
   function update(next: ConfigDraft): void {
     setDraft(next);
     setDirty(true);
+    setSaved(false);
   }
 
+  // Persists the draft and reconciles all save-state flags: clears `dirty`
+  // (no unsaved edits remain), sets `saved` (drives the "✓ saved" indicator),
+  // and records `shadowed` — the list of higher-precedence config files (.ts/.js)
+  // that saveDraft renamed aside so our .json is the one groundcrew loads.
   async function save(): Promise<void> {
     const result = await saveDraft(target, draft);
+    setBaseline(draft);
     setDirty(false);
-    setSavedAt(
-      result.shadowed.length > 0
-        ? `${result.path} (moved ${result.shadowed.join(", ")})`
-        : result.path,
-    );
+    setSaved(true);
+    setShadowed(result.shadowed);
   }
 
   // Global quit handling on Home.
@@ -125,6 +160,15 @@ export function App({ initialDraft, target }: Props) {
     { isActive: route.name === "home" && !quitting },
   );
 
+  // Computed BEFORE any conditional early return — Rules-of-Hooks requires
+  // every render to call the same hooks in the same order, and the `quitting`
+  // branch below would otherwise skip this one on first entry, then re-call it
+  // after cancel, tripping React's "Rendered fewer hooks than expected" check.
+  const modified = useMemo(
+    () => modifiedSections(baseline, draft),
+    [baseline, draft],
+  );
+
   if (quitting) {
     return (
       <Screen rows={rows} columns={columns}>
@@ -138,10 +182,14 @@ export function App({ initialDraft, target }: Props) {
   }
 
   const noSources = enabledSourceCount(draft) === 0;
-  // crew run refuses without a task source, but loadConfig accepts empty sources,
-  // so badge it here (separate from loadConfig validity).
+  // `issues` carries only sections loadConfig flagged. Here we inject a synthetic
+  // `taskSources` badge that is NOT derived from loadConfig validity: loadConfig
+  // accepts an empty `sources[]`, but `crew run` refuses to do any work without a
+  // task source. The badge nudges the user even though the config is technically
+  // valid. The footer still reports `issues` (the real validity count) unchanged;
+  // only Home's per-section badges see this augmented set.
   const homeIssues = noSources
-    ? new Set<SectionId>([...issues, "ticketSources"])
+    ? new Set<SectionId>([...issues, "taskSources"])
     : issues;
 
   if (route.name === "home") {
@@ -162,11 +210,21 @@ export function App({ initialDraft, target }: Props) {
       >
         <Box justifyContent="space-between">
           <Text bold>crew-config</Text>
-          <Text dimColor>{savedAt ?? target.scope}</Text>
+          <Text dimColor>{target.scope}</Text>
+        </Box>
+        <Box>
+          <Text dimColor>
+            editing{" "}
+            <Text color={saved ? "green" : undefined}>{configPath}</Text>
+            {saved ? <Text color="green"> ✓ saved</Text> : null}
+            {saved && shadowed.length > 0 ? (
+              <Text dimColor> (moved {shadowed.join(", ")})</Text>
+            ) : null}
+          </Text>
         </Box>
         <Box marginTop={1}>
           <Text dimColor>
-            groundcrew picks up your tickets and runs AI coding agents on them
+            groundcrew picks up your tasks and runs AI coding agents on them
             automatically — each in its own isolated copy of your repo — then
             opens a PR. Set it up below.
           </Text>
@@ -175,6 +233,7 @@ export function App({ initialDraft, target }: Props) {
           <Home
             draft={draft}
             issues={homeIssues}
+            modified={modified}
             cursor={homeCursor}
             onCursorChange={setHomeCursor}
             onOpen={(id) => setRoute({ name: "section", id })}
@@ -188,20 +247,53 @@ export function App({ initialDraft, target }: Props) {
   const back = () => setRoute({ name: "home" });
   const configDir = path.dirname(targetPath(target));
 
+  // Route dispatch: five section ids get bespoke screens via the explicit
+  // branches below; every other SectionId falls through to the generic
+  // SectionForm driven by `simpleSectionSpec(id)`. Adding a simple section
+  // means adding a simpleSectionSpec case plus its registry entries
+  // (SECTION_LABEL/SECTION_DESCRIPTION); adding a complex one means adding a
+  // branch here. Either way, a new SectionId also needs an entry in
+  // validate.ts's SECTION_PREFIXES, or its error badge mis-routes.
   const form =
     id === "workspace" ? (
-      <WorkspaceForm draft={draft} onChange={update} onBack={back} />
+      <WorkspaceForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "repositories" ? (
-      <RepositoriesForm draft={draft} onChange={update} onBack={back} />
-    ) : id === "ticketSources" ? (
-      <TaskSourcesMenu draft={draft} onChange={update} onBack={back} />
+      <RepositoriesForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
+    ) : id === "taskSources" ? (
+      <TaskSourcesMenu
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "usage" ? (
-      <UsageForm draft={draft} onChange={update} onBack={back} />
+      <UsageForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "agents" ? (
-      <AgentsForm draft={draft} onChange={update} onBack={back} />
+      <AgentsForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
     ) : id === "prompts" ? (
       <PromptsScreen
         draft={draft}
+        baseline={baseline}
         onChange={update}
         onBack={back}
         configDir={configDir}
@@ -212,6 +304,7 @@ export function App({ initialDraft, target }: Props) {
         description={SECTION_DESCRIPTION[id]}
         spec={simpleSectionSpec(id)}
         draft={draft}
+        baseline={baseline}
         onChange={update}
         onBack={back}
       />

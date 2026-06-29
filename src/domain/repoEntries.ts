@@ -18,6 +18,13 @@ export interface RepoEntry {
   workdir?: string | undefined;
   /** Scripted provisioning templates; mutually exclusive with `projectDirOverride`. */
   provision?: ProvisionEntry | undefined;
+  /**
+   * Per-repo `prepareWorktree` shell command (groundcrew ≥ 4.41). Slots
+   * between a repo-committed `.groundcrew/config.json` hook (wins) and
+   * `defaults.hooks.prepareWorktree` (fallback). Edited as a single string —
+   * groundcrew's `HookCommands` only models one command today.
+   */
+  prepareWorktreeHook?: string | undefined;
 }
 
 type RepoUnion = ConfigDraft["workspace"]["knownRepositories"][number];
@@ -35,6 +42,7 @@ export function normalizeRepos(
           provision: entry.provision
             ? { create: entry.provision.create, remove: entry.provision.remove }
             : undefined,
+          prepareWorktreeHook: entry.hooks?.prepareWorktree,
         },
   );
 }
@@ -46,12 +54,14 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
     const workdir = entry.workdir?.trim();
     const create = entry.provision?.create.trim() ?? "";
     const remove = entry.provision?.remove.trim() ?? "";
+    const prepareHook = entry.prepareWorktreeHook?.trim() ?? "";
     const hasOverride = override !== undefined && override.length > 0;
     const hasWorkdir = workdir !== undefined && workdir.length > 0;
     const hasProvision = create.length > 0 || remove.length > 0;
+    const hasHook = prepareHook.length > 0;
     // The bare string is the minimal form: emit it only when no per-repo option
     // is set, so an untouched repo never bloats into the object form.
-    if (!hasOverride && !hasWorkdir && !hasProvision) {
+    if (!hasOverride && !hasWorkdir && !hasProvision && !hasHook) {
       return name;
     }
     const repo: KnownRepo = { name };
@@ -61,14 +71,61 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
     // and groundcrew's loader then reports the both-required error against this
     // entry, instead of us silently discarding the half the user did type.
     if (hasProvision) repo.provision = { create, remove };
+    if (hasHook) repo.hooks = { prepareWorktree: prepareHook };
     return repo;
   });
+}
+
+/**
+ * A repo name not already in `existing`: the base when free, otherwise the
+ * first free `base-copy`, `base-copy-2`, `base-copy-3`, … so duplicating an
+ * entry never collides with a sibling (which `repoErrors` would flag).
+ */
+export function uniqueRepoName(
+  base: string,
+  existing: readonly string[],
+): string {
+  const taken = new Set(existing);
+  if (!taken.has(base)) return base;
+  const first = `${base}-copy`;
+  if (!taken.has(first)) return first;
+  for (let n = 2; ; n++) {
+    const candidate = `${base}-copy-${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * A deep copy of `entry` (including its nested `provision` pair) under a name
+ * unique against `existingNames`. The copy shares no mutable structure with the
+ * source, so editing one in the sub-form never bleeds into the other.
+ */
+export function duplicateEntry(
+  entry: RepoEntry,
+  existingNames: readonly string[],
+): RepoEntry {
+  return {
+    name: uniqueRepoName(entry.name, existingNames),
+    projectDirOverride: entry.projectDirOverride,
+    workdir: entry.workdir,
+    provision: entry.provision
+      ? { create: entry.provision.create, remove: entry.provision.remove }
+      : undefined,
+    prepareWorktreeHook: entry.prepareWorktreeHook,
+  };
 }
 
 /**
  * Per-entry error string (or undefined). Index-aligned with `entries`.
  * The first occurrence of a name is clean; only later repeats are flagged as
  * duplicates, so the user sees the error on the entry they just added.
+ *
+ * Mirrors the groundcrew rules the screen can check locally so its inline
+ * feedback matches the Home badge (which comes from groundcrew's `loadConfig`).
+ * A scripted (`provision`) entry has no groundcrew-managed clone, so pairing it
+ * with `projectDirOverride` is rejected — surface that here rather than only on
+ * Home. (A half-filled `provision` is intentionally left to groundcrew; see
+ * `denormalizeRepos`.)
  */
 export function repoErrors(
   entries: readonly RepoEntry[],
@@ -77,8 +134,16 @@ export function repoErrors(
   return entries.map((entry) => {
     const name = entry.name.trim();
     if (name.length === 0) return "name is required";
-    if (seen.has(name)) return "duplicate repository name";
+    const duplicate = seen.has(name);
     seen.add(name);
+    if (duplicate) return "duplicate repository name";
+    const hasOverride = (entry.projectDirOverride?.trim().length ?? 0) > 0;
+    const hasProvision =
+      (entry.provision?.create.trim().length ?? 0) > 0 ||
+      (entry.provision?.remove.trim().length ?? 0) > 0;
+    if (hasOverride && hasProvision) {
+      return "projectDirOverride can't be combined with provision";
+    }
     return undefined;
   });
 }

@@ -9,9 +9,11 @@ import {
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
+  migratePlanKeeperSandboxPaths,
   planKeeperCommands,
   planKeeperSource,
   applyShellFields,
+  readShellEnv,
   readShellFields,
   setLinearEnabled,
   setLinearField,
@@ -20,8 +22,11 @@ import {
   setShellSources,
   setTodoTxtEnabled,
   setTodoTxtField,
+  shellListTasksCommand,
   shellSourceCount,
   shellSources,
+  readShellSandboxPaths,
+  taskSourceModified,
   todoTxtSource,
 } from "./sources.ts";
 
@@ -151,6 +156,69 @@ test("planKeeperSource uses the new 'plankeeper' name", () => {
   expect(s.commands.fetch).toBe("plan-keeper crew fetch");
 });
 
+test("planKeeperSource pre-grants ~/plans in sandboxWritePaths", () => {
+  // plan-keeper writes task state under ~/plans; without this default the
+  // preset would error out under groundcrew's 4.42 sandbox on first use.
+  const s = planKeeperSource() as { sandboxWritePaths?: string[] };
+  expect(s.sandboxWritePaths).toEqual(["~/plans"]);
+});
+
+test("migratePlanKeeperSandboxPaths backfills ~/plans on an existing entry", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "shell", name: "plankeeper", commands: { fetch: "x" } }],
+  } as never;
+  const migrated = migratePlanKeeperSandboxPaths(draft);
+  expect(migrated.sources?.[0]).toMatchObject({
+    kind: "shell",
+    name: "plankeeper",
+    sandboxWritePaths: ["~/plans"],
+  });
+});
+
+test("migratePlanKeeperSandboxPaths preserves user-added paths and prepends ~/plans", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      {
+        kind: "shell",
+        name: "plankeeper",
+        commands: { fetch: "x" },
+        sandboxWritePaths: ["/var/log/plans"],
+      },
+    ],
+  } as never;
+  const migrated = migratePlanKeeperSandboxPaths(draft);
+  expect(
+    (migrated.sources?.[0] as { sandboxWritePaths: string[] }).sandboxWritePaths,
+  ).toEqual(["~/plans", "/var/log/plans"]);
+});
+
+test("migratePlanKeeperSandboxPaths returns the same draft when ~/plans is already set", () => {
+  // Referential equality matters: an unrelated load shouldn't allocate or shift
+  // the baseline anchor, which would silently flag every config as edited.
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      {
+        kind: "shell",
+        name: "plankeeper",
+        commands: { fetch: "x" },
+        sandboxWritePaths: ["~/plans", "/extra"],
+      },
+    ],
+  } as never;
+  expect(migratePlanKeeperSandboxPaths(draft)).toBe(draft);
+});
+
+test("migratePlanKeeperSandboxPaths leaves non-plankeeper shell sources untouched", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [{ kind: "shell", name: "jira", commands: { listTasks: "j ls" } }],
+  } as never;
+  expect(migratePlanKeeperSandboxPaths(draft)).toBe(draft);
+});
+
 test("isPlanKeeperEnabled / setPlanKeeperEnabled round-trip", () => {
   expect(isPlanKeeperEnabled(base)).toBe(false);
   const on = setPlanKeeperEnabled(base, true);
@@ -190,6 +258,68 @@ test("shellSources / setShellSources manage generic shell entries only", () => {
     { kind: "shell", name: "plankeeper" },
     { kind: "shell", name: "gitlab", commands: { listTasks: "glab ls" } },
   ]);
+});
+
+test("shellListTasksCommand returns commands.listTasks when present", () => {
+  expect(
+    shellListTasksCommand({
+      kind: "shell",
+      name: "jira",
+      commands: { listTasks: "jira ls", fetch: "legacy" },
+    } as never),
+  ).toBe("jira ls");
+});
+
+test("shellListTasksCommand falls back to the legacy commands.fetch alias", () => {
+  expect(
+    shellListTasksCommand({
+      kind: "shell",
+      name: "jira",
+      commands: { fetch: "jira ls" },
+    } as never),
+  ).toBe("jira ls");
+});
+
+test("shellListTasksCommand returns undefined for missing/non-string/non-shell", () => {
+  // No listTasks or fetch command on the shell source.
+  expect(
+    shellListTasksCommand({ kind: "shell", name: "jira", commands: {} } as never),
+  ).toBeUndefined();
+  // A non-string command value is not returned.
+  expect(
+    shellListTasksCommand({
+      kind: "shell",
+      name: "jira",
+      commands: { listTasks: 42 },
+    } as never),
+  ).toBeUndefined();
+  // A non-shell kind never lists tasks through this helper.
+  expect(shellListTasksCommand({ kind: "linear" } as never)).toBeUndefined();
+  // A malformed shell source with no `commands` object does not throw.
+  expect(
+    shellListTasksCommand({ kind: "shell", name: "jira" } as never),
+  ).toBeUndefined();
+});
+
+test("structural helpers partition a mixed sources array consistently", () => {
+  const draft = {
+    workspace: { projectDir: "~/d", knownRepositories: [] },
+    sources: [
+      { kind: "linear" },
+      { kind: "todo-txt" },
+      { kind: "shell", name: "plankeeper" },
+      { kind: "shell", name: "jira", commands: { listTasks: "jira ls" } },
+      { kind: "webhook" },
+    ],
+  } as never;
+  // plan-keeper is detected via its name; only it is "plan-keeper enabled".
+  expect(isPlanKeeperEnabled(draft)).toBe(true);
+  // shellSources is the generic-shell bucket — plankeeper is excluded.
+  expect(shellSources(draft).map((s) => (s as { name: string }).name)).toEqual([
+    "jira",
+  ]);
+  // customSources holds only the unmanaged, non-shell kinds.
+  expect(customSources(draft)).toEqual([{ kind: "webhook" }]);
 });
 
 test("readShellFields / applyShellFields round-trip preferred command names", () => {
@@ -285,4 +415,163 @@ test("planKeeperCommands returns undefined for a null commands payload", () => {
     sources: [{ kind: "shell", name: "plankeeper", commands: null }],
   } as never;
   expect(planKeeperCommands(draft)).toBeUndefined();
+});
+
+test("readShellEnv reads the env map as ordered entries; non-object → []", () => {
+  expect(
+    readShellEnv({
+      kind: "shell",
+      name: "jira",
+      env: { JIRA_HOST: "jira.example.com", JIRA_TOKEN: "secret" },
+    } as never),
+  ).toEqual([
+    { key: "JIRA_HOST", value: "jira.example.com" },
+    { key: "JIRA_TOKEN", value: "secret" },
+  ]);
+  expect(readShellEnv(undefined)).toEqual([]);
+  // typeof null === "object", so a null env must not reach Object.entries.
+  expect(readShellEnv({ kind: "shell", env: null } as never)).toEqual([]);
+});
+
+test("readShellFields surfaces env and applyShellFields writes it back", () => {
+  const fields = readShellFields({
+    kind: "shell",
+    name: "jira",
+    commands: { listTasks: "jira ls" },
+    env: { JIRA_HOST: "jira.example.com" },
+  } as never);
+  expect(fields.env).toEqual([{ key: "JIRA_HOST", value: "jira.example.com" }]);
+
+  const built = applyShellFields(undefined, {
+    ...fields,
+    env: [
+      { key: "JIRA_HOST", value: "jira.example.com" },
+      { key: "JIRA_TOKEN", value: "secret" },
+    ],
+  }) as { env?: Record<string, string> };
+  expect(built.env).toEqual({
+    JIRA_HOST: "jira.example.com",
+    JIRA_TOKEN: "secret",
+  });
+});
+
+test("applyShellFields drops blank-key env entries, last write wins, empty → no env key", () => {
+  const fields = readShellFields(undefined);
+  // A blank key is dropped; a duplicate key keeps the later value.
+  const built = applyShellFields(undefined, {
+    ...fields,
+    name: "jira",
+    listTasks: "jira ls",
+    env: [
+      { key: "  ", value: "ignored" },
+      { key: "A", value: "first" },
+      { key: "A", value: "second" },
+    ],
+  }) as { env?: Record<string, string> };
+  expect(built.env).toEqual({ A: "second" });
+
+  // An all-blank/empty list removes the env key entirely (prune-friendly).
+  const cleared = applyShellFields(
+    { kind: "shell", name: "jira", env: { A: "x" } } as never,
+    { ...fields, name: "jira", listTasks: "jira ls", env: [] },
+  ) as Record<string, unknown>;
+  expect("env" in cleared).toBe(false);
+});
+
+test("taskSourceModified flags each row independently against baseline", () => {
+  // Identical draft and baseline: nothing modified.
+  expect(taskSourceModified(base, base)).toEqual({
+    linear: false,
+    todoTxt: false,
+    planKeeper: false,
+    shell: false,
+  });
+
+  // Enabling Linear flips just the linear flag (this is the bug we're fixing).
+  const linearOn = setLinearEnabled(base, true);
+  expect(taskSourceModified(linearOn, base)).toEqual({
+    linear: true,
+    todoTxt: false,
+    planKeeper: false,
+    shell: false,
+  });
+
+  // Toggling other rows is symmetric and independent.
+  expect(taskSourceModified(setTodoTxtEnabled(base, true), base).todoTxt).toBe(true);
+  expect(taskSourceModified(setPlanKeeperEnabled(base, true), base).planKeeper).toBe(true);
+
+  // Editing a Linear sub-field also counts the Linear row as modified.
+  const linearWithTeam = setLinearField(linearOn, "team", "infra");
+  expect(taskSourceModified(linearWithTeam, linearOn).linear).toBe(true);
+
+  // Shell row reacts to any change inside any shell source.
+  const shellOnly = setShellSources(base, [
+    { kind: "shell", name: "jira", commands: { listTasks: "jira ls" } },
+  ] as never);
+  expect(taskSourceModified(shellOnly, base).shell).toBe(true);
+});
+
+test("readShellSandboxPaths reads string entries; missing/non-array → []", () => {
+  expect(
+    readShellSandboxPaths({
+      kind: "shell",
+      name: "plankeeper",
+      sandboxWritePaths: ["~/plans", "/abs/path"],
+    } as never),
+  ).toEqual(["~/plans", "/abs/path"]);
+  expect(readShellSandboxPaths(undefined)).toEqual([]);
+  expect(readShellSandboxPaths({ kind: "shell", name: "x" } as never)).toEqual([]);
+  // Non-string entries are dropped (hand-edited JSON could include junk).
+  expect(
+    readShellSandboxPaths({
+      kind: "shell",
+      name: "x",
+      sandboxWritePaths: ["~/plans", 42, null],
+    } as never),
+  ).toEqual(["~/plans"]);
+});
+
+test("readShellFields surfaces sandboxWritePaths and applyShellFields writes it back", () => {
+  const fields = readShellFields({
+    kind: "shell",
+    name: "plankeeper",
+    commands: { listTasks: "plan-keeper crew fetch" },
+    sandboxWritePaths: ["~/plans"],
+  } as never);
+  expect(fields.sandboxWritePaths).toEqual(["~/plans"]);
+
+  const built = applyShellFields(undefined, {
+    ...fields,
+    sandboxWritePaths: ["~/plans", "/abs/path"],
+  }) as { sandboxWritePaths?: string[] };
+  expect(built.sandboxWritePaths).toEqual(["~/plans", "/abs/path"]);
+});
+
+test("applyShellFields trims sandboxWritePaths rows, drops blanks, empty → no key", () => {
+  const fields = readShellFields(undefined);
+  // Whitespace-only rows are dropped; surrounding whitespace is trimmed.
+  const built = applyShellFields(undefined, {
+    ...fields,
+    name: "plankeeper",
+    listTasks: "plan-keeper crew fetch",
+    sandboxWritePaths: ["  ", "  ~/plans  ", ""],
+  }) as { sandboxWritePaths?: string[] };
+  expect(built.sandboxWritePaths).toEqual(["~/plans"]);
+
+  // An all-blank/empty list removes the key entirely (prune-friendly).
+  const cleared = applyShellFields(
+    {
+      kind: "shell",
+      name: "plankeeper",
+      commands: {},
+      sandboxWritePaths: ["~/plans"],
+    } as never,
+    {
+      ...fields,
+      name: "plankeeper",
+      listTasks: "plan-keeper crew fetch",
+      sandboxWritePaths: [],
+    },
+  ) as Record<string, unknown>;
+  expect("sandboxWritePaths" in cleared).toBe(false);
 });

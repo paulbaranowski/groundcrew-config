@@ -4,8 +4,16 @@ Interactive TUI to create and update [groundcrew](https://www.npmjs.com/package/
 
 ## Install
 
+**macOS** (Homebrew):
+
 ```bash
 brew install paulbaranowski/tap/crew-config
+```
+
+**Linux** (curl installer — handles Node 24 via nvm if needed):
+
+```bash
+curl -fsSL https://github.com/paulbaranowski/groundcrew-config/releases/latest/download/install.sh | bash
 ```
 
 ## Use

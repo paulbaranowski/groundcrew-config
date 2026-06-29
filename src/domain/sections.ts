@@ -1,5 +1,6 @@
 import {
   GIT_DEFAULTS,
+  NETWORK_EGRESS,
   ORCHESTRATOR_DEFAULTS,
   RUNNERS,
   WORKSPACE_KINDS,
@@ -11,23 +12,25 @@ import {
   isLinearEnabled,
   isPlanKeeperEnabled,
   isTodoTxtEnabled,
-  shellSourceCount,
+  shellSourceNames,
 } from "./sources.ts";
 import { isUsageDisabled } from "./usage.ts";
 
 export type { SectionId };
 
 export const SECTION_ORDER: SectionId[] = [
-  "workspace",
+  // The six primary setup sections, in the order a new user works through them.
   "repositories",
+  "workspace",
+  "taskSources",
   "agents",
-  "ticketSources",
+  "terminal",
+  "sandbox",
+  // Advanced/optional sections follow, reachable below the essentials.
   "orchestrator",
   "usage",
   "hooks",
   "git",
-  "terminal",
-  "sandbox",
   "prompts",
   "advanced",
 ];
@@ -36,7 +39,7 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   workspace: "Workspace",
   repositories: "Repositories",
   agents: "Agents",
-  ticketSources: "Task Sources",
+  taskSources: "Task Sources",
   orchestrator: "Orchestrator",
   usage: "Usage Limits",
   hooks: "Hooks",
@@ -59,9 +62,9 @@ export const SECTION_DESCRIPTION: Record<SectionId, string> = {
   repositories:
     "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir).",
   agents:
-    "The AI coding tools groundcrew runs on your tickets (e.g. Claude, Codex). Check the ones installed on your machine. \"bypass permission prompts\" lets the agent act without stopping to ask.",
-  ticketSources:
-    "Where groundcrew gets its to-do list. Turn on one or more sources of tickets for it to work through.",
+    "The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex). Check the ones installed on your machine. \"bypass permission prompts\" lets the agent act without stopping to ask.",
+  taskSources:
+    "Where groundcrew gets its to-do list. Turn on one or more sources of tasks for it to work through.",
   orchestrator:
     "Controls how many tasks groundcrew runs at once and how often it checks for new ones.",
   usage:
@@ -72,15 +75,39 @@ export const SECTION_DESCRIPTION: Record<SectionId, string> = {
   terminal:
     "Which terminal multiplexer hosts the running agents (tmux, cmux, or zellij).",
   sandbox:
-    "Pick the sandbox that isolates each agent from the rest of your machine while it runs.",
+    "Pick the sandbox that isolates each agent from the rest of your machine while it runs. networkEgress controls the agent's network access (safehouse runner only).",
   prompts:
     "The instructions groundcrew gives the agent at the start of every task.",
   advanced: "Where groundcrew writes its log file.",
 };
 
-/** A field in the generic SectionForm. `path` is a dotted path into the draft. */
+/**
+ * The dotted paths the spec-driven sections write into the draft. Every `path`
+ * value produced by `simpleSectionSpec` appears here; adding a field to a
+ * spec-driven section means adding its path to this union (typecheck enforces
+ * the round trip through `setByPath`).
+ */
+export type FieldPath =
+  | "orchestrator.maximumInProgress"
+  | "orchestrator.pollIntervalMilliseconds"
+  | "defaults.hooks.prepareWorktree"
+  | "git.remote"
+  | "git.defaultBranch"
+  | "git.branchPrefix"
+  | "local.runner"
+  | "local.networkEgress"
+  | "prompts.initial"
+  | "prompts.promptFile"
+  | "workspaceKind"
+  | "logging.file";
+
+/**
+ * A field in the generic SectionForm. `path` is a dotted path into the draft;
+ * for a `kind: "select"` field, the `options` values must be assignable to the
+ * draft field that `path` points at (they are stored verbatim via `setByPath`).
+ */
 export interface FieldSpec {
-  path: string;
+  path: FieldPath;
   label: string;
   kind: "text" | "select" | "number";
   help: string;
@@ -97,14 +124,14 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           path: "orchestrator.maximumInProgress",
           label: "maximumInProgress",
           kind: "number",
-          help: "Max tickets in progress at once.",
+          help: "Max tasks in progress at once.",
           placeholder: String(ORCHESTRATOR_DEFAULTS.maximumInProgress),
         },
         {
           path: "orchestrator.pollIntervalMilliseconds",
           label: "pollIntervalMilliseconds",
           kind: "number",
-          help: "How often to poll for tickets (ms).",
+          help: "How often to poll for tasks (ms).",
           placeholder: String(ORCHESTRATOR_DEFAULTS.pollIntervalMilliseconds),
         },
       ];
@@ -155,6 +182,17 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
             "• none — no sandbox (unsafe)",
           ].join("\n"),
         },
+        {
+          path: "local.networkEgress",
+          label: "networkEgress",
+          kind: "select",
+          options: NETWORK_EGRESS,
+          help: [
+            "Network access for agents. Only the safehouse runner uses this; srt/sdx/none ignore it.",
+            "• allowlisted — Clearance-wrapped: deny network except the egress allowlist (default)",
+            "• open — keep the filesystem sandbox but open network egress (no Clearance)",
+          ].join("\n"),
+        },
       ];
     case "prompts":
       return [
@@ -201,8 +239,10 @@ function repoCount(draft: ConfigDraft): number {
 
 export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
   switch (id) {
-    case "workspace":
-      return draft.workspace.projectDir;
+    case "workspace": {
+      const { projectDir, worktreeDir } = draft.workspace;
+      return `${projectDir} · worktreeDir: ${worktreeDir ?? projectDir}`;
+    }
     case "repositories": {
       const n = repoCount(draft);
       return `${n} repo${n === 1 ? "" : "s"}`;
@@ -213,14 +253,13 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
         ? "none enabled"
         : `default: ${draft.agents?.default ?? "?"} · ${defs.join(", ")}`;
     }
-    case "ticketSources": {
+    case "taskSources": {
       if (enabledSourceCount(draft) === 0) return "none — crew won't run";
       const kinds: string[] = [];
       if (isLinearEnabled(draft)) kinds.push("linear");
       if (isTodoTxtEnabled(draft)) kinds.push("todo-txt");
       if (isPlanKeeperEnabled(draft)) kinds.push("plan-keeper");
-      const shell = shellSourceCount(draft);
-      if (shell > 0) kinds.push(`${shell} shell`);
+      kinds.push(...shellSourceNames(draft));
       return kinds.join(", ");
     }
     case "usage": {
@@ -246,7 +285,9 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
     case "git":
       return `${draft.git?.remote ?? GIT_DEFAULTS.remote} · ${draft.git?.defaultBranch ?? GIT_DEFAULTS.defaultBranch}`;
     case "sandbox":
-      return `runner: ${draft.local?.runner ?? "auto"}`;
+      return `runner: ${draft.local?.runner ?? "auto"} · egress: ${
+        draft.local?.networkEgress ?? "allowlisted"
+      }`;
     case "prompts": {
       const prompts = draft.prompts ?? {};
       if (prompts.promptFile) return `file: ${prompts.promptFile}`;

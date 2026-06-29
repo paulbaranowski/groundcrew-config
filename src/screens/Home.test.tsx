@@ -17,6 +17,7 @@ test("renders sections with summaries and a warning badge", () => {
     <Home
       draft={draft}
       issues={new Set(["sandbox"])}
+      modified={new Set()}
       cursor={0}
       onCursorChange={() => {}}
       onOpen={() => {}}
@@ -36,13 +37,14 @@ test("enter opens the focused section", () => {
     <Home
       draft={draft}
       issues={new Set()}
+      modified={new Set()}
       cursor={0}
       onCursorChange={() => {}}
       onOpen={onOpen}
     />,
   );
   stdin.write("\r");
-  expect(onOpen).toHaveBeenCalledWith("workspace");
+  expect(onOpen).toHaveBeenCalledWith("repositories");
 });
 
 test("reports cursor moves to the parent", () => {
@@ -51,6 +53,7 @@ test("reports cursor moves to the parent", () => {
     <Home
       draft={draft}
       issues={new Set()}
+      modified={new Set()}
       cursor={0}
       onCursorChange={onCursorChange}
       onOpen={() => {}}
@@ -58,4 +61,27 @@ test("reports cursor moves to the parent", () => {
   );
   stdin.write(DOWN);
   expect(onCursorChange).toHaveBeenCalledWith(1);
+});
+
+test("appends '(edited)' to rows in the modified set", () => {
+  const { lastFrame } = render(
+    <Home
+      draft={draft}
+      issues={new Set()}
+      modified={new Set(["repositories"])}
+      cursor={0}
+      onCursorChange={() => {}}
+      onOpen={() => {}}
+    />,
+  );
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("Repositories");
+  // The (edited) suffix appears on the same row as Repositories.
+  const repoLine =
+    frame.split("\n").find((l) => l.includes("Repositories")) ?? "";
+  expect(repoLine).toContain("(edited)");
+  // Workspace is not in the modified set, so it does not get (edited).
+  const workspaceLine =
+    frame.split("\n").find((l) => l.includes("Workspace")) ?? "";
+  expect(workspaceLine).not.toContain("(edited)");
 });

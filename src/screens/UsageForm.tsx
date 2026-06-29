@@ -1,17 +1,23 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { TextField } from "../components/TextField.tsx";
+import { valuesEqual } from "../domain/diff.ts";
 import { setByPath } from "../domain/draftPath.ts";
 import { isUsageDisabled, setUsageDisabled } from "../domain/usage.ts";
 import { ORCHESTRATOR_DEFAULTS, type ConfigDraft } from "../domain/types.ts";
 
 interface Props {
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `modified` markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
 }
 
-export function UsageForm({ draft, onChange, onBack }: Props) {
+// Section editor for usage limits: toggle per-agent usage tracking and set the
+// orchestrator's sessionLimitPercentage ceiling. Follows the screen contract —
+// see SectionForm.
+export function UsageForm({ draft, baseline, onChange, onBack }: Props) {
   const disabled = isUsageDisabled(draft.agents);
   const hasAgents = Object.keys(draft.agents?.definitions ?? {}).length > 0;
   // Two focusable rows: 0 = the tracking on/off toggle, 1 = the limit field.
@@ -42,6 +48,12 @@ export function UsageForm({ draft, onChange, onBack }: Props) {
     }
   });
 
+  const limitModified = !valuesEqual(
+    baseline.orchestrator?.sessionLimitPercentage,
+    draft.orchestrator?.sessionLimitPercentage,
+  );
+  const trackingModified = isUsageDisabled(baseline.agents) !== disabled;
+
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Usage Limits</Text>
@@ -52,6 +64,7 @@ export function UsageForm({ draft, onChange, onBack }: Props) {
           <Text color={disabled ? "yellow" : "green"}>
             {disabled ? "disabled" : "enabled"}
           </Text>
+          {trackingModified ? <Text color="yellow"> ●</Text> : null}
         </Text>
       </Box>
       <Box marginTop={1}>
@@ -60,6 +73,7 @@ export function UsageForm({ draft, onChange, onBack }: Props) {
           value={limit === undefined ? "" : String(limit)}
           placeholder={`${ORCHESTRATOR_DEFAULTS.sessionLimitPercentage}  (default)`}
           isActive={active === 1}
+          modified={limitModified}
           onChange={setLimit}
         />
       </Box>

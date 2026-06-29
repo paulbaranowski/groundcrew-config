@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { TextField } from "../components/TextField.tsx";
+import { valuesEqual } from "../domain/diff.ts";
 import { setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 
 interface Props {
   draft: ConfigDraft;
+  /** Last-saved draft; the anchor against which the `modified` markers diff. */
+  baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
 }
@@ -13,7 +16,9 @@ interface Props {
 type Focus = "projectDir" | "worktreeDir";
 const FOCI: Focus[] = ["projectDir", "worktreeDir"];
 
-export function WorkspaceForm({ draft, onChange, onBack }: Props) {
+// Section editor for the workspace paths (projectDir and worktreeDir). Follows
+// the screen contract — see SectionForm.
+export function WorkspaceForm({ draft, baseline, onChange, onBack }: Props) {
   const [focusIndex, setFocusIndex] = useState(0);
   const focus = FOCI[focusIndex] ?? "projectDir";
 
@@ -33,6 +38,15 @@ export function WorkspaceForm({ draft, onChange, onBack }: Props) {
     );
   }
 
+  const projectDirModified = !valuesEqual(
+    baseline.workspace.projectDir,
+    draft.workspace.projectDir,
+  );
+  const worktreeDirModified = !valuesEqual(
+    baseline.workspace.worktreeDir,
+    draft.workspace.worktreeDir,
+  );
+
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Workspace</Text>
@@ -41,6 +55,7 @@ export function WorkspaceForm({ draft, onChange, onBack }: Props) {
           label="projectDir"
           value={draft.workspace.projectDir}
           isActive={focus === "projectDir"}
+          modified={projectDirModified}
           onChange={(v) => setField("workspace.projectDir", v)}
         />
         <TextField
@@ -48,6 +63,7 @@ export function WorkspaceForm({ draft, onChange, onBack }: Props) {
           value={draft.workspace.worktreeDir ?? ""}
           placeholder={`${draft.workspace.projectDir}  (default)`}
           isActive={focus === "worktreeDir"}
+          modified={worktreeDirModified}
           onChange={(v) => setField("workspace.worktreeDir", v)}
         />
       </Box>

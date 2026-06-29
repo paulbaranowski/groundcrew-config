@@ -6,14 +6,19 @@ interface Props {
   options: readonly string[];
   isActive: boolean;
   onChange: (next: string) => void;
+  /** True when the current value differs from its last-saved baseline. */
+  modified?: boolean;
 }
 
+// A left/right-arrow option cycler (not a dropdown): renders every option inline
+// with the active one in brackets, wrapping past the ends.
 export function SelectField({
   label,
   value,
   options,
   isActive,
   onChange,
+  modified = false,
 }: Props) {
   useInput(
     (_input, key) => {
@@ -40,6 +45,7 @@ export function SelectField({
           .map((opt) => (opt === value ? `[${opt}]` : ` ${opt} `))
           .join(" ")}
       </Text>
+      {modified ? <Text color="yellow"> ●</Text> : null}
     </Box>
   );
 }

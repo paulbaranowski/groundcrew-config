@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { pruneEmpty } from "../domain/prune.ts";
+import { sectionForKeyPath } from "../domain/sectionRouting.ts";
 import type { ConfigDraft, SectionId } from "../domain/types.ts";
 
 const run = promisify(execFile);
@@ -13,57 +14,53 @@ export type ValidationResult =
   | { ok: true }
   | { ok: false; message: string; section: SectionId | undefined };
 
+// Validity is whatever groundcrew's loadConfig accepts — nothing here reimplements
+// the schema. It is established out-of-process: the pruned draft is written to a
+// temp GROUNDCREW_CONFIG sidecar and a child Node process (CHILD below) imports
+// groundcrew's real loadConfig and reports whether it throws. Validation runs in
+// the config's REAL directory when it exists, so config-relative paths (e.g.
+// prompts.promptFile) resolve exactly as groundcrew will at load time; dropping
+// the configDir argument silently flips valid configs to invalid.
+//
+// SECTION_PREFIXES (the routing table) lives in domain/sectionRouting.ts so the
+// modified-marker code can reuse it without importing from io.
+
 // Resolve groundcrew's entry once so the child imports it by absolute URL,
 // independent of the child's cwd.
 const groundcrewUrl = import.meta.resolve("@clipboard-health/groundcrew");
 
+// Child process body: import groundcrew's real loadConfig and exit non-zero with
+// its message if the GROUNDCREW_CONFIG sidecar is rejected.
 const CHILD = `
 const { loadConfig } = await import(${JSON.stringify(groundcrewUrl)});
 try { await loadConfig(); }
 catch (error) { console.error(error?.message ?? String(error)); process.exit(1); }
 `;
 
-// Ordered most-specific-first: a longer key that *contains* a shorter one must
-// be tested before it, e.g. "workspaceKind" before "workspace" (since
-// "workspaceKind".includes("workspace") is true) and "defaults.hooks" before
-// any bare "hooks" check.
-//
-// "usage" is listed before "agents" on purpose: in groundcrew config there is no
-// top-level `usage` key — usage always lives under
-// `agents.definitions.<name>.usage.*`, which contains both substrings. Routing
-// those errors to the Usage badge (not Agents) points the user at the Usage
-// screen, where the `usage.disabled` toggle that owns this config actually lives.
-const SECTION_PREFIXES: Array<[string, SectionId]> = [
-  ["knownRepositories", "repositories"],
-  ["workspaceKind", "terminal"],
-  ["defaults.hooks", "hooks"],
-  ["workspace", "workspace"],
-  ["usage", "usage"],
-  // The session limit is edited on the Usage Limits screen even though it lives
-  // under `orchestrator.*` in the file — route its errors to that badge. Must
-  // precede the bare "orchestrator" entry below (most-specific-first).
-  ["orchestrator.sessionLimitPercentage", "usage"],
-  ["agents", "agents"],
-  ["linear", "ticketSources"],
-  ["sources", "ticketSources"],
-  ["orchestrator", "orchestrator"],
-  ["git", "git"],
-  ["local", "sandbox"],
-  ["prompts", "prompts"],
-  ["logging", "advanced"],
-];
-
 export function mapSection(message: string): SectionId | undefined {
-  // groundcrew errors read "groundcrew config: <key.path> <prose>". The section
-  // identity lives in the key path; match only against it, not the whole
-  // message. Otherwise prose that happens to name a section keyword — e.g. the
-  // allowed-placeholder list "{{workspaceContinuationInstruction}}" in a
-  // prompts.initial error — hijacks the badge (here, mis-routing to workspace).
-  const keyPath = message.replace(/^groundcrew config:\s*/, "").split(/\s/, 1)[0] ?? "";
-  for (const [prefix, section] of SECTION_PREFIXES) {
-    if (keyPath.includes(prefix)) return section;
-  }
-  return undefined;
+  // groundcrew errors read "groundcrew config: [<filepath>: ]<key.path> <prose>".
+  // The filepath prefix is added by the loader when it wraps a thrown validation
+  // error (groundcrew ≥ 4.x), so we strip both the constant prefix and the
+  // optional path-then-colon, then take the first whitespace-delimited token as
+  // the key path. The section identity lives in the key path; matching the
+  // whole message would let prose that happens to name a section keyword
+  // (e.g. "{{workspaceContinuationInstruction}}" in a prompts.initial error)
+  // hijack the badge.
+  const stripped = message.replace(/^groundcrew config:\s*/, "");
+  // Strip an absolute-path prefix ("<path>:\s+") if present. The optional
+  // `[A-Za-z]:` head accepts Windows drive-letter paths (`C:\foo\bar:` …)
+  // alongside POSIX absolute paths. The leading `[^\s:]*[\\/]` keeps the
+  // slash-required anchor that distinguishes a path prefix from a bare key
+  // path (key paths contain no slash), while the post-slash `.*?` (lazy) lets
+  // the rest of the path contain spaces — paths like `/Users/My User/...` no
+  // longer leak into the keypath token. `.*?` stops at the first `:\s+`, which
+  // is groundcrew's separator between the wrapped path and the inner error.
+  const withoutPath = stripped.replace(
+    /^(?:[A-Za-z]:)?[^\s:]*[\\/].*?:\s+/,
+    "",
+  );
+  const keyPath = withoutPath.split(/\s/, 1)[0] ?? "";
+  return sectionForKeyPath(keyPath);
 }
 
 export async function validateDraft(
@@ -90,10 +87,7 @@ export async function validateDraft(
   // never shadows the user's own crew.config.json discovery), placed *in* the
   // config dir — not a subdir — so `path.dirname` matches the real config's.
   const file = path.join(dir, `.crew.config.validate-${randomUUID()}.json`);
-  writeFileSync(
-    file,
-    JSON.stringify(pruneEmpty(draft as unknown as Record<string, unknown>)),
-  );
+  writeFileSync(file, JSON.stringify(pruneEmpty(draft)));
   try {
     await run(process.execPath, ["--input-type=module", "-e", CHILD], {
       env: { ...process.env, GROUNDCREW_CONFIG: file },

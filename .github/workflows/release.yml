@@ -1,0 +1,134 @@
+name: release
+
+# Cuts a release whenever the version in package.json gains a new value.
+#
+# Flow on every push to main (i.e. after a PR merges):
+#   1. Read `version` from package.json.
+#   2. If a `v<version>` tag already exists, do nothing — this push didn't bump
+#      the version, so there is nothing to release.
+#   3. Otherwise: tag `v<version>`, publish a GitHub release, hash the source
+#      tarball, and rewrite the Homebrew formula's url + sha256 in the tap repo.
+#
+# Versioning is manual on purpose: the PR author bumps package.json's version,
+# and merging that bump is what ships a new `brew` version. Doc/refactor PRs that
+# leave the version untouched cut no release.
+#
+# Requires repo secret HOMEBREW_TAP_TOKEN — a fine-grained PAT with Contents:
+# read/write on paulbaranowski/homebrew-tap. The default GITHUB_TOKEN cannot push
+# to another repo, which is why the tap formula was never getting updated.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Tagging and publishing a release both write to this repo's contents.
+permissions:
+  contents: write
+
+# Never let two releases race on the tag/formula.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Don't run on forks.
+    if: github.repository == 'paulbaranowski/groundcrew-config'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve target version
+        id: ver
+        run: |
+          version="$(jq -r .version package.json)"
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "::error::Could not read version from package.json"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if already released
+        id: check
+        run: |
+          tag="${{ steps.ver.outputs.tag }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists — version unchanged, nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+
+      - name: Publish GitHub release
+        if: steps.check.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: gh release create "$TAG" --title "$TAG" --generate-notes install.sh
+
+      - name: Hash source tarball
+        if: steps.check.outputs.release == 'true'
+        id: sha
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          url="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
+          # GitHub generates this tarball from the tag; it can lag the push by a
+          # few seconds, so retry until it's downloadable.
+          for attempt in $(seq 1 10); do
+            if curl -fsSL "$url" -o source.tar.gz; then
+              break
+            fi
+            echo "Tarball not ready (attempt $attempt/10); retrying..."
+            sleep 3
+          done
+          if [ ! -s source.tar.gz ]; then
+            echo "::error::Source tarball never became available at $url"
+            exit 1
+          fi
+          sha="$(sha256sum source.tar.gz | cut -d' ' -f1)"
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formula
+        if: steps.check.outputs.release == 'true'
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          SHA: ${{ steps.sha.outputs.sha256 }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is not set; cannot update the tap formula."
+            exit 1
+          fi
+          git clone --depth 1 \
+            "https://x-access-token:${TAP_TOKEN}@github.com/paulbaranowski/homebrew-tap.git" tap
+          cd tap
+          formula="Formula/crew-config.rb"
+          # Point url at the new tag and swap in the freshly-computed checksum.
+          sed -i -E "s#/archive/refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz#/archive/refs/tags/${TAG}.tar.gz#" "$formula"
+          sed -i -E "s#sha256 \"[a-f0-9]{64}\"#sha256 \"${SHA}\"#" "$formula"
+          if git diff --quiet -- "$formula"; then
+            echo "Formula already at ${TAG}; nothing to update."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$formula"
+          git commit -m "crew-config ${VERSION}"
+          git push
