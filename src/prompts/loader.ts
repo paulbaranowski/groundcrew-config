@@ -1,8 +1,12 @@
-// Packaged prompts ship as .md files next to this module (src/prompts/ in dev,
-// dist/prompts/ after bundling). Each file carries YAML frontmatter with
-// `title:` and `description:` lines; the body is the prompt the agent sees.
+// Packaged prompts ship as .md files. In dev the loader file IS in
+// `src/prompts/`, so `./` next to this module already lands on them. After
+// bundling, this loader is inlined into `dist/cli.js` and the .md files are
+// copied into a sibling `dist/prompts/` directory — so the prod resolver needs
+// to dive one level into `./prompts/`. We try the bundled location first and
+// fall back to the dev one. Each file carries YAML frontmatter with `title:`
+// and `description:` lines; the body is the prompt the agent sees.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,7 +22,13 @@ export interface Frontmatter {
   body: string;
 }
 
-const PROMPTS_DIR = fileURLToPath(new URL("./", import.meta.url));
+export function resolvePromptsDir(moduleUrl: string = import.meta.url): string {
+  const bundled = fileURLToPath(new URL("./prompts/", moduleUrl));
+  if (existsSync(bundled) && statSync(bundled).isDirectory()) return bundled;
+  return fileURLToPath(new URL("./", moduleUrl));
+}
+
+const PROMPTS_DIR = resolvePromptsDir();
 
 export function listPackagedPrompts(dir: string = PROMPTS_DIR): PackagedPrompt[] {
   const files = readdirSync(dir)

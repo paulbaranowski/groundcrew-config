@@ -1,5 +1,13 @@
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { expect, test } from "vitest";
-import { listPackagedPrompts, parseFrontmatter } from "./loader.ts";
+import {
+  listPackagedPrompts,
+  parseFrontmatter,
+  resolvePromptsDir,
+} from "./loader.ts";
 
 test("parseFrontmatter pulls key/value pairs out of a leading --- block", () => {
   const text = "---\ntitle: Hello\ndescription: A short note.\n---\nbody line 1\nbody line 2\n";
@@ -35,6 +43,30 @@ test("parseFrontmatter keeps colons that appear inside the value", () => {
   const text = "---\ndescription: ratio 1:2:3\n---\nbody";
   const { frontmatter } = parseFrontmatter(text);
   expect(frontmatter.description).toBe("ratio 1:2:3");
+});
+
+test("resolvePromptsDir prefers ./prompts/ when it exists next to the module (bundled cli.js layout)", () => {
+  // Simulate dist/ after build: a cli.js at the root, a sibling prompts/ dir
+  // with the .md files. The "moduleUrl" we pass is the URL of the cli.js, the
+  // way `import.meta.url` would look from inside the bundle.
+  const root = mkdtempSync(path.join(tmpdir(), "crew-config-bundled-"));
+  const promptsDir = path.join(root, "prompts");
+  mkdirSync(promptsDir);
+  writeFileSync(path.join(root, "cli.js"), "// bundle\n");
+  writeFileSync(path.join(promptsDir, "sample.md"), "---\ntitle: X\n---\nbody\n");
+  const moduleUrl = pathToFileURL(path.join(root, "cli.js")).href;
+  // Trailing slash so node:path normalizes the same way the loader does.
+  expect(resolvePromptsDir(moduleUrl)).toBe(promptsDir + path.sep);
+});
+
+test("resolvePromptsDir falls back to the module's directory when no sibling prompts/ exists (dev layout)", () => {
+  // Simulate src/prompts/loader.ts: there is no nested prompts/prompts/ dir, so
+  // the resolver must return the directory the module itself lives in.
+  const root = mkdtempSync(path.join(tmpdir(), "crew-config-dev-"));
+  writeFileSync(path.join(root, "loader.js"), "// dev\n");
+  writeFileSync(path.join(root, "sample.md"), "---\ntitle: X\n---\nbody\n");
+  const moduleUrl = pathToFileURL(path.join(root, "loader.js")).href;
+  expect(resolvePromptsDir(moduleUrl)).toBe(root + path.sep);
 });
 
 test("listPackagedPrompts surfaces the bundled coding-task prompt", () => {
