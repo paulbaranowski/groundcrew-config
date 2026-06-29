@@ -19,6 +19,7 @@ import { saveDraft, targetPath, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
 import { Home } from "./screens/Home.tsx";
 import { AgentsForm } from "./screens/AgentsForm.tsx";
+import { PromptsScreen } from "./screens/PromptsScreen.tsx";
 import { QuitGuard } from "./screens/QuitGuard.tsx";
 import { RepositoriesForm } from "./screens/RepositoriesForm.tsx";
 import { SectionForm } from "./screens/SectionForm.tsx";
@@ -244,6 +245,7 @@ export function App({ initialDraft, target }: Props) {
 
   const id = route.id;
   const back = () => setRoute({ name: "home" });
+  const configDir = path.dirname(targetPath(target));
 
   // Route dispatch: five section ids get bespoke screens via the explicit
   // branches below; every other SectionId falls through to the generic
@@ -287,6 +289,14 @@ export function App({ initialDraft, target }: Props) {
         baseline={baseline}
         onChange={update}
         onBack={back}
+      />
+    ) : id === "prompts" ? (
+      <PromptsScreen
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+        configDir={configDir}
       />
     ) : (
       <SectionForm
