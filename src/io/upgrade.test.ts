@@ -165,7 +165,11 @@ describe("runUpgrade", () => {
 
   test("a non-existent script path realpath failure -> unknown guidance", () => {
     // The default realpath throws on a missing path; runUpgrade must treat that
-    // as 'no resolvable location' rather than crashing.
+    // as 'no resolvable location' rather than crashing. Assert the full fallback
+    // (guidance printed, nothing spawned), not just the exit code, so a
+    // regression that drops the guidance or still runs the upgrade is caught.
+    const logs: string[] = [];
+    const calls: unknown[] = [];
     const throwingRealpath: UpgradeDeps["realpath"] = () => {
       throw new Error("ENOENT");
     };
@@ -174,9 +178,16 @@ describe("runUpgrade", () => {
       realpath: throwingRealpath,
       brewFormulaPrefix: () => "/opt/homebrew/Cellar/crew-config/1",
       npmGlobalPrefix: () => "/usr/local",
-      run: () => 0,
-      log: () => {},
+      run: (...a: unknown[]) => {
+        calls.push(a);
+        return 0;
+      },
+      log: (m) => logs.push(m),
     });
     expect(code).toBe(1);
+    expect(calls).toHaveLength(0);
+    const out = logs.join("\n");
+    expect(out).toContain("brew upgrade paulbaranowski/tap/crew-config");
+    expect(out).toContain("install.sh");
   });
 });
