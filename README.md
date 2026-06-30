@@ -22,6 +22,7 @@ curl -fsSL https://github.com/paulbaranowski/groundcrew-config/releases/latest/d
 crew-config            # edit the global ~/.config/groundcrew/crew.config.json
 crew-config --local    # edit ./crew.config.json in the current project
 crew-config ./path/to/crew.config.json
+crew-config upgrade    # upgrade crew-config in place (auto-detects brew vs. installer)
 ```
 
 - With no config, opens the editor on an empty draft — fill in Workspace and add at least one Task Source (groundcrew needs one to run; the footer warns when none is set).

@@ -8,6 +8,7 @@ Usage:
   crew-config            edit the global ~/.config/groundcrew/crew.config.json
   crew-config --local    edit ./crew.config.json in the current project
   crew-config <path>     edit the crew.config.json at <path>
+  crew-config upgrade    upgrade crew-config to the latest version
 
 Flags:
   -h, --help       show this help and exit

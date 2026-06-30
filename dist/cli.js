@@ -724,14 +724,14 @@ function sectionForKeyPath(keyPath) {
   }
   return void 0;
 }
-function containsSegment(path10, segment) {
-  if (segment.length > path10.length) return false;
+function containsSegment(path11, segment) {
+  if (segment.length > path11.length) return false;
   let from = 0;
-  while (from <= path10.length - segment.length) {
-    const idx = path10.indexOf(segment, from);
+  while (from <= path11.length - segment.length) {
+    const idx = path11.indexOf(segment, from);
     if (idx === -1) return false;
-    const before = idx === 0 ? "." : path10[idx - 1];
-    const after = idx + segment.length === path10.length ? "." : path10[idx + segment.length];
+    const before = idx === 0 ? "." : path11[idx - 1];
+    const after = idx + segment.length === path11.length ? "." : path11[idx + segment.length];
     if ((before === "." || before === "[") && (after === "." || after === "[")) {
       return true;
     }
@@ -743,8 +743,8 @@ function containsSegment(path10, segment) {
 // src/domain/modified.ts
 function modifiedSections(baseline, draft) {
   const out = /* @__PURE__ */ new Set();
-  for (const path10 of changedPaths(baseline, draft)) {
-    const section = sectionForKeyPath(path10);
+  for (const path11 of changedPaths(baseline, draft)) {
+    const section = sectionForKeyPath(path11);
     if (section !== void 0) out.add(section);
   }
   return out;
@@ -1383,16 +1383,16 @@ import { useRef as useRef6, useState as useState8 } from "react";
 import { Box as Box10, Text as Text10, useInput as useInput8 } from "ink";
 
 // src/domain/draftPath.ts
-function getByPath(draft, path10) {
+function getByPath(draft, path11) {
   let current = draft;
-  for (const key of path10.split(".")) {
+  for (const key of path11.split(".")) {
     if (!isObject(current)) return void 0;
     current = current[key];
   }
   return current;
 }
-function setByPath(draft, path10, value) {
-  const keys = path10.split(".");
+function setByPath(draft, path11, value) {
+  const keys = path11.split(".");
   const [head, ...rest] = keys;
   if (head === void 0) return draft;
   const clone = { ...draft };
@@ -1663,12 +1663,12 @@ function PromptsScreen({
     },
     { isActive: mode === "form" }
   );
-  function update(path10, raw) {
+  function update(path11, raw) {
     const value = raw.length === 0 ? void 0 : raw;
     onChange(
       setByPath(
         draft,
-        path10,
+        path11,
         value
       )
     );
@@ -2581,7 +2581,7 @@ function PathEntryEditor({
   onSave,
   onCancel
 }) {
-  const [path10, setPath] = useState15(value);
+  const [path11, setPath] = useState15(value);
   const guard = useEditGuard();
   useInput19(
     (_input, k) => {
@@ -2589,12 +2589,12 @@ function PathEntryEditor({
         guard.requestCancel(onCancel);
         return;
       }
-      if (k.return && path10.trim().length > 0) onSave(path10);
+      if (k.return && path11.trim().length > 0) onSave(path11);
     },
     { isActive: !guard.guarding }
   );
   if (guard.guarding) {
-    const apply = path10.trim().length === 0 ? onCancel : () => onSave(path10);
+    const apply = path11.trim().length === 0 ? onCancel : () => onSave(path11);
     return /* @__PURE__ */ jsx21(
       SaveGuard,
       {
@@ -2610,13 +2610,13 @@ function PathEntryEditor({
       TextField,
       {
         label: "path",
-        value: path10,
+        value: path11,
         placeholder: "absolute or ~ path the command may write to",
         isActive: true,
         onChange: guard.track(setPath)
       }
     ) }),
-    path10.trim().length === 0 ? /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "\u26A0 path is required (a blank row is dropped)." }) }) : null,
+    path11.trim().length === 0 ? /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "\u26A0 path is required (a blank row is dropped)." }) }) : null,
     /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: "type to edit \xB7 enter apply \xB7 esc cancel." }) })
   ] });
 }
@@ -2655,8 +2655,8 @@ function ShellSandboxPathsEditor({
       String(editing)
     );
   }
-  const items = paths.map((path10, index) => ({
-    label: path10 || "(unnamed)",
+  const items = paths.map((path11, index) => ({
+    label: path11 || "(unnamed)",
     note: void 0,
     error: void 0,
     modified: modified[index]
@@ -3143,11 +3143,11 @@ function WorkspaceForm({ draft, baseline, onChange, onBack }) {
     if (key.downArrow) setFocusIndex((f) => Math.min(FOCI.length - 1, f + 1));
     if (key.upArrow) setFocusIndex((f) => Math.max(0, f - 1));
   });
-  function setField(path10, value) {
+  function setField(path11, value) {
     onChange(
       setByPath(
         draft,
-        path10,
+        path11,
         value.length === 0 ? void 0 : value
       )
     );
@@ -3512,6 +3512,93 @@ function seedNewConfig(target2) {
   return defaultDraft();
 }
 
+// src/io/upgrade.ts
+import { spawnSync } from "child_process";
+import { realpathSync } from "fs";
+import path10 from "path";
+var BREW_FORMULA = "paulbaranowski/tap/crew-config";
+var INSTALLER_URL = "https://github.com/paulbaranowski/groundcrew-config/releases/latest/download/install.sh";
+var INSTALLER_PIPELINE = `curl -fsSL ${INSTALLER_URL} | bash`;
+function isContained(child, parent) {
+  if (parent === "") return false;
+  const rel = path10.relative(parent, child);
+  return rel === "" || !rel.startsWith("..") && !path10.isAbsolute(rel);
+}
+function detectChannel(input) {
+  if (isContained(input.scriptRealpath, input.brewFormulaPrefix)) return "brew";
+  if (isContained(input.scriptRealpath, input.npmGlobalPrefix)) {
+    return "installer";
+  }
+  return "unknown";
+}
+function commandFor(channel) {
+  if (channel === "brew") {
+    return {
+      echo: `brew upgrade ${BREW_FORMULA}`,
+      cmd: "brew",
+      args: ["upgrade", BREW_FORMULA]
+    };
+  }
+  if (channel === "installer") {
+    return {
+      echo: INSTALLER_PIPELINE,
+      cmd: "bash",
+      args: ["-c", INSTALLER_PIPELINE]
+    };
+  }
+  return null;
+}
+function guidanceText() {
+  return [
+    "Could not determine how crew-config was installed (it looks like a source",
+    "checkout or an unrecognized location), so nothing was changed.",
+    "",
+    "Upgrade manually with whichever matches your install:",
+    `  Homebrew:  brew upgrade ${BREW_FORMULA}`,
+    `  Installer: ${INSTALLER_PIPELINE}`
+  ].join("\n");
+}
+function tryRealpath(p, realpath) {
+  try {
+    return realpath(p);
+  } catch {
+    return "";
+  }
+}
+function prefixFromCommand(cmd, args) {
+  const r = spawnSync(cmd, args, { encoding: "utf8" });
+  if (r.error || r.status !== 0 || typeof r.stdout !== "string") return "";
+  const out = r.stdout.trim();
+  if (out === "") return "";
+  return tryRealpath(out, realpathSync);
+}
+function defaultDeps() {
+  return {
+    scriptPath: process.argv[1] ?? "",
+    realpath: realpathSync,
+    brewFormulaPrefix: () => prefixFromCommand("brew", ["--prefix", "crew-config"]),
+    npmGlobalPrefix: () => prefixFromCommand("npm", ["prefix", "-g"]),
+    run: (cmd, args) => spawnSync(cmd, args, { stdio: "inherit" }).status ?? 1,
+    log: (message) => console.log(message)
+  };
+}
+function runUpgrade(deps = {}) {
+  const d = { ...defaultDeps(), ...deps };
+  const scriptRealpath = tryRealpath(d.scriptPath, d.realpath);
+  const channel = detectChannel({
+    scriptRealpath,
+    brewFormulaPrefix: d.brewFormulaPrefix(),
+    npmGlobalPrefix: d.npmGlobalPrefix()
+  });
+  const command = commandFor(channel);
+  if (command === null) {
+    d.log(guidanceText());
+    return 1;
+  }
+  d.log(`Upgrading crew-config via: ${command.echo}`);
+  return d.run(command.cmd, command.args);
+}
+
 // src/meta.ts
 import { readFileSync as readFileSync3 } from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
@@ -3521,6 +3608,7 @@ Usage:
   crew-config            edit the global ~/.config/groundcrew/crew.config.json
   crew-config --local    edit ./crew.config.json in the current project
   crew-config <path>     edit the crew.config.json at <path>
+  crew-config upgrade    upgrade crew-config to the latest version
 
 Flags:
   -h, --help       show this help and exit
@@ -3543,6 +3631,9 @@ var meta = metaOutput(argv);
 if (meta !== null) {
   console.log(meta);
   process.exit(0);
+}
+if (argv[0] === "upgrade") {
+  process.exit(runUpgrade());
 }
 var { target, path: configPath } = locate(argv, process.cwd());
 var initialDraft = await loadDraft(configPath) ?? seedNewConfig(target);
