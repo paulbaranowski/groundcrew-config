@@ -4,6 +4,7 @@ import { createFullscreen, installFullscreen } from "./hooks/useFullscreen.ts";
 import { loadDraft } from "./io/load.ts";
 import { locate } from "./io/locate.ts";
 import { seedNewConfig } from "./io/seed.ts";
+import { runUpgrade } from "./io/upgrade.ts";
 import { metaOutput } from "./meta.ts";
 
 const argv = process.argv.slice(2);
@@ -14,6 +15,14 @@ const meta = metaOutput(argv);
 if (meta !== null) {
   console.log(meta);
   process.exit(0);
+}
+
+// `crew-config upgrade` is a non-interactive subcommand: it spawns the right
+// channel's upgrade and exits. Like the meta flags, it must short-circuit
+// before locate() (which would mistake the bare `upgrade` arg for a config
+// path) and before entering the alt screen.
+if (argv[0] === "upgrade") {
+  process.exit(runUpgrade());
 }
 
 const { target, path: configPath } = locate(argv, process.cwd());
