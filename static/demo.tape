@@ -3,8 +3,8 @@
 # Reproduce with: `brew install vhs`, `crew-config` on PATH, and a sample
 # config to edit so no real config is touched:
 #
-#   mkdir -p /tmp/acme && cd /tmp/acme
-#   cat > crew.config.json <<'EOF'
+#   mkdir -p /tmp/acme
+#   cat > /tmp/acme/crew.config.json <<'EOF'
 #   {
 #     "workspace": {
 #       "projectDir": "~/dev/acme",
@@ -14,8 +14,8 @@
 #     "sources": [{ "kind": "todo-txt" }]
 #   }
 #   EOF
-#   vhs demo.tape
-Output demo.gif
+#   vhs static/demo.tape
+Output static/demo.gif
 
 Set Shell "bash"
 Set FontSize 17
