@@ -2,6 +2,8 @@
 
 Interactive TUI to create and update [groundcrew](https://www.npmjs.com/package/@clipboard-health/groundcrew)'s `crew.config.json`.
 
+<a href="./static/demo.tape"><img alt="crew-config editing a sample crew.config.json: browsing task sources, a repository's settings, and the sandbox and terminal sections" src="./static/demo.gif" width="800"></a>
+
 ## Install
 
 **macOS** (Homebrew):
