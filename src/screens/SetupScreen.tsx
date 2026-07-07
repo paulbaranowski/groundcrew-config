@@ -98,19 +98,26 @@ export function SetupScreen({ onBack, deps }: Props) {
     setStates((prev) => ({ ...prev, [id]: state }));
   }
 
+  // One mounted flag covers both the mount-time probes and the long-running
+  // install actions (INSTALL_TIMEOUT_MS is 10 minutes): a resolution landing
+  // after the user esc'd away must not call setState on the unmounted screen.
+  const mountedRef = useRef(true);
   useEffect(() => {
-    let cancelled = false;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     void d.probeGroundcrew().then((report) => {
-      if (!cancelled) setRow("groundcrew", { phase: "ready", report });
+      if (mountedRef.current) setRow("groundcrew", { phase: "ready", report });
     });
     if (d.platform === "darwin") {
       void d.probeSafehouse().then((report) => {
-        if (!cancelled) setRow("safehouse", { phase: "ready", report });
+        if (mountedRef.current) setRow("safehouse", { phase: "ready", report });
       });
     }
-    return () => {
-      cancelled = true;
-    };
   }, [d]);
 
   function moveCursor(next: number): void {
@@ -125,7 +132,9 @@ export function SetupScreen({ onBack, deps }: Props) {
     const install =
       id === "groundcrew" ? d.installGroundcrew : d.installSafehouse;
     setRow(id, { phase: "acting" });
-    void install().then((report) => setRow(id, { phase: "ready", report }));
+    void install().then((report) => {
+      if (mountedRef.current) setRow(id, { phase: "ready", report });
+    });
   }
 
   useInput((_input, key) => {
