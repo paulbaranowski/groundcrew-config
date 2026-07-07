@@ -8,6 +8,7 @@ import {
   type SectionId,
 } from "./types.ts";
 import {
+  customKindNames,
   enabledSourceCount,
   isLinearEnabled,
   isPlanKeeperEnabled,
@@ -260,6 +261,8 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
       if (isTodoTxtEnabled(draft)) kinds.push("todo-txt");
       if (isPlanKeeperEnabled(draft)) kinds.push("plan-keeper");
       kinds.push(...shellSourceNames(draft));
+      // Enable-by-kind manifest sources (jira, …) and any other unmanaged kinds.
+      kinds.push(...customKindNames(draft));
       return kinds.join(", ");
     }
     case "usage": {

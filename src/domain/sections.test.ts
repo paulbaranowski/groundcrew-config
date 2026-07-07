@@ -215,3 +215,21 @@ test("taskSources summary warns when no sources are enabled", () => {
     } as never),
   ).toBe("none — crew won't run");
 });
+
+test("taskSources summary names enabled by-kind manifest sources", () => {
+  expect(
+    sectionSummary("taskSources", {
+      workspace: { projectDir: "~/d", knownRepositories: [] },
+      sources: [{ kind: "linear" }, { kind: "jira" }],
+    } as never),
+  ).toBe("linear, jira");
+});
+
+test("taskSources summary omits a disabled by-kind manifest source", () => {
+  expect(
+    sectionSummary("taskSources", {
+      workspace: { projectDir: "~/d", knownRepositories: [] },
+      sources: [{ kind: "linear" }, { kind: "jira", enabled: false }],
+    } as never),
+  ).toBe("linear");
+});

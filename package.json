@@ -1,6 +1,6 @@
 {
   "name": "@clipboard-health/groundcrew-config",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Interactive TUI to create and update groundcrew's crew.config.json",
   "license": "MIT",
   "type": "module",
@@ -24,7 +24,7 @@
     "prepublishOnly": "npm run verify"
   },
   "dependencies": {
-    "@clipboard-health/groundcrew": "^4.43.2",
+    "@clipboard-health/groundcrew": "^4.46.3",
     "cosmiconfig": "^9.0.0",
     "ink": "^6.0.0",
     "react": "^19.0.0"
