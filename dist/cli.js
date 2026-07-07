@@ -2324,7 +2324,7 @@ function SectionForm({
 }
 
 // src/screens/TaskSourcesMenu.tsx
-import { useEffect as useEffect3, useRef as useRef9, useState as useState20 } from "react";
+import { useEffect as useEffect3, useRef as useRef10, useState as useState20 } from "react";
 import { Box as Box26, Text as Text26, useInput as useInput24 } from "ink";
 
 // src/domain/manifestSources.ts
@@ -2627,7 +2627,7 @@ function LinearForm({
 }
 
 // src/screens/ManifestSourceForm.tsx
-import { useState as useState15 } from "react";
+import { useRef as useRef8, useState as useState15 } from "react";
 import { Box as Box20, Text as Text20, useInput as useInput18 } from "ink";
 
 // src/io/prereqProbes.ts
@@ -2790,6 +2790,8 @@ function ManifestSourceForm({
   const [editingEnv, setEditingEnv] = useState15(false);
   const maxRow = enabled ? 1 : 0;
   const row = Math.min(focus, maxRow);
+  const rowRef = useRef8(row);
+  rowRef.current = row;
   const [prereqs] = useState15(
     () => (manifest?.prerequisites ?? []).map((p) => ({
       ...p,
@@ -2809,11 +2811,17 @@ function ManifestSourceForm({
         onBack();
         return;
       }
-      if (k.downArrow) setFocus((f) => Math.min(maxRow, f + 1));
-      if (k.upArrow) setFocus((f) => Math.max(0, f - 1));
-      if (input === " " && row === 0)
+      if (k.downArrow) {
+        rowRef.current = Math.min(maxRow, rowRef.current + 1);
+        setFocus(rowRef.current);
+      }
+      if (k.upArrow) {
+        rowRef.current = Math.max(0, rowRef.current - 1);
+        setFocus(rowRef.current);
+      }
+      if (input === " " && rowRef.current === 0)
         onChange(setKindEnabled(draft, kind, !enabled));
-      if (k.return && row === 1) setEditingEnv(true);
+      if (k.return && rowRef.current === 1) setEditingEnv(true);
     },
     { isActive: !editingEnv }
   );
@@ -2979,7 +2987,7 @@ import { useState as useState18 } from "react";
 import { Box as Box24, Text as Text24, useInput as useInput22 } from "ink";
 
 // src/screens/ShellSourceSubForm.tsx
-import { useRef as useRef8, useState as useState17 } from "react";
+import { useRef as useRef9, useState as useState17 } from "react";
 import { Box as Box23, Text as Text23, useInput as useInput21 } from "ink";
 
 // src/screens/ShellSandboxPathsEditor.tsx
@@ -3114,7 +3122,7 @@ function ShellSourceSubForm({
   const [active, setActive] = useState17(0);
   const [mode, setMode] = useState17("fields");
   const guard = useEditGuard();
-  const activeRef = useRef8(0);
+  const activeRef = useRef9(0);
   function moveActive(next) {
     activeRef.current = next;
     setActive(next);
@@ -3377,11 +3385,19 @@ function TaskSourcesMenu({
   const [sub, setSub] = useState20("hub");
   const [catalog, setCatalog] = useState20([]);
   const [cursor, setCursor] = useState20(0);
-  const cursorRef = useRef9(0);
+  const cursorRef = useRef10(0);
   useEffect3(() => {
     let alive = true;
     void loadCatalog().then((entries) => {
-      if (alive) setCatalog(entries);
+      if (!alive) return;
+      const before = hubRows([], draft, baseline).map((r) => r.label);
+      const after = hubRows(entries, draft, baseline).map((r) => r.label);
+      const current = before[cursorRef.current];
+      const remapped = current === void 0 ? -1 : after.indexOf(current);
+      if (remapped >= 0) moveCursor(remapped);
+      setCatalog(entries);
+    }).catch(() => {
+      if (alive) setCatalog([]);
     });
     return () => {
       alive = false;

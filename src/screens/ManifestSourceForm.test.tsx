@@ -153,6 +153,25 @@ test("shows manifest env defaults and opens the env override editor", async () =
   );
 });
 
+test("a down+enter burst in one tick opens the env editor (rowRef, not stale closure)", async () => {
+  const { lastFrame, stdin } = render(
+    <ManifestSourceForm
+      source={jira}
+      draft={enabledDraft}
+      baseline={enabledDraft}
+      onChange={() => {}}
+      onBack={() => {}}
+      {...noProbes}
+    />,
+  );
+  // Both keys land in the same input chunk, so both handlers share one render
+  // closure — only the rowRef mirror lets the enter see the moved cursor.
+  stdin.write("\x1b[B\r");
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("Environment variables"),
+  );
+});
+
 test("esc calls onBack", async () => {
   const onBack = vi.fn();
   const { stdin } = render(

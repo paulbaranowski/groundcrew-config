@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { valuesEqual } from "../domain/diff.ts";
 import {
@@ -53,6 +53,12 @@ export function ManifestSourceForm({
   // Row 0 is the enable toggle; row 1 (when enabled) opens the env editor.
   const maxRow = enabled ? 1 : 0;
   const row = Math.min(focus, maxRow);
+  // Mirror the row in a ref: a down+enter burst arriving in one input chunk
+  // fires both handlers against the same stale closure, so reading `row` there
+  // would drop the enter (same trick as TaskSourcesMenu's cursorRef — see the
+  // testing notes in CLAUDE.md). Handlers MUST read `rowRef.current`.
+  const rowRef = useRef(row);
+  rowRef.current = row;
 
   // Probe once on mount, not per render: the probes hit the filesystem, and a
   // keystroke re-render must not re-scan PATH.
@@ -79,11 +85,17 @@ export function ManifestSourceForm({
         onBack();
         return;
       }
-      if (k.downArrow) setFocus((f) => Math.min(maxRow, f + 1));
-      if (k.upArrow) setFocus((f) => Math.max(0, f - 1));
-      if (input === " " && row === 0)
+      if (k.downArrow) {
+        rowRef.current = Math.min(maxRow, rowRef.current + 1);
+        setFocus(rowRef.current);
+      }
+      if (k.upArrow) {
+        rowRef.current = Math.max(0, rowRef.current - 1);
+        setFocus(rowRef.current);
+      }
+      if (input === " " && rowRef.current === 0)
         onChange(setKindEnabled(draft, kind, !enabled));
-      if (k.return && row === 1) setEditingEnv(true);
+      if (k.return && rowRef.current === 1) setEditingEnv(true);
     },
     { isActive: !editingEnv },
   );

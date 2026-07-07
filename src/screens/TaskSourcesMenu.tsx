@@ -53,12 +53,30 @@ export function TaskSourcesMenu({
 
   useEffect(() => {
     let alive = true;
-    void loadCatalog().then((entries) => {
-      if (alive) setCatalog(entries);
-    });
+    void loadCatalog()
+      .then((entries) => {
+        if (!alive) return;
+        // Discovered rows insert between the builtins and PlanKeeper/Shell, so
+        // a cursor parked below the insertion point would silently retarget.
+        // Remap it by row label (labels don't depend on the moving draft) so
+        // the highlighted row keeps its identity when the catalog lands.
+        const before = hubRows([], draft, baseline).map((r) => r.label);
+        const after = hubRows(entries, draft, baseline).map((r) => r.label);
+        const current = before[cursorRef.current];
+        const remapped = current === undefined ? -1 : after.indexOf(current);
+        if (remapped >= 0) moveCursor(remapped);
+        setCatalog(entries);
+      })
+      // loadSourceCatalog never rejects, but the loader is an injectable prop —
+      // don't let a rejecting substitute become an unhandled rejection.
+      .catch(() => {
+        if (alive) setCatalog([]);
+      });
     return () => {
       alive = false;
     };
+    // draft/baseline are deliberately not deps: the effect runs once on mount,
+    // and row *labels* (all the remap reads) don't change with draft edits.
   }, [loadCatalog]);
 
   const rows = hubRows(catalog, draft, baseline);

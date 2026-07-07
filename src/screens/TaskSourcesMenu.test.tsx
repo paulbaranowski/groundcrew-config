@@ -157,6 +157,36 @@ test("appends discovered catalog sources as rows once the catalog resolves", asy
   );
 });
 
+test("keeps the cursor on the same row when the catalog inserts rows above it", async () => {
+  let resolveCatalog: (entries: CatalogSource[]) => void = () => {};
+  const gated = new Promise<CatalogSource[]>((resolve) => {
+    resolveCatalog = resolve;
+  });
+  const { lastFrame, stdin } = render(
+    <TaskSourcesMenu
+      draft={draft}
+      baseline={draft}
+      onChange={() => {}}
+      onBack={() => {}}
+      loadCatalog={() => gated}
+    />,
+  );
+  // Park the cursor on PlanKeeper (row 3 of the static four) before the
+  // catalog lands.
+  stdin.write("\x1b[B");
+  stdin.write("\x1b[B");
+  await vi.waitFor(() => {
+    const line = (lastFrame() ?? "").split("\n").find((l) => l.includes("PlanKeeper"));
+    expect(line).toContain("▸");
+  });
+  resolveCatalog([jiraCatalog]);
+  // jira inserts above PlanKeeper; the highlight must stay on PlanKeeper.
+  await vi.waitFor(() => expect(lastFrame()).toContain("jira"));
+  const frame = lastFrame() ?? "";
+  expect(frame.split("\n").find((l) => l.includes("PlanKeeper"))).toContain("▸");
+  expect(frame.split("\n").find((l) => l.includes("jira"))).not.toContain("▸");
+});
+
 test("enter on a discovered row opens the generic manifest screen; esc returns", async () => {
   const { lastFrame, stdin } = render(
     <TaskSourcesMenu
