@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { TextField } from "./TextField.tsx";
@@ -203,6 +204,55 @@ test("the value row is indented under the label", () => {
   // The 4-col indent on the value row sets it visually under the label,
   // distinct from the label's `›`/`  ` 2-col prefix.
   expect(valueLine).toMatch(/^ {4}/);
+});
+
+// Controlled harness wired like the real app: a single useState, plain (non-
+// functional) updates. The key-repeat regressions below only reproduce against
+// live state, because they depend on how successive edits compound.
+function Stateful({ initial }: { initial: string }) {
+  const [value, setValue] = useState(initial);
+  return <TextField label="cmd" value={value} isActive onChange={setValue} />;
+}
+
+test("a held backspace fused into one stdin chunk deletes one char per repeat", async () => {
+  // Terminal key-repeat can deliver several DEL bytes in a single read. Ink
+  // splits chunks only at escape sequences, so all three arrive as ONE input
+  // event with key.delete unset. Each byte must still act as a backspace.
+  const { stdin, lastFrame } = render(<Stateful initial="hello" />);
+  stdin.write(BACKSPACE + BACKSPACE + BACKSPACE);
+  await vi.waitFor(() => {
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("he▏"); // "he" left, caret at the end
+    expect(frame).not.toContain("hel");
+  });
+});
+
+test("control bytes in a fused chunk are never inserted into the value", async () => {
+  const { stdin, lastFrame } = render(<Stateful initial="" />);
+  // One fused event: type "a", type "b", backspace. The DEL byte must edit,
+  // not land in the value as a literal control character.
+  stdin.write("ab" + BACKSPACE);
+  await vi.waitFor(() => {
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("a▏");
+    expect(frame).not.toContain("ab");
+    expect(frame).not.toContain("\x7f");
+  });
+});
+
+test("edits split across several same-tick events compound instead of clobbering", async () => {
+  // One chunk, but the interior escape sequence makes Ink split it into three
+  // events (backspace, left, backspace) dispatched in the same tick. Each
+  // handler call must see the value produced by the previous one, not the
+  // stale render-time prop: "hello" -> "hell" -> caret left -> "hel".
+  const { stdin, lastFrame } = render(<Stateful initial="hello" />);
+  stdin.write(BACKSPACE + LEFT + BACKSPACE);
+  await vi.waitFor(() => {
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("hel");
+    expect(frame).not.toContain("hell");
+    expect(frame).not.toContain("helo");
+  });
 });
 
 test("a disabled field still shows its hint on the value row", () => {

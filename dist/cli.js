@@ -1092,31 +1092,50 @@ function TextField({
     caretRef.current = next;
     setCaret(next);
   }
+  const valueRef = useRef2(value);
+  valueRef.current = value;
+  function edit(next, nextCaret) {
+    valueRef.current = next;
+    onChange(next);
+    moveCaret(nextCaret);
+  }
   useEffect2(() => {
     if (isActive && !disabled) moveCaret(value.length);
   }, [isActive, disabled]);
   useInput2(
     (input, key) => {
-      const pos2 = Math.min(caretRef.current, value.length);
+      const current = valueRef.current;
+      const pos2 = Math.min(caretRef.current, current.length);
       if (key.leftArrow) {
         moveCaret(Math.max(0, pos2 - 1));
         return;
       }
       if (key.rightArrow) {
-        moveCaret(Math.min(value.length, pos2 + 1));
+        moveCaret(Math.min(current.length, pos2 + 1));
         return;
       }
       if (key.backspace || key.delete) {
         if (pos2 === 0) return;
-        onChange(value.slice(0, pos2 - 1) + value.slice(pos2));
-        moveCaret(pos2 - 1);
+        edit(current.slice(0, pos2 - 1) + current.slice(pos2), pos2 - 1);
         return;
       }
       if (key.return || key.upArrow || key.downArrow || key.escape || key.tab)
         return;
       if (input) {
-        onChange(value.slice(0, pos2) + input + value.slice(pos2));
-        moveCaret(pos2 + input.length);
+        let next = current;
+        let nextPos = pos2;
+        for (const ch of input) {
+          if (ch === "\x7F" || ch === "\b") {
+            if (nextPos > 0) {
+              next = next.slice(0, nextPos - 1) + next.slice(nextPos);
+              nextPos -= 1;
+            }
+          } else if (ch >= " ") {
+            next = next.slice(0, nextPos) + ch + next.slice(nextPos);
+            nextPos += 1;
+          }
+        }
+        if (next !== current) edit(next, nextPos);
       }
     },
     { isActive: isActive && !disabled }

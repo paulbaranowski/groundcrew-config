@@ -53,6 +53,18 @@ export function TextField({
     caretRef.current = next;
     setCaret(next);
   }
+  // `value` is mirrored in a ref for the same reason as the caret: several
+  // input events can arrive in one tick (e.g. held-key repeat), and each
+  // handler call must edit the text produced by the previous call, not the
+  // stale render-time prop (which would make the last edit clobber the rest).
+  // Re-synced from the prop on every render so the parent stays authoritative.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  function edit(next: string, nextCaret: number): void {
+    valueRef.current = next;
+    onChange(next);
+    moveCaret(nextCaret);
+  }
   // Re-home the caret to the end whenever the field (re)gains focus, so editing
   // an existing value starts at a sensible place. Deliberately keyed on focus
   // only (not `value`): re-homing on every keystroke would fight interior edits.
@@ -62,27 +74,44 @@ export function TextField({
 
   useInput(
     (input, key) => {
-      const pos = Math.min(caretRef.current, value.length);
+      const current = valueRef.current;
+      const pos = Math.min(caretRef.current, current.length);
       if (key.leftArrow) {
         moveCaret(Math.max(0, pos - 1));
         return;
       }
       if (key.rightArrow) {
-        moveCaret(Math.min(value.length, pos + 1));
+        moveCaret(Math.min(current.length, pos + 1));
         return;
       }
       if (key.backspace || key.delete) {
         // Backspace removes the character before the caret.
         if (pos === 0) return;
-        onChange(value.slice(0, pos - 1) + value.slice(pos));
-        moveCaret(pos - 1);
+        edit(current.slice(0, pos - 1) + current.slice(pos), pos - 1);
         return;
       }
       if (key.return || key.upArrow || key.downArrow || key.escape || key.tab)
         return;
       if (input) {
-        onChange(value.slice(0, pos) + input + value.slice(pos));
-        moveCaret(pos + input.length);
+        // Ink splits stdin chunks only at escape sequences, so a held-down key
+        // (terminal key-repeat) arrives as one fused event: `input` can be
+        // several keypresses long and can embed raw DEL/BS bytes (key.delete
+        // is set only when the whole event is exactly "\x7f"). Replay the
+        // event keypress-by-keypress; control bytes edit, they never insert.
+        let next = current;
+        let nextPos = pos;
+        for (const ch of input) {
+          if (ch === "\x7f" || ch === "\b") {
+            if (nextPos > 0) {
+              next = next.slice(0, nextPos - 1) + next.slice(nextPos);
+              nextPos -= 1;
+            }
+          } else if (ch >= " ") {
+            next = next.slice(0, nextPos) + ch + next.slice(nextPos);
+            nextPos += 1;
+          }
+        }
+        if (next !== current) edit(next, nextPos);
       }
     },
     { isActive: isActive && !disabled },
