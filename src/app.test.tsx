@@ -43,11 +43,40 @@ test("enter opens a section, esc returns home", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  stdin.write("\r"); // open Repositories (row 0)
+  stdin.write(DOWN); // down to Repositories (row 1; Setup is row 0)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
+  stdin.write("\r"); // open Repositories
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("repos groundcrew is allowed to work on"),
   );
   stdin.write(ESC); // esc back
+  await vi.waitFor(() => expect(lastFrame()).toContain("Task Sources"));
+  unmount();
+});
+
+test("opens the Setup screen from Home with injected deps", async () => {
+  const report = {
+    action: "already-installed" as const,
+    version: "9.9.9",
+    details: "",
+  };
+  const setupDeps = {
+    platform: "darwin",
+    probeGroundcrew: () => Promise.resolve(report),
+    installGroundcrew: () => Promise.resolve(report),
+    probeSafehouse: () => Promise.resolve(report),
+    installSafehouse: () => Promise.resolve(report),
+  };
+  const { lastFrame, stdin, unmount } = render(
+    <App
+      initialDraft={draft}
+      target={{ scope: "local", cwd: "/tmp" }}
+      setupDeps={setupDeps}
+    />,
+  );
+  stdin.write("\r"); // Setup is row 0
+  await vi.waitFor(() => expect(lastFrame()).toContain("9.9.9"));
+  stdin.write(ESC);
   await vi.waitFor(() => expect(lastFrame()).toContain("Task Sources"));
   unmount();
 });
@@ -57,12 +86,15 @@ test("opens the Agents bypass-permissions form from Home", async () => {
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
   // Each waitFor yields a tick so ink processes one queued arrow before the
-  // next write. Agents is row 3: Repositories, Workspace, Task Sources, Agents.
-  stdin.write(DOWN); // down to Workspace (row 1)
+  // next write. Agents is row 4: Setup, Repositories, Workspace, Task
+  // Sources, Agents.
+  stdin.write(DOWN); // down to Repositories (row 1)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
+  stdin.write(DOWN); // down to Workspace (row 2)
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
-  stdin.write(DOWN); // down to Task Sources (row 2)
+  stdin.write(DOWN); // down to Task Sources (row 3)
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Task Sources"));
-  stdin.write(DOWN); // down to Agents (row 3)
+  stdin.write(DOWN); // down to Agents (row 4)
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Agents"));
   stdin.write("\r");
   await vi.waitFor(() =>
@@ -75,7 +107,9 @@ test("esc restores the Home row that was open", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  stdin.write(DOWN); // down to Workspace (row 1)
+  stdin.write(DOWN); // down to Repositories (row 1)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
+  stdin.write(DOWN); // down to Workspace (row 2)
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
   stdin.write("\r"); // open Workspace
   await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
@@ -90,7 +124,9 @@ test("opens Repositories from Home", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  stdin.write("\r"); // open Repositories (row 0)
+  stdin.write(DOWN); // down to Repositories (row 1; Setup is row 0)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
+  stdin.write("\r"); // open Repositories
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("repos groundcrew is allowed to work on"),
   );
@@ -107,7 +143,9 @@ test("an edit shows (edited) on the affected Home section", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  // Open Workspace (row 1 -> down once + enter).
+  // Open Workspace (row 2: Setup, Repositories, Workspace).
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
   stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
   stdin.write("\r");
@@ -130,6 +168,8 @@ test("reverting a single field clears its marker", async () => {
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
+  stdin.write(DOWN); // -> Repositories
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
   stdin.write(DOWN); // -> Workspace
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
   stdin.write("\r");
@@ -151,6 +191,8 @@ test("q on a dirty draft opens QuitGuard without tripping Rules-of-Hooks", async
   const { lastFrame, stdin, unmount } = render(
     <App initialDraft={draft} target={{ scope: "local", cwd: "/tmp" }} />,
   );
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
   stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
   stdin.write("\r");
@@ -204,6 +246,8 @@ test("saving clears every modified marker — and the (edited) section badge", a
       <App initialDraft={draft} target={{ scope: "local", cwd: dir }} />,
     );
     // Make an edit so a `●` and an `(edited)` badge both appear, then esc home.
+    stdin.write(DOWN);
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
     stdin.write(DOWN);
     await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
     stdin.write("\r");

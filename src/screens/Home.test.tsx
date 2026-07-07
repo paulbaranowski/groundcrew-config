@@ -44,7 +44,7 @@ test("enter opens the focused section", () => {
     />,
   );
   stdin.write("\r");
-  expect(onOpen).toHaveBeenCalledWith("repositories");
+  expect(onOpen).toHaveBeenCalledWith("setup");
 });
 
 test("reports cursor moves to the parent", () => {

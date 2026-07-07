@@ -8,6 +8,7 @@ import {
 
 test("section order is the Home list order", () => {
   expect(SECTION_ORDER).toEqual([
+    "setup",
     "repositories",
     "workspace",
     "taskSources",

@@ -19,6 +19,7 @@ import { saveDraft, targetPath, type Target } from "./io/save.ts";
 import { validateDraft } from "./io/validate.ts";
 import { Home } from "./screens/Home.tsx";
 import { AgentsForm } from "./screens/AgentsForm.tsx";
+import { SetupScreen, type SetupScreenDeps } from "./screens/SetupScreen.tsx";
 import { PromptsScreen } from "./screens/PromptsScreen.tsx";
 import { QuitGuard } from "./screens/QuitGuard.tsx";
 import { RepositoriesForm } from "./screens/RepositoriesForm.tsx";
@@ -30,6 +31,8 @@ import { WorkspaceForm } from "./screens/WorkspaceForm.tsx";
 interface Props {
   initialDraft: ConfigDraft | undefined;
   target: Target;
+  /** Injectable for tests so opening Setup never probes the real npm/brew. */
+  setupDeps?: SetupScreenDeps;
 }
 
 type Route = { name: "home" } | { name: "section"; id: SectionId };
@@ -62,7 +65,7 @@ function Screen({
   );
 }
 
-export function App({ initialDraft, target }: Props) {
+export function App({ initialDraft, target, setupDeps }: Props) {
   const { exit } = useApp();
   const { rows, columns } = useFullscreen();
   // Raw on-disk shape (degenerate empty seed if no config exists). Used as the
@@ -247,15 +250,20 @@ export function App({ initialDraft, target }: Props) {
   const back = () => setRoute({ name: "home" });
   const configDir = path.dirname(targetPath(target));
 
-  // Route dispatch: five section ids get bespoke screens via the explicit
-  // branches below; every other SectionId falls through to the generic
-  // SectionForm driven by `simpleSectionSpec(id)`. Adding a simple section
-  // means adding a simpleSectionSpec case plus its registry entries
+  // Route dispatch: the bespoke section ids get explicit branches below;
+  // every other SectionId falls through to the generic SectionForm driven by
+  // `simpleSectionSpec(id)`. Adding a simple section means adding a
+  // simpleSectionSpec case plus its registry entries
   // (SECTION_LABEL/SECTION_DESCRIPTION); adding a complex one means adding a
-  // branch here. Either way, a new SectionId also needs an entry in
-  // validate.ts's SECTION_PREFIXES, or its error badge mis-routes.
+  // branch here. A new config-backed SectionId also needs an entry in
+  // sectionRouting.ts's SECTION_PREFIXES, or its error badge mis-routes.
+  // ("setup" is machine state, not config-backed: no key path may route to
+  // it, so it deliberately has no SECTION_PREFIXES entry and ignores the
+  // draft entirely.)
   const form =
-    id === "workspace" ? (
+    id === "setup" ? (
+      <SetupScreen onBack={back} deps={setupDeps} />
+    ) : id === "workspace" ? (
       <WorkspaceForm
         draft={draft}
         baseline={baseline}

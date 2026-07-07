@@ -15,7 +15,7 @@ export type ConfigDraft = Config;
  * without an ordering dependency.
  */
 export type SectionId =
-  | "workspace" | "repositories" | "agents" | "taskSources"
+  | "setup" | "workspace" | "repositories" | "agents" | "taskSources"
   | "orchestrator" | "usage" | "hooks" | "git" | "terminal"
   | "sandbox" | "prompts" | "advanced";
 
