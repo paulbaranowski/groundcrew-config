@@ -519,7 +519,7 @@ var SECTION_LABEL = {
   advanced: "Logging"
 };
 var SECTION_DESCRIPTION = {
-  setup: "Machine setup for groundcrew: install the crew CLI and the safehouse sandbox, then verify with crew doctor. This screen manages your machine, not this config file.",
+  setup: "Machine setup for groundcrew: install the crew CLI and the safehouse sandbox, then verify with crew-config doctor. This screen manages your machine, not this config file.",
   workspace: 'Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a "git worktree") created under worktreeDir. Add the repos themselves in the Repositories section.',
   repositories: "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir).",
   agents: 'The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex). Check the ones installed on your machine. "bypass permission prompts" lets the agent act without stopping to ask.',
@@ -1507,6 +1507,9 @@ async function probeGroundcrew(deps = defaultInstallDeps()) {
     ["ls", "-g", GROUNDCREW_PACKAGE, "--depth", "0", "--json"],
     PROBE_TIMEOUT_MS
   );
+  if (result.error !== void 0) {
+    return { action: "failed", version: null, details: result.error };
+  }
   const probe = parseNpmLs(result.stdout, GROUNDCREW_PACKAGE);
   return probe.installed ? { action: "already-installed", version: probe.version, details: "" } : { action: "missing", version: null, details: "" };
 }
@@ -1526,6 +1529,13 @@ async function installGroundcrew(deps = defaultInstallDeps()) {
     };
   }
   const after = await probeGroundcrew(deps);
+  if (after.action !== "already-installed") {
+    return {
+      action: "failed",
+      version: null,
+      details: after.details || `npm install exited 0 but ${GROUNDCREW_PACKAGE} is still not detected`
+    };
+  }
   return { action: "installed", version: after.version, details: "" };
 }
 async function probeSafehouseFormula(deps = defaultInstallDeps()) {
@@ -1541,6 +1551,9 @@ async function probeSafehouseFormula(deps = defaultInstallDeps()) {
     ["list", "--versions", SAFEHOUSE_FORMULA_NAME],
     BREW_PROBE_TIMEOUT_MS
   );
+  if (result.error !== void 0) {
+    return { action: "failed", version: null, details: result.error };
+  }
   if (result.code !== 0) {
     return { action: "missing", version: null, details: "" };
   }
@@ -1563,6 +1576,13 @@ async function installSafehouse(deps = defaultInstallDeps()) {
     };
   }
   const after = await probeSafehouseFormula(deps);
+  if (after.action !== "already-installed") {
+    return {
+      action: "failed",
+      version: null,
+      details: after.details || `brew install exited 0 but ${SAFEHOUSE_FORMULA_NAME} is still not detected`
+    };
+  }
   return { action: "installed", version: after.version, details: "" };
 }
 
@@ -4180,7 +4200,7 @@ Usage:
   crew-config --local    edit ./crew.config.json in the current project
   crew-config <path>     edit the crew.config.json at <path>
   crew-config upgrade    upgrade crew-config to the latest version
-  crew-config doctor     check the machine setup (groundcrew, sandbox, network); --json for machines
+  crew-config doctor     check the machine setup (groundcrew, safehouse, clearance); --json for machines
 
 Flags:
   -h, --help       show this help and exit
@@ -4208,7 +4228,11 @@ if (argv[0] === "upgrade") {
   process.exit(runUpgrade());
 }
 if (argv[0] === "doctor") {
-  process.exit(await runDoctor(argv.slice(1)));
+  const code = await runDoctor(argv.slice(1));
+  await new Promise((resolve) => {
+    process.stdout.write("", () => resolve());
+  });
+  process.exit(code);
 }
 var { target, path: configPath } = locate(argv, process.cwd());
 var initialDraft = await loadDraft(configPath) ?? seedNewConfig(target);

@@ -62,7 +62,7 @@ export const SECTION_LABEL: Record<SectionId, string> = {
  */
 export const SECTION_DESCRIPTION: Record<SectionId, string> = {
   setup:
-    "Machine setup for groundcrew: install the crew CLI and the safehouse sandbox, then verify with crew doctor. This screen manages your machine, not this config file.",
+    "Machine setup for groundcrew: install the crew CLI and the safehouse sandbox, then verify with crew-config doctor. This screen manages your machine, not this config file.",
   workspace:
     "Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a \"git worktree\") created under worktreeDir. Add the repos themselves in the Repositories section.",
   repositories:

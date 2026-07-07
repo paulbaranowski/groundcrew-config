@@ -72,6 +72,18 @@ describe("probeGroundcrew", () => {
     const { deps } = fakeDeps(() => missingNpmLs);
     expect((await probeGroundcrew(deps)).action).toBe("missing");
   });
+
+  it("reports failed, not missing, when the probe itself times out", async () => {
+    const { deps } = fakeDeps(() => ({
+      code: -1,
+      stdout: "",
+      stderr: "",
+      error: "timed out after 30000ms",
+    }));
+    const report = await probeGroundcrew(deps);
+    expect(report.action).toBe("failed");
+    expect(report.details).toContain("timed out");
+  });
 });
 
 describe("installGroundcrew", () => {
@@ -112,6 +124,17 @@ describe("installGroundcrew", () => {
     expect(report.action).toBe("failed");
     expect(report.details).toContain("EACCES");
   });
+
+  it("reports failed when install exits 0 but the re-probe still can't see the package", async () => {
+    const { deps } = fakeDeps((_cmd, args) =>
+      args[0] === "install"
+        ? { code: 0, stdout: "", stderr: "" }
+        : missingNpmLs,
+    );
+    const report = await installGroundcrew(deps);
+    expect(report.action).toBe("failed");
+    expect(report.details).toContain("still not detected");
+  });
 });
 
 describe("probeSafehouseFormula", () => {
@@ -140,6 +163,18 @@ describe("probeSafehouseFormula", () => {
       version: "0.9.0",
       details: "",
     });
+  });
+
+  it("reports failed, not missing, when the probe itself fails to spawn", async () => {
+    const { deps } = fakeDeps(() => ({
+      code: -1,
+      stdout: "",
+      stderr: "",
+      error: "ENOENT",
+    }));
+    const report = await probeSafehouseFormula(deps);
+    expect(report.action).toBe("failed");
+    expect(report.details).toContain("ENOENT");
   });
 });
 

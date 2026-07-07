@@ -63,6 +63,11 @@ export async function probeGroundcrew(
     ["ls", "-g", GROUNDCREW_PACKAGE, "--depth", "0", "--json"],
     PROBE_TIMEOUT_MS,
   );
+  // A spawn failure or timeout is a broken probe, not evidence of absence:
+  // reporting it as "missing" would invite a spurious install.
+  if (result.error !== undefined) {
+    return { action: "failed", version: null, details: result.error };
+  }
   // npm ls exits non-zero when the package is missing but still writes valid
   // JSON, so parse stdout regardless of exit code.
   const probe = parseNpmLs(result.stdout, GROUNDCREW_PACKAGE);
@@ -90,7 +95,19 @@ export async function installGroundcrew(
       details: failureDetails(result, "npm install failed"),
     };
   }
+  // Trust the re-probe, not npm's exit code: a "successful" install that the
+  // probe still can't see must not render as installed ✓ while doctor
+  // simultaneously reports the package broken.
   const after = await probeGroundcrew(deps);
+  if (after.action !== "already-installed") {
+    return {
+      action: "failed",
+      version: null,
+      details:
+        after.details ||
+        `npm install exited 0 but ${GROUNDCREW_PACKAGE} is still not detected`,
+    };
+  }
   return { action: "installed", version: after.version, details: "" };
 }
 
@@ -109,6 +126,10 @@ export async function probeSafehouseFormula(
     ["list", "--versions", SAFEHOUSE_FORMULA_NAME],
     BREW_PROBE_TIMEOUT_MS,
   );
+  // A spawn failure or timeout is a broken probe, not evidence of absence.
+  if (result.error !== undefined) {
+    return { action: "failed", version: null, details: result.error };
+  }
   if (result.code !== 0) {
     return { action: "missing", version: null, details: "" };
   }
@@ -137,6 +158,16 @@ export async function installSafehouse(
       details: failureDetails(result, "brew install failed"),
     };
   }
+  // Same as installGroundcrew: only the re-probe decides success.
   const after = await probeSafehouseFormula(deps);
+  if (after.action !== "already-installed") {
+    return {
+      action: "failed",
+      version: null,
+      details:
+        after.details ||
+        `brew install exited 0 but ${SAFEHOUSE_FORMULA_NAME} is still not detected`,
+    };
+  }
   return { action: "installed", version: after.version, details: "" };
 }
