@@ -9,6 +9,7 @@ Usage:
   crew-config --local    edit ./crew.config.json in the current project
   crew-config <path>     edit the crew.config.json at <path>
   crew-config upgrade    upgrade crew-config to the latest version
+  crew-config doctor     check the machine setup (groundcrew, sandbox, network); --json for machines
 
 Flags:
   -h, --help       show this help and exit

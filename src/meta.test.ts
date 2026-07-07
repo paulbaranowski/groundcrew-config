@@ -14,6 +14,7 @@ test("--help / -h print usage with the invocation forms", () => {
     expect(out).toContain("Usage:");
     expect(out).toContain("crew-config --local");
     expect(out).toContain("<path>");
+    expect(out).toContain("crew-config doctor");
   }
 });
 
