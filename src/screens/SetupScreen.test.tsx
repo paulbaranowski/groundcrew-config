@@ -71,10 +71,12 @@ describe("SetupScreen", () => {
     await vi.waitFor(() => expect(lastFrame()).toContain("not installed"));
     stdin.write("\u001B[B");
     await vi.waitFor(() => expect(lastFrame()).toContain("▸ safehouse"));
-    // Both enters land in the same input batch, before any re-render: the
-    // second must see the acting state via the ref mirror, not the stale
-    // render closure.
-    stdin.write("\r\r");
+    // Both enters land in the same tick, before any re-render: the second
+    // must see the acting state via the ref mirror, not the stale render
+    // closure. (Two separate writes: a fused "\r\r" chunk is not parsed as
+    // two return keypresses by ink.)
+    stdin.write("\r");
+    stdin.write("\r");
     await vi.waitFor(() => expect(lastFrame()).toContain("installing…"));
     expect(installSpy).toHaveBeenCalledOnce();
     resolveInstall({ action: "installed", version: "0.9.0", details: "" });

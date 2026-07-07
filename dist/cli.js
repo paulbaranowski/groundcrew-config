@@ -1636,8 +1636,10 @@ function SetupScreen({ onBack, deps }) {
     groundcrew: { phase: "checking" },
     safehouse: d.platform === "darwin" ? { phase: "checking" } : { phase: "not-applicable" }
   });
+  const statesRef = useRef4(states);
   function setRow(id, state) {
-    setStates((prev) => ({ ...prev, [id]: state }));
+    statesRef.current = { ...statesRef.current, [id]: state };
+    setStates(statesRef.current);
   }
   const mountedRef = useRef4(true);
   useEffect3(() => {
@@ -1661,7 +1663,7 @@ function SetupScreen({ onBack, deps }) {
     setCursor(next);
   }
   function activate(id) {
-    const state = states[id];
+    const state = statesRef.current[id];
     if (state.phase !== "ready" || state.report.action !== "missing") return;
     const install = id === "groundcrew" ? d.installGroundcrew : d.installSafehouse;
     setRow(id, { phase: "acting" });
