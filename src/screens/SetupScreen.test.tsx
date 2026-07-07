@@ -55,6 +55,32 @@ describe("SetupScreen", () => {
     });
   });
 
+  it("runs a single install for a burst of enter presses in one tick", async () => {
+    const deps = stubDeps();
+    let resolveInstall: (r: InstallReport) => void = () => {};
+    const installSpy = vi.fn(
+      () =>
+        new Promise<InstallReport>((resolve) => {
+          resolveInstall = resolve;
+        }),
+    );
+    deps.installSafehouse = installSpy;
+    const { stdin, lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={deps} />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("not installed"));
+    stdin.write("\u001B[B");
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ safehouse"));
+    // Both enters land in the same input batch, before any re-render: the
+    // second must see the acting state via the ref mirror, not the stale
+    // render closure.
+    stdin.write("\r\r");
+    await vi.waitFor(() => expect(lastFrame()).toContain("installing…"));
+    expect(installSpy).toHaveBeenCalledOnce();
+    resolveInstall({ action: "installed", version: "0.9.0", details: "" });
+    await vi.waitFor(() => expect(lastFrame()).toContain("0.9.0"));
+  });
+
   it("does not re-run an install on an already-installed row", async () => {
     const deps = stubDeps();
     const installSpy = vi.fn(deps.installGroundcrew);

@@ -93,9 +93,15 @@ export function SetupScreen({ onBack, deps }: Props) {
         ? { phase: "checking" }
         : { phase: "not-applicable" },
   });
+  // Mirror the row states in a ref for the same reason ListField mirrors its
+  // cursor: a burst of keypresses delivered in one tick all share the same
+  // stale render closure, so a double-enter would read "ready" twice and
+  // start two parallel installs. activate() MUST read statesRef.current.
+  const statesRef = useRef(states);
 
   function setRow(id: InstallRow["id"], state: RowPhase): void {
-    setStates((prev) => ({ ...prev, [id]: state }));
+    statesRef.current = { ...statesRef.current, [id]: state };
+    setStates(statesRef.current);
   }
 
   // One mounted flag covers both the mount-time probes and the long-running
@@ -126,8 +132,9 @@ export function SetupScreen({ onBack, deps }: Props) {
   }
 
   function activate(id: InstallRow["id"]): void {
-    const state = states[id];
-    // Only a probed-missing row has an action; everything else is a no-op.
+    const state = statesRef.current[id];
+    // Only a probed-missing row has an action; everything else is a no-op
+    // (including "acting": a second enter mid-install must not double-run).
     if (state.phase !== "ready" || state.report.action !== "missing") return;
     const install =
       id === "groundcrew" ? d.installGroundcrew : d.installSafehouse;
