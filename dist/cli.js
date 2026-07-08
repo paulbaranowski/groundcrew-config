@@ -4,7 +4,7 @@
 import { render } from "ink";
 
 // src/app.tsx
-import { useEffect as useEffect5, useMemo as useMemo2, useRef as useRef13, useState as useState26 } from "react";
+import { useEffect as useEffect5, useMemo as useMemo2, useRef as useRef14, useState as useState26 } from "react";
 import { Box as Box32, Text as Text32, useApp, useInput as useInput30 } from "ink";
 
 // src/components/Footer.tsx
@@ -2715,7 +2715,7 @@ function QuitGuard({ onSaveQuit, onDiscard, onCancel }) {
 }
 
 // src/screens/RepositoriesForm.tsx
-import { useState as useState14 } from "react";
+import { useRef as useRef10, useState as useState14 } from "react";
 import { homedir as homedir3 } from "os";
 import { Box as Box18, Text as Text18, useInput as useInput16 } from "ink";
 
@@ -3280,23 +3280,35 @@ function RepositoriesForm({
   );
   const [discovery, setDiscovery] = useState14({ phase: "idle" });
   const runDiscovery = discover ?? ((workspaceDir) => discoverRepos(homedir3(), workspaceDir));
+  const discoveryReq = useRef10(0);
   const entries = normalizeRepos(draft.workspace.knownRepositories);
   const baseEntries = normalizeRepos(baseline.workspace.knownRepositories);
   const modified = modifiedByKey(entries, baseEntries, (entry) => entry.name);
   const errors = repoErrors(entries);
   const listActive = editing === void 0 && pendingDelete === void 0 && discovery.phase === "idle";
+  const inputActive = editing === void 0 && pendingDelete === void 0 && discovery.phase !== "picking";
   useInput16(
     (input, key) => {
+      if (discovery.phase === "loading") {
+        if (key.escape) {
+          discoveryReq.current += 1;
+          setDiscovery({ phase: "idle" });
+        }
+        return;
+      }
       if (!listActive) return;
       if (key.escape) onBack();
       if (input === "f") {
+        const req = discoveryReq.current += 1;
         setDiscovery({ phase: "loading" });
-        void runDiscovery(draft.workspace.projectDir).then(
-          (candidates) => setDiscovery({ phase: "picking", candidates })
-        );
+        void runDiscovery(draft.workspace.projectDir).then((candidates) => {
+          if (discoveryReq.current === req) {
+            setDiscovery({ phase: "picking", candidates });
+          }
+        });
       }
     },
-    { isActive: listActive }
+    { isActive: inputActive }
   );
   function commitEntries(next) {
     onChange(
@@ -3366,7 +3378,7 @@ function RepositoriesForm({
   if (discovery.phase === "loading") {
     return /* @__PURE__ */ jsxs18(Box18, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
       /* @__PURE__ */ jsx18(Text18, { bold: true, children: "Repositories" }),
-      /* @__PURE__ */ jsx18(Box18, { marginTop: 1, children: /* @__PURE__ */ jsx18(Text18, { dimColor: true, children: "discovering repos (gh + local scan)\u2026" }) })
+      /* @__PURE__ */ jsx18(Box18, { marginTop: 1, children: /* @__PURE__ */ jsx18(Text18, { dimColor: true, children: "discovering repos (gh + local scan)\u2026 esc to cancel." }) })
     ] });
   }
   const items = entries.map((entry, index) => ({
@@ -3525,7 +3537,7 @@ function SectionForm({
 }
 
 // src/screens/TaskSourcesMenu.tsx
-import { useEffect as useEffect4, useRef as useRef12, useState as useState23 } from "react";
+import { useEffect as useEffect4, useRef as useRef13, useState as useState23 } from "react";
 import { Box as Box29, Text as Text29, useInput as useInput27 } from "ink";
 
 // src/domain/manifestSources.ts
@@ -3828,7 +3840,7 @@ function LinearForm({
 }
 
 // src/screens/ManifestSourceForm.tsx
-import { useRef as useRef10, useState as useState18 } from "react";
+import { useRef as useRef11, useState as useState18 } from "react";
 import { Box as Box23, Text as Text23, useInput as useInput21 } from "ink";
 
 // src/io/prereqProbes.ts
@@ -3991,7 +4003,7 @@ function ManifestSourceForm({
   const [editingEnv, setEditingEnv] = useState18(false);
   const maxRow = enabled ? 1 : 0;
   const row2 = Math.min(focus, maxRow);
-  const rowRef = useRef10(row2);
+  const rowRef = useRef11(row2);
   rowRef.current = row2;
   const [prereqs] = useState18(
     () => (manifest?.prerequisites ?? []).map((p) => ({
@@ -4188,7 +4200,7 @@ import { useState as useState21 } from "react";
 import { Box as Box27, Text as Text27, useInput as useInput25 } from "ink";
 
 // src/screens/ShellSourceSubForm.tsx
-import { useRef as useRef11, useState as useState20 } from "react";
+import { useRef as useRef12, useState as useState20 } from "react";
 import { Box as Box26, Text as Text26, useInput as useInput24 } from "ink";
 
 // src/screens/ShellSandboxPathsEditor.tsx
@@ -4323,7 +4335,7 @@ function ShellSourceSubForm({
   const [active, setActive] = useState20(0);
   const [mode, setMode] = useState20("fields");
   const guard = useEditGuard();
-  const activeRef = useRef11(0);
+  const activeRef = useRef12(0);
   function moveActive(next) {
     activeRef.current = next;
     setActive(next);
@@ -4586,7 +4598,7 @@ function TaskSourcesMenu({
   const [sub, setSub] = useState23("hub");
   const [catalog, setCatalog] = useState23([]);
   const [cursor, setCursor] = useState23(0);
-  const cursorRef = useRef12(0);
+  const cursorRef = useRef13(0);
   useEffect4(() => {
     let alive = true;
     void loadCatalog().then((entries) => {
@@ -4843,15 +4855,15 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoct
   const [shadowed, setShadowed] = useState26([]);
   const [quitting, setQuitting] = useState26(false);
   const [doctorOffer, setDoctorOffer] = useState26("hidden");
-  const doctorOfferRef = useRef13("hidden");
+  const doctorOfferRef = useRef14("hidden");
   const [doctorResult, setDoctorResult] = useState26(
     null
   );
-  const routeRef = useRef13(route);
+  const routeRef = useRef14(route);
   useEffect5(() => {
     routeRef.current = route;
   }, [route]);
-  const appMountedRef = useRef13(true);
+  const appMountedRef = useRef14(true);
   useEffect5(() => {
     appMountedRef.current = true;
     return () => {

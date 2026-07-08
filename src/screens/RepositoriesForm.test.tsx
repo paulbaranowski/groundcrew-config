@@ -3,6 +3,7 @@ import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { RepositoriesForm } from "./RepositoriesForm.tsx";
 import type { ConfigDraft } from "../domain/types.ts";
+import type { DiscoveredRepo } from "../domain/setup/repoDiscovery.ts";
 
 const draft = {
   workspace: {
@@ -215,6 +216,38 @@ test("esc from the picker returns to the list without changes", async () => {
   await vi.waitFor(() => expect(lastFrame()).toContain("Discovered"));
   stdin.write("\x1b");
   await vi.waitFor(() => expect(lastFrame()).toContain("Repositories"));
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test("esc during discovery loading returns to the list and ignores a late result", async () => {
+  let resolveDiscovery!: (repos: DiscoveredRepo[]) => void;
+  const discover = vi.fn(
+    () =>
+      new Promise<DiscoveredRepo[]>((resolve) => {
+        resolveDiscovery = resolve;
+      }),
+  );
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  stdin.write("f");
+  await vi.waitFor(() => expect(lastFrame()).toContain("discovering repos"));
+  stdin.write("\x1b"); // cancel the in-flight scan
+  await vi.waitFor(() => expect(lastFrame()).not.toContain("discovering repos"));
+  // A scan that resolves after the user backed out must not pop the picker.
+  resolveDiscovery([{ owner: "a", repo: "r", sources: ["gh"] }]);
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  expect(lastFrame()).not.toContain("Discovered repositories");
   expect(onChange).not.toHaveBeenCalled();
 });
 

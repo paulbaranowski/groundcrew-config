@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { homedir } from "node:os";
 import { Box, Text, useInput } from "ink";
 import { ListField, type ListItem } from "../components/ListField.tsx";
@@ -49,30 +49,48 @@ export function RepositoriesForm({
   >({ phase: "idle" });
   const runDiscovery =
     discover ?? ((workspaceDir) => discoverRepos(homedir(), workspaceDir));
+  // Monotonic id of the in-flight discovery. Esc during loading bumps it so a
+  // late-resolving scan can't pop the picker after the user backed out.
+  const discoveryReq = useRef(0);
   const entries = normalizeRepos(draft.workspace.knownRepositories);
   const baseEntries = normalizeRepos(baseline.workspace.knownRepositories);
   const modified = modifiedByKey(entries, baseEntries, (entry) => entry.name);
   const errors = repoErrors(entries);
 
-  // Esc-to-back and the discovery trigger are live only on the bare list — not
-  // while a sub-editor, the delete confirmation, or discovery owns input (the
-  // DeleteGuard and the picker handle their own esc).
+  // Esc-to-back and the `f` discovery trigger are live only on the bare list.
+  // The handler itself stays active through `loading` too (so esc can cancel a
+  // slow scan), but goes quiet while a sub-editor, the delete confirmation, or
+  // the picker owns input - each of those handles its own esc.
   const listActive =
     editing === undefined &&
     pendingDelete === undefined &&
     discovery.phase === "idle";
+  const inputActive =
+    editing === undefined &&
+    pendingDelete === undefined &&
+    discovery.phase !== "picking";
   useInput(
     (input, key) => {
+      if (discovery.phase === "loading") {
+        if (key.escape) {
+          discoveryReq.current += 1;
+          setDiscovery({ phase: "idle" });
+        }
+        return;
+      }
       if (!listActive) return;
       if (key.escape) onBack();
       if (input === "f") {
+        const req = (discoveryReq.current += 1);
         setDiscovery({ phase: "loading" });
-        void runDiscovery(draft.workspace.projectDir).then((candidates) =>
-          setDiscovery({ phase: "picking", candidates }),
-        );
+        void runDiscovery(draft.workspace.projectDir).then((candidates) => {
+          if (discoveryReq.current === req) {
+            setDiscovery({ phase: "picking", candidates });
+          }
+        });
       }
     },
-    { isActive: listActive },
+    { isActive: inputActive },
   );
 
   function commitEntries(next: RepoEntry[]): void {
@@ -151,7 +169,7 @@ export function RepositoriesForm({
       <Box flexDirection="column" borderStyle="round" paddingX={1}>
         <Text bold>Repositories</Text>
         <Box marginTop={1}>
-          <Text dimColor>discovering repos (gh + local scan)…</Text>
+          <Text dimColor>discovering repos (gh + local scan)… esc to cancel.</Text>
         </Box>
       </Box>
     );
