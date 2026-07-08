@@ -24,7 +24,7 @@
     "prepublishOnly": "npm run verify"
   },
   "dependencies": {
-    "@clipboard-health/groundcrew": "^4.46.3",
+    "@clipboard-health/groundcrew": "^4.46.4",
     "cosmiconfig": "^9.0.0",
     "ink": "^6.0.0",
     "react": "^19.0.0"
