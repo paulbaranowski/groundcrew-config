@@ -89,11 +89,17 @@ export function RepositoriesForm({
       if (input === "f") {
         const req = (discoveryReq.current += 1);
         setDiscovery({ phase: "loading" });
-        void runDiscovery(draft.workspace.projectDir).then((candidates) => {
+        const settle = (candidates: DiscoveredRepo[]): void => {
           if (discoveryReq.current === req) {
             setDiscovery({ phase: "picking", candidates });
           }
-        });
+        };
+        // I7: discovery is best-effort. A rejection is a silent non-result, not
+        // an error - fall through to the picker's empty state rather than
+        // stranding the loading view or leaking an unhandled rejection.
+        void runDiscovery(draft.workspace.projectDir).then(settle, () =>
+          settle([]),
+        );
       }
     },
     { isActive: inputActive },

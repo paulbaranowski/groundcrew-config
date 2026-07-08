@@ -236,6 +236,32 @@ test("picking two owners of the same folder name commits a single entry", async 
   ]);
 });
 
+test("a rejected discovery lands on the picker's empty state, not stuck loading", async () => {
+  const discover = vi.fn(() =>
+    Promise.reject(new Error("gh exploded")),
+  ) as unknown as (w: string | undefined) => Promise<DiscoveredRepo[]>;
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  stdin.write("f");
+  // I7: the failure is silent - the picker opens with no candidates rather than
+  // stranding the loading view.
+  await vi.waitFor(() => expect(lastFrame()).toContain("nothing found"));
+  expect(lastFrame()).not.toContain("discovering repos");
+  expect(onChange).not.toHaveBeenCalled();
+});
+
 test("esc from the picker returns to the list without changes", async () => {
   const discover = vi.fn(() =>
     Promise.resolve([{ owner: "a", repo: "r", sources: ["gh" as const] }]),

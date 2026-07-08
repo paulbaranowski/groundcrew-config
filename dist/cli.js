@@ -3314,11 +3314,15 @@ function RepositoriesForm({
       if (input === "f") {
         const req = discoveryReq.current += 1;
         setDiscovery({ phase: "loading" });
-        void runDiscovery(draft.workspace.projectDir).then((candidates) => {
+        const settle = (candidates) => {
           if (discoveryReq.current === req) {
             setDiscovery({ phase: "picking", candidates });
           }
-        });
+        };
+        void runDiscovery(draft.workspace.projectDir).then(
+          settle,
+          () => settle([])
+        );
       }
     },
     { isActive: inputActive }
