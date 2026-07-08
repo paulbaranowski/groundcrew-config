@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { homedir } from "node:os";
 import { Box, Text, useInput } from "ink";
 import { ListField, type ListItem } from "../components/ListField.tsx";
 import { modifiedByKey } from "../domain/modified.ts";
@@ -11,7 +12,10 @@ import {
 } from "../domain/repoEntries.ts";
 import { setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
+import type { DiscoveredRepo } from "../domain/setup/repoDiscovery.ts";
+import { discoverRepos } from "../io/setup/discoverRepos.ts";
 import { RepoSubForm } from "./RepoSubForm.tsx";
+import { RepoDiscoveryPicker } from "./RepoDiscoveryPicker.tsx";
 import { DeleteGuard } from "./DeleteGuard.tsx";
 
 interface Props {
@@ -20,6 +24,8 @@ interface Props {
   baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
+  /** Injectable for tests; defaults to the real gh+local discovery (F6). */
+  discover?: (workspaceDir: string | undefined) => Promise<DiscoveredRepo[]>;
 }
 
 // Section editor for workspace.knownRepositories: a ListField of repo entries
@@ -30,23 +36,41 @@ export function RepositoriesForm({
   baseline,
   onChange,
   onBack,
+  discover,
 }: Props) {
   const [editing, setEditing] = useState<number | undefined>(undefined);
   const [pendingDelete, setPendingDelete] = useState<number | undefined>(
     undefined,
   );
+  const [discovery, setDiscovery] = useState<
+    | { phase: "idle" }
+    | { phase: "loading" }
+    | { phase: "picking"; candidates: DiscoveredRepo[] }
+  >({ phase: "idle" });
+  const runDiscovery =
+    discover ?? ((workspaceDir) => discoverRepos(homedir(), workspaceDir));
   const entries = normalizeRepos(draft.workspace.knownRepositories);
   const baseEntries = normalizeRepos(baseline.workspace.knownRepositories);
   const modified = modifiedByKey(entries, baseEntries, (entry) => entry.name);
   const errors = repoErrors(entries);
 
-  // Esc-to-back is live only on the bare list — not while a sub-editor or the
-  // delete confirmation owns input (the DeleteGuard handles its own esc).
-  const listActive = editing === undefined && pendingDelete === undefined;
+  // Esc-to-back and the discovery trigger are live only on the bare list — not
+  // while a sub-editor, the delete confirmation, or discovery owns input (the
+  // DeleteGuard and the picker handle their own esc).
+  const listActive =
+    editing === undefined &&
+    pendingDelete === undefined &&
+    discovery.phase === "idle";
   useInput(
-    (_input, key) => {
+    (input, key) => {
       if (!listActive) return;
       if (key.escape) onBack();
+      if (input === "f") {
+        setDiscovery({ phase: "loading" });
+        void runDiscovery(draft.workspace.projectDir).then((candidates) =>
+          setDiscovery({ phase: "picking", candidates }),
+        );
+      }
     },
     { isActive: listActive },
   );
@@ -98,6 +122,41 @@ export function RepositoriesForm({
     );
   }
 
+  if (discovery.phase === "picking") {
+    return (
+      <RepoDiscoveryPicker
+        candidates={discovery.candidates}
+        existingNames={new Set(entries.map((e) => e.name))}
+        onCommit={(names) => {
+          if (names.length > 0) {
+            // Append as minimal entries; denormalizeRepos keeps them as bare
+            // strings, and existing entries (with their per-repo settings)
+            // pass through untouched.
+            commitEntries([
+              ...entries,
+              ...names.map((name) => ({
+                name,
+                projectDirOverride: undefined,
+              })),
+            ]);
+          }
+          setDiscovery({ phase: "idle" });
+        }}
+        onCancel={() => setDiscovery({ phase: "idle" })}
+      />
+    );
+  }
+  if (discovery.phase === "loading") {
+    return (
+      <Box flexDirection="column" borderStyle="round" paddingX={1}>
+        <Text bold>Repositories</Text>
+        <Box marginTop={1}>
+          <Text dimColor>discovering repos (gh + local scan)…</Text>
+        </Box>
+      </Box>
+    );
+  }
+
   const items: ListItem[] = entries.map((entry, index) => ({
     label: entry.name,
     note: entry.projectDirOverride
@@ -139,7 +198,7 @@ export function RepositoriesForm({
         <Text dimColor>
           The repos groundcrew is allowed to work on, listed by their local
           folder name (each must already exist under your projectDir). ↑/↓ move ·
-          enter edit · c duplicate · d delete (confirm) · esc back.
+          enter edit · c duplicate · d delete (confirm) · f discover · esc back.
         </Text>
       </Box>
     </Box>

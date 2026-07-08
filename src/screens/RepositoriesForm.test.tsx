@@ -149,6 +149,75 @@ test("c commits the copy immediately; esc returns to a list holding both repos",
   expect(lastFrame()).toContain("maple-copy");
 });
 
+test("f runs discovery and merges picked repos without duplicates", async () => {
+  const discover = vi.fn(() =>
+    Promise.resolve([
+      { owner: "acme", repo: "widgets", sources: ["gh" as const] },
+      { owner: "acme", repo: "existing-repo", sources: ["local" as const] },
+    ]),
+  );
+  const onChange = vi.fn();
+  // Draft fixture: knownRepositories already holds "existing-repo" (as the
+  // object form with a projectDirOverride, to prove settings are preserved).
+  const draft = {
+    workspace: {
+      projectDir: "~/dev",
+      knownRepositories: [
+        { name: "existing-repo", projectDirOverride: "/elsewhere" },
+      ],
+    },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("existing-repo"));
+  stdin.write("f");
+  await vi.waitFor(() => {
+    expect(discover).toHaveBeenCalledWith("~/dev");
+    expect(lastFrame()).toContain("Discovered repositories");
+  });
+  // Select acme/widgets (first row) and commit.
+  stdin.write(" ");
+  await vi.waitFor(() => expect(lastFrame()).toContain("[x] acme/widgets"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+  const next = onChange.mock.calls[0]![0];
+  expect(next.workspace.knownRepositories).toEqual([
+    { name: "existing-repo", projectDirOverride: "/elsewhere" },
+    "widgets",
+  ]);
+});
+
+test("esc from the picker returns to the list without changes", async () => {
+  const discover = vi.fn(() =>
+    Promise.resolve([{ owner: "a", repo: "r", sources: ["gh" as const] }]),
+  );
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  stdin.write("f");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Discovered"));
+  stdin.write("\x1b");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Repositories"));
+  expect(onChange).not.toHaveBeenCalled();
+});
+
 test("marks a changed repo entry with ●", () => {
   const baseline = {
     workspace: { projectDir: "~/dev", knownRepositories: ["a", "b"] },
