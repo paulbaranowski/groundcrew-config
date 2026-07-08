@@ -1,14 +1,14 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import {
-  isLinearEnabled,
-  isPlanKeeperEnabled,
-  isTodoTxtEnabled,
-  shellSourceNames,
-  taskSourceModified,
-} from "../domain/sources.ts";
+  hubRows,
+  type CatalogSource,
+  type HubRoute,
+} from "../domain/manifestSources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
+import { loadSourceCatalog } from "../io/sourceCatalog.ts";
 import { LinearForm } from "./LinearForm.tsx";
+import { ManifestSourceForm } from "./ManifestSourceForm.tsx";
 import { PlanKeeperForm } from "./PlanKeeperForm.tsx";
 import { ShellSourcesForm } from "./ShellSourcesForm.tsx";
 import { TodoTxtForm } from "./TodoTxtForm.tsx";
@@ -19,24 +19,30 @@ interface Props {
   baseline: ConfigDraft;
   onChange: (next: ConfigDraft) => void;
   onBack: () => void;
+  /** Injected for testability; defaults to the real groundcrew catalog. */
+  loadCatalog?: () => Promise<CatalogSource[]>;
 }
 
-type Sub = "hub" | "linear" | "todoTxt" | "planKeeper" | "shell";
-const ROWS: Array<Exclude<Sub, "hub">> = [
-  "linear",
-  "todoTxt",
-  "planKeeper",
-  "shell",
-];
-
 /**
- * Hub for the taskSources section: owns sub-routing to LinearForm, TodoTxtForm,
- * PlanKeeperForm, and ShellSourcesForm via its `Sub` union and `ROWS`. To add a
- * task-source screen, extend `Sub`/`ROWS` and the dispatch here — not app.tsx,
- * which only routes the `taskSources` SectionId to this hub.
+ * Hub for the taskSources section. Its rows are catalog-driven: the builtins
+ * (Linear, todo-txt) plus every source groundcrew's open registry discovers
+ * (jira, anything under ~/.config/groundcrew/task-sources), plus the PlanKeeper
+ * preset and the shell builder. Row derivation lives in `hubRows`
+ * (domain/manifestSources.ts); the catalog loads asynchronously on mount and
+ * until (or unless — old groundcrew) it resolves, the static builtin rows
+ * render alone, which is exactly the pre-catalog hub. Bespoke screens keep
+ * their sub-routes; discovered kinds all route to the generic
+ * ManifestSourceForm.
  */
-export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
-  const [sub, setSub] = useState<Sub>("hub");
+export function TaskSourcesMenu({
+  draft,
+  baseline,
+  onChange,
+  onBack,
+  loadCatalog = loadSourceCatalog,
+}: Props) {
+  const [sub, setSub] = useState<HubRoute | "hub">("hub");
+  const [catalog, setCatalog] = useState<CatalogSource[]>([]);
   const [cursor, setCursor] = useState(0);
   // Mirror the cursor in a ref so a down+enter burst in one render opens the
   // latest row. The useInput handler MUST read `cursorRef.current`, never the
@@ -44,6 +50,36 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
   // stale closure, so reading `cursor` would open the pre-burst row. Do not
   // "simplify" the ref away.
   const cursorRef = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    void loadCatalog()
+      .then((entries) => {
+        if (!alive) return;
+        // Discovered rows insert between the builtins and PlanKeeper/Shell, so
+        // a cursor parked below the insertion point would silently retarget.
+        // Remap it by row label (labels don't depend on the moving draft) so
+        // the highlighted row keeps its identity when the catalog lands.
+        const before = hubRows([], draft, baseline).map((r) => r.label);
+        const after = hubRows(entries, draft, baseline).map((r) => r.label);
+        const current = before[cursorRef.current];
+        const remapped = current === undefined ? -1 : after.indexOf(current);
+        if (remapped >= 0) moveCursor(remapped);
+        setCatalog(entries);
+      })
+      // loadSourceCatalog never rejects, but the loader is an injectable prop —
+      // don't let a rejecting substitute become an unhandled rejection.
+      .catch(() => {
+        if (alive) setCatalog([]);
+      });
+    return () => {
+      alive = false;
+    };
+    // draft/baseline are deliberately not deps: the effect runs once on mount,
+    // and row *labels* (all the remap reads) don't change with draft edits.
+  }, [loadCatalog]);
+
+  const rows = hubRows(catalog, draft, baseline);
 
   function moveCursor(next: number): void {
     cursorRef.current = next;
@@ -55,11 +91,11 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
       if (sub !== "hub") return;
       if (key.escape) onBack();
       if (key.downArrow)
-        moveCursor(Math.min(ROWS.length - 1, cursorRef.current + 1));
+        moveCursor(Math.min(rows.length - 1, cursorRef.current + 1));
       if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
       if (key.return) {
-        const next = ROWS[cursorRef.current];
-        if (next) setSub(next);
+        const next = rows[cursorRef.current];
+        if (next) setSub(next.route);
       }
     },
     { isActive: sub === "hub" },
@@ -67,86 +103,60 @@ export function TaskSourcesMenu({ draft, baseline, onChange, onBack }: Props) {
 
   const back = () => setSub("hub");
 
-  if (sub === "linear")
+  if (sub !== "hub") {
+    if (sub.screen === "linear")
+      return (
+        <LinearForm
+          draft={draft}
+          baseline={baseline}
+          onChange={onChange}
+          onBack={back}
+        />
+      );
+    if (sub.screen === "todoTxt")
+      return (
+        <TodoTxtForm
+          draft={draft}
+          baseline={baseline}
+          onChange={onChange}
+          onBack={back}
+        />
+      );
+    if (sub.screen === "planKeeper")
+      return (
+        <PlanKeeperForm
+          draft={draft}
+          baseline={baseline}
+          onChange={onChange}
+          onBack={back}
+        />
+      );
+    if (sub.screen === "shell")
+      return (
+        <ShellSourcesForm
+          draft={draft}
+          baseline={baseline}
+          onChange={onChange}
+          onBack={back}
+        />
+      );
     return (
-      <LinearForm
+      <ManifestSourceForm
+        source={sub.source}
         draft={draft}
         baseline={baseline}
         onChange={onChange}
         onBack={back}
       />
     );
-  if (sub === "todoTxt")
-    return (
-      <TodoTxtForm
-        draft={draft}
-        baseline={baseline}
-        onChange={onChange}
-        onBack={back}
-      />
-    );
-  if (sub === "planKeeper")
-    return (
-      <PlanKeeperForm
-        draft={draft}
-        baseline={baseline}
-        onChange={onChange}
-        onBack={back}
-      />
-    );
-  if (sub === "shell")
-    return (
-      <ShellSourcesForm
-        draft={draft}
-        baseline={baseline}
-        onChange={onChange}
-        onBack={back}
-      />
-    );
-
-  const modified = taskSourceModified(draft, baseline);
-  const rows: Array<{
-    id: Sub;
-    label: string;
-    status: string;
-    modified: boolean;
-  }> = [
-    {
-      id: "linear",
-      label: "Linear",
-      status: isLinearEnabled(draft) ? "enabled" : "disabled",
-      modified: modified.linear,
-    },
-    {
-      id: "todoTxt",
-      label: "todo-txt",
-      status: isTodoTxtEnabled(draft) ? "enabled" : "disabled",
-      modified: modified.todoTxt,
-    },
-    {
-      id: "planKeeper",
-      label: "PlanKeeper",
-      status: isPlanKeeperEnabled(draft) ? "enabled" : "disabled",
-      modified: modified.planKeeper,
-    },
-    {
-      id: "shell",
-      label: "Shell sources",
-      // Names (joined) instead of a bare count so the row can be scanned without
-      // descending into the sub-form to see which sources are configured. Matches
-      // the Home summary's shape (`sections.ts` → taskSources case).
-      // `[].join(", ")` is "", so the `|| "none"` covers the empty case.
-      status: shellSourceNames(draft).join(", ") || "none",
-      modified: modified.shell,
-    },
-  ];
+  }
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Task Sources</Text>
       <Box marginTop={1} flexDirection="column">
         {rows.map((row, index) => (
-          <Box key={row.id}>
+          <Box key={row.label}>
             <Text color={cursor === index ? "cyan" : undefined}>
               {cursor === index ? "▸ " : "  "}
             </Text>
