@@ -3365,14 +3365,15 @@ function RepositoriesForm({
         candidates: discovery.candidates,
         existingNames: new Set(entries.map((e) => e.name)),
         onCommit: (names) => {
-          if (names.length > 0) {
-            commitEntries([
-              ...entries,
-              ...names.map((name) => ({
-                name,
-                projectDirOverride: void 0
-              }))
-            ]);
+          const seen = new Set(entries.map((e) => e.name));
+          const additions = [];
+          for (const name of names) {
+            if (seen.has(name)) continue;
+            seen.add(name);
+            additions.push({ name, projectDirOverride: void 0 });
+          }
+          if (additions.length > 0) {
+            commitEntries([...entries, ...additions]);
           }
           setDiscovery({ phase: "idle" });
         },

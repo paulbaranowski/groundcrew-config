@@ -195,6 +195,44 @@ test("f runs discovery and merges picked repos without duplicates", async () => 
   ]);
 });
 
+test("picking two owners of the same folder name commits a single entry", async () => {
+  const discover = vi.fn(() =>
+    Promise.resolve([
+      { owner: "acme", repo: "widgets", sources: ["gh" as const] },
+      { owner: "fork", repo: "widgets", sources: ["local" as const] },
+    ]),
+  );
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  stdin.write("f");
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("Discovered repositories"),
+  );
+  stdin.write(" "); // select acme/widgets
+  await vi.waitFor(() => expect(lastFrame()).toContain("[x] acme/widgets"));
+  stdin.write("\x1b[B"); // down to fork/widgets
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] fork/widgets"));
+  stdin.write(" "); // select fork/widgets too
+  await vi.waitFor(() => expect(lastFrame()).toContain("[x] fork/widgets"));
+  stdin.write("\r"); // commit both
+  await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+  // Both rows share the folder name "widgets"; only one entry is committed.
+  expect(onChange.mock.calls[0]![0].workspace.knownRepositories).toEqual([
+    "widgets",
+  ]);
+});
+
 test("esc from the picker returns to the list without changes", async () => {
   const discover = vi.fn(() =>
     Promise.resolve([{ owner: "a", repo: "r", sources: ["gh" as const] }]),

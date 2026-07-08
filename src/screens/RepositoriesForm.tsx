@@ -154,17 +154,22 @@ export function RepositoriesForm({
         candidates={discovery.candidates}
         existingNames={new Set(entries.map((e) => e.name))}
         onCommit={(names) => {
-          if (names.length > 0) {
-            // Append as minimal entries; denormalizeRepos keeps them as bare
-            // strings, and existing entries (with their per-repo settings)
-            // pass through untouched.
-            commitEntries([
-              ...entries,
-              ...names.map((name) => ({
-                name,
-                projectDirOverride: undefined,
-              })),
-            ]);
+          // Discovery keys candidates on owner/repo, but knownRepositories keys
+          // on folder name alone - so two picked rows (acme/widgets,
+          // fork/widgets) collapse to one entry. Dedupe by name against the
+          // existing entries and within the batch so a commit can never append
+          // a duplicate that would immediately flag a duplicate-name error.
+          const seen = new Set(entries.map((e) => e.name));
+          const additions: RepoEntry[] = [];
+          for (const name of names) {
+            if (seen.has(name)) continue;
+            seen.add(name);
+            additions.push({ name, projectDirOverride: undefined });
+          }
+          if (additions.length > 0) {
+            // Existing entries (with their per-repo settings) pass through
+            // untouched; denormalizeRepos keeps the additions as bare strings.
+            commitEntries([...entries, ...additions]);
           }
           setDiscovery({ phase: "idle" });
         }}
