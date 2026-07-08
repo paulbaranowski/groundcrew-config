@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { homedir } from "node:os";
 import { Box, Text, useInput } from "ink";
+import { RC_SNIPPET } from "../domain/setup/clearance.ts";
+import type { RcMatch } from "../domain/setup/rcScan.ts";
+import { runCrewDoctor, type CrewDoctorResult } from "../io/setup/crewDoctor.ts";
 import {
   defaultInstallDeps,
   installGroundcrew,
@@ -8,15 +12,35 @@ import {
   probeSafehouseFormula,
   type InstallReport,
 } from "../io/setup/installs.ts";
+import {
+  probeClearance,
+  probeSafehouse,
+  type ClearanceStatus,
+  type SafehouseStatus,
+} from "../io/setup/probes.ts";
+import {
+  writeClearanceHosts,
+  writeClearanceSidecar,
+  writeSafehouseSidecar,
+  type HostsWriteResult,
+  type SidecarWriteResult,
+} from "../io/setup/sidecars.ts";
+import { CrewDoctorView } from "./CrewDoctorView.tsx";
 
 // Every effect is injected so tests drive the screen with stubs and no real
-// npm/brew, mirroring how App takes initialDraft/target.
+// npm/brew/filesystem, mirroring how App takes initialDraft/target.
 export interface SetupScreenDeps {
   platform: string;
   probeGroundcrew: () => Promise<InstallReport>;
   installGroundcrew: () => Promise<InstallReport>;
   probeSafehouse: () => Promise<InstallReport>;
   installSafehouse: () => Promise<InstallReport>;
+  probeClearance: () => Promise<ClearanceStatus>;
+  probeSafehouseSetup: () => Promise<SafehouseStatus>;
+  writeHosts: () => HostsWriteResult;
+  writeClearance: () => SidecarWriteResult;
+  writeSafehouse: () => SidecarWriteResult;
+  runCrewDoctor: () => Promise<CrewDoctorResult>;
 }
 
 export function defaultSetupScreenDeps(): SetupScreenDeps {
@@ -27,6 +51,12 @@ export function defaultSetupScreenDeps(): SetupScreenDeps {
     installGroundcrew: () => installGroundcrew(installDeps),
     probeSafehouse: () => probeSafehouseFormula(installDeps),
     installSafehouse: () => installSafehouse(installDeps),
+    probeClearance: () => Promise.resolve(probeClearance(homedir())),
+    probeSafehouseSetup: () => probeSafehouse(homedir()),
+    writeHosts: () => writeClearanceHosts(homedir(), "append"),
+    writeClearance: () => writeClearanceSidecar(homedir()),
+    writeSafehouse: () => writeSafehouseSidecar(homedir()),
+    runCrewDoctor: () => runCrewDoctor(),
   };
 }
 
@@ -36,13 +66,21 @@ type RowPhase =
   | { phase: "ready"; report: InstallReport }
   | { phase: "not-applicable" };
 
-interface InstallRow {
-  id: "groundcrew" | "safehouse";
+type InstallRowId = "groundcrew" | "safehouse";
+type SidecarRowId =
+  | "clearanceHosts"
+  | "clearanceSidecar"
+  | "safehouseSidecar"
+  | "crewDoctor";
+type RowId = InstallRowId | SidecarRowId;
+
+interface Row {
+  id: RowId;
   label: string;
   detail: string;
 }
 
-const ROWS: InstallRow[] = [
+const ROWS: Row[] = [
   {
     id: "groundcrew",
     label: "groundcrew",
@@ -53,9 +91,32 @@ const ROWS: InstallRow[] = [
     label: "safehouse",
     detail: "brew eugene1g/safehouse/agent-safehouse (macOS sandbox)",
   },
+  {
+    id: "clearanceHosts",
+    label: "clearance hosts",
+    detail: "~/.config/clearance/personal-allow-hosts (personal egress allowlist)",
+  },
+  {
+    id: "clearanceSidecar",
+    label: "clearance env.sh",
+    detail: "~/.config/clearance/env.sh (env sidecar; sourced from your rc)",
+  },
+  {
+    id: "safehouseSidecar",
+    label: "safehouse env.sh",
+    detail: "~/.config/agent-safehouse/env.sh (safe/safe-claude wrappers)",
+  },
+  {
+    id: "crewDoctor",
+    label: "run crew doctor",
+    detail: "groundcrew's own health check (read-only)",
+  },
 ];
 
-function rowText(state: RowPhase): string {
+const isInstallRow = (id: RowId): id is InstallRowId =>
+  id === "groundcrew" || id === "safehouse";
+
+function installRowText(state: RowPhase): string {
   switch (state.phase) {
     case "checking":
       return "checking…";
@@ -81,12 +142,13 @@ interface Props {
 
 // Doctor-style screen: probe everything up front, show per-row state, and let
 // the user fix only what is broken. Mutations happen only on enter;
-// re-running an install is a reported no-op.
+// re-running any fix is a reported no-op (I2), and rc files are only ever
+// read (I3) - the sourcing snippet below the rows is a user instruction (N3).
 export function SetupScreen({ onBack, deps }: Props) {
   const d = useRef(deps ?? defaultSetupScreenDeps()).current;
   const [cursor, setCursor] = useState(0);
   const cursorRef = useRef(0);
-  const [states, setStates] = useState<Record<InstallRow["id"], RowPhase>>({
+  const [states, setStates] = useState<Record<InstallRowId, RowPhase>>({
     groundcrew: { phase: "checking" },
     safehouse:
       d.platform === "darwin"
@@ -99,13 +161,39 @@ export function SetupScreen({ onBack, deps }: Props) {
   // start two parallel installs. activate() MUST read statesRef.current.
   const statesRef = useRef(states);
 
-  function setRow(id: InstallRow["id"], state: RowPhase): void {
+  const [clearance, setClearance] = useState<ClearanceStatus | null>(null);
+  const [safehouseSetup, setSafehouseSetup] = useState<SafehouseStatus | null>(
+    null,
+  );
+  // Same burst rule for the sidecar rows: busyRef guards double-enter.
+  const [busy, setBusy] = useState<Record<SidecarRowId, boolean>>({
+    clearanceHosts: false,
+    clearanceSidecar: false,
+    safehouseSidecar: false,
+    crewDoctor: false,
+  });
+  const busyRef = useRef(busy);
+  const [conflicts, setConflicts] = useState<{
+    clearanceSidecar: RcMatch[];
+    safehouseSidecar: RcMatch[];
+  }>({ clearanceSidecar: [], safehouseSidecar: [] });
+  const [doctorResult, setDoctorResult] = useState<CrewDoctorResult | null>(
+    null,
+  );
+  const doctorRef = useRef<CrewDoctorResult | null>(null);
+
+  function setRow(id: InstallRowId, state: RowPhase): void {
     statesRef.current = { ...statesRef.current, [id]: state };
     setStates(statesRef.current);
   }
 
+  function setBusyRow(id: SidecarRowId, value: boolean): void {
+    busyRef.current = { ...busyRef.current, [id]: value };
+    setBusy(busyRef.current);
+  }
+
   // One mounted flag covers both the mount-time probes and the long-running
-  // install actions (INSTALL_TIMEOUT_MS is 10 minutes): a resolution landing
+  // actions (installs and crew doctor can take minutes): a resolution landing
   // after the user esc'd away must not call setState on the unmounted screen.
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -123,7 +211,13 @@ export function SetupScreen({ onBack, deps }: Props) {
       void d.probeSafehouse().then((report) => {
         if (mountedRef.current) setRow("safehouse", { phase: "ready", report });
       });
+      void d.probeSafehouseSetup().then((status) => {
+        if (mountedRef.current) setSafehouseSetup(status);
+      });
     }
+    void d.probeClearance().then((status) => {
+      if (mountedRef.current) setClearance(status);
+    });
   }, [d]);
 
   function moveCursor(next: number): void {
@@ -131,7 +225,7 @@ export function SetupScreen({ onBack, deps }: Props) {
     setCursor(next);
   }
 
-  function activate(id: InstallRow["id"]): void {
+  function activateInstall(id: InstallRowId): void {
     const state = statesRef.current[id];
     // "acting"/"checking"/"not-applicable" rows have no action (a second
     // enter mid-install must not double-run).
@@ -156,7 +250,59 @@ export function SetupScreen({ onBack, deps }: Props) {
     });
   }
 
+  function activateSidecar(id: SidecarRowId): void {
+    if (busyRef.current[id]) return;
+    if (
+      id === "safehouseSidecar" &&
+      d.platform !== "darwin" // N4: no action off macOS
+    ) {
+      return;
+    }
+    setBusyRow(id, true);
+    if (id === "crewDoctor") {
+      void d.runCrewDoctor().then((result) => {
+        if (!mountedRef.current) return;
+        doctorRef.current = result;
+        setDoctorResult(result);
+        setBusyRow(id, false);
+      });
+      return;
+    }
+    // The writes are synchronous and idempotent (I2); the re-probe that
+    // follows refreshes the affected row so the state text reflects disk.
+    if (id === "clearanceHosts") {
+      d.writeHosts();
+    } else if (id === "clearanceSidecar") {
+      const result = d.writeClearance();
+      setConflicts((prev) => ({
+        ...prev,
+        clearanceSidecar: result.rcConflicts,
+      }));
+    } else {
+      const result = d.writeSafehouse();
+      setConflicts((prev) => ({
+        ...prev,
+        safehouseSidecar: result.rcConflicts,
+      }));
+    }
+    const reprobe =
+      id === "safehouseSidecar"
+        ? d.probeSafehouseSetup().then((status) => {
+            if (mountedRef.current) setSafehouseSetup(status);
+          })
+        : d.probeClearance().then((status) => {
+            if (mountedRef.current) setClearance(status);
+          });
+    void reprobe.then(() => {
+      if (mountedRef.current) setBusyRow(id, false);
+    });
+  }
+
   useInput((_input, key) => {
+    // While the doctor view is open its own useInput owns the keyboard; this
+    // handler stays registered (hooks run before the early return below), so
+    // it must ignore everything or esc would also pop the whole screen.
+    if (doctorRef.current !== null) return;
     if (key.escape) {
       onBack();
       return;
@@ -166,9 +312,65 @@ export function SetupScreen({ onBack, deps }: Props) {
     if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
     if (key.return) {
       const row = ROWS[cursorRef.current];
-      if (row) activate(row.id);
+      if (!row) return;
+      if (isInstallRow(row.id)) activateInstall(row.id);
+      else activateSidecar(row.id);
     }
   });
+
+  if (doctorResult !== null) {
+    return (
+      <CrewDoctorView
+        result={doctorResult}
+        onClose={() => {
+          doctorRef.current = null;
+          setDoctorResult(null);
+        }}
+      />
+    );
+  }
+
+  function sidecarRowText(id: SidecarRowId): string {
+    if (busy[id]) return id === "crewDoctor" ? "running…" : "writing…";
+    switch (id) {
+      case "clearanceHosts": {
+        if (clearance === null) return "checking…";
+        if (clearance.personalFileExists && clearance.personalFileHasClaudeHosts)
+          return "present ✓";
+        if (clearance.personalFileExists)
+          return "missing claude hosts - enter to append";
+        return "not written - enter to create";
+      }
+      case "clearanceSidecar": {
+        if (clearance === null) return "checking…";
+        return clearance.envExported
+          ? "exported ✓"
+          : "write sidecar + add rc line";
+      }
+      case "safehouseSidecar": {
+        if (d.platform !== "darwin") return "not applicable on this platform";
+        if (safehouseSetup === null) return "checking…";
+        if (safehouseSetup.sidecarPresent && safehouseSetup.sidecarHasFunctions)
+          return "present ✓";
+        if (safehouseSetup.sidecarPresent) {
+          // Task 10 subtlety: a wrapper the rc owns is commented out in the
+          // sidecar, so "functions missing" can mean "rc-defined", not broken.
+          return conflicts.safehouseSidecar.some((m) => m.value === null)
+            ? "sidecar present (wrappers defined in your rc)"
+            : "incomplete - enter to regenerate";
+        }
+        return "not written - enter to write";
+      }
+      case "crewDoctor":
+        return "enter to run";
+    }
+  }
+
+  function conflictNote(id: RowId): RcMatch[] {
+    if (id === "clearanceSidecar") return conflicts.clearanceSidecar;
+    if (id === "safehouseSidecar") return conflicts.safehouseSidecar;
+    return [];
+  }
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
@@ -181,8 +383,22 @@ export function SetupScreen({ onBack, deps }: Props) {
                 {cursor === index ? "▸ " : "  "}
                 {row.label}
               </Text>
-              <Text dimColor> {rowText(states[row.id])}</Text>
+              <Text dimColor>
+                {" "}
+                {isInstallRow(row.id)
+                  ? installRowText(states[row.id])
+                  : sidecarRowText(row.id)}
+              </Text>
             </Box>
+            {conflictNote(row.id).length > 0 ? (
+              <Text dimColor>
+                {"    "}
+                defined in your rc:{" "}
+                {conflictNote(row.id)
+                  .map((m) => `${m.file}:${m.line} (${m.item})`)
+                  .join(", ")}
+              </Text>
+            ) : null}
             {cursor === index ? (
               <Text dimColor>
                 {"    "}
@@ -192,12 +408,19 @@ export function SetupScreen({ onBack, deps }: Props) {
           </Box>
         ))}
       </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text>
+          Add this line to your shell rc (~/.zshrc) yourself - crew-config
+          never edits rc files:
+        </Text>
+        <Text dimColor>{RC_SNIPPET}</Text>
+      </Box>
       <Box marginTop={1}>
         <Text dimColor>
           Installs and checks the tools groundcrew needs on this machine (it
-          does not edit crew.config.json; the Sandbox section holds the related
-          networkEgress setting). ↑/↓ move · enter install · esc back. Headless:
-          crew-config doctor.
+          does not edit crew.config.json). The Sandbox section's networkEgress
+          setting controls whether crew uses this allowlist. ↑/↓ move · enter
+          fix · esc back. Headless: crew-config doctor.
         </Text>
       </Box>
     </Box>

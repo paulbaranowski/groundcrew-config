@@ -14,6 +14,31 @@ const missing: InstallReport = {
   details: "",
 };
 
+const healthyClearance = {
+  personalFileExists: true,
+  personalFileHasClaudeHosts: true,
+  envExported: true,
+  daemonPid: null,
+  daemonAgeSeconds: null,
+};
+
+const emptyClearance = {
+  personalFileExists: false,
+  personalFileHasClaudeHosts: false,
+  envExported: false,
+  daemonPid: null,
+  daemonAgeSeconds: null,
+};
+
+const emptySafehouseSetup = {
+  binaryAvailable: false,
+  binaryPath: null,
+  brewFormulaInstalled: false,
+  envExported: false,
+  sidecarPresent: false,
+  sidecarHasFunctions: false,
+};
+
 function stubDeps(overrides: Partial<SetupScreenDeps> = {}): SetupScreenDeps {
   return {
     platform: "darwin",
@@ -22,6 +47,25 @@ function stubDeps(overrides: Partial<SetupScreenDeps> = {}): SetupScreenDeps {
     probeSafehouse: () => Promise.resolve(missing),
     installSafehouse: () =>
       Promise.resolve({ action: "installed", version: "0.9.0", details: "" }),
+    probeClearance: () => Promise.resolve(emptyClearance),
+    probeSafehouseSetup: () => Promise.resolve(emptySafehouseSetup),
+    writeHosts: vi.fn(() => ({
+      target: "/h/.config/clearance/personal-allow-hosts",
+      wrote: true,
+      refused: false,
+    })),
+    writeClearance: vi.fn(() => ({
+      target: "/h/.config/clearance/env.sh",
+      rcConflicts: [],
+      overridesStub: null,
+    })),
+    writeSafehouse: vi.fn(() => ({
+      target: "/h/.config/agent-safehouse/env.sh",
+      rcConflicts: [],
+      overridesStub: null,
+    })),
+    runCrewDoctor: () =>
+      Promise.resolve({ available: true, code: 0, output: "all good" }),
     ...overrides,
   };
 }
@@ -151,5 +195,112 @@ describe("SetupScreen", () => {
     await vi.waitFor(() => expect(lastFrame()).toContain("Setup"));
     stdin.write("\u001B");
     await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
+  });
+});
+
+describe("SetupScreen sidecar rows", () => {
+  it("shows missing clearance artifacts as fixable rows", async () => {
+    const { lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={stubDeps()} />,
+    );
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain("clearance hosts");
+      expect(lastFrame()).toContain("clearance env.sh");
+      expect(lastFrame()).toContain("safehouse env.sh");
+    });
+  });
+
+  it("writes the sidecar on enter and re-probes the row", async () => {
+    const deps = stubDeps();
+    let clearanceState = emptyClearance;
+    deps.probeClearance = () => Promise.resolve(clearanceState);
+    deps.writeClearance = vi.fn(() => {
+      clearanceState = healthyClearance;
+      return {
+        target: "/h/.config/clearance/env.sh",
+        rcConflicts: [],
+        overridesStub: null,
+      };
+    });
+    const { stdin, lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={deps} />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("clearance env.sh"));
+    // Navigate to the clearance env.sh row (4th row: groundcrew, safehouse,
+    // clearance hosts, clearance env.sh), then enter.
+    stdin.write("\u001B[B");
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ safehouse"));
+    stdin.write("\u001B[B");
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ clearance hosts"));
+    stdin.write("\u001B[B");
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ clearance env.sh"));
+    stdin.write("\r");
+    await vi.waitFor(() => expect(deps.writeClearance).toHaveBeenCalledOnce());
+  });
+
+  it("always shows the rc snippet instruction (N3: user adds it themselves)", async () => {
+    const { lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={stubDeps()} />,
+    );
+    await vi.waitFor(() =>
+      expect(lastFrame()).toContain("Add this line to your shell rc"),
+    );
+  });
+
+  it("runs crew doctor from the final row and shows its output", async () => {
+    const deps = stubDeps();
+    deps.runCrewDoctor = vi.fn(() =>
+      Promise.resolve({
+        available: true,
+        code: 0,
+        output: "everything is fine",
+      }),
+    );
+    const { stdin, lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={deps} />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("run crew doctor"));
+    // Jump to the last row: five downs from the top.
+    for (const _ of Array.from({ length: 5 })) {
+      stdin.write("\u001B[B");
+      await vi.waitFor(() => expect(lastFrame()).toBeTruthy());
+    }
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ run crew doctor"));
+    stdin.write("\r");
+    await vi.waitFor(() => {
+      expect(deps.runCrewDoctor).toHaveBeenCalledOnce();
+      expect(lastFrame()).toContain("everything is fine");
+    });
+    // Any key closes the output view.
+    stdin.write("x");
+    await vi.waitFor(() => expect(lastFrame()).toContain("Setup"));
+  });
+
+  it("reports an rc-owned wrapper as rc-defined, not broken", async () => {
+    const deps = stubDeps({
+      probeSafehouseSetup: () =>
+        Promise.resolve({
+          ...emptySafehouseSetup,
+          sidecarPresent: true,
+          sidecarHasFunctions: false,
+        }),
+    });
+    deps.writeSafehouse = vi.fn(() => ({
+      target: "/h/.config/agent-safehouse/env.sh",
+      rcConflicts: [{ item: "safe", file: "/h/.zshrc", line: 3, value: null }],
+      overridesStub: null,
+    }));
+    const { stdin, lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={deps} />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("safehouse env.sh"));
+    // Navigate to the safehouse env.sh row (5th) and regenerate.
+    for (const _ of Array.from({ length: 4 })) {
+      stdin.write("\u001B[B");
+      await vi.waitFor(() => expect(lastFrame()).toBeTruthy());
+    }
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ safehouse env.sh"));
+    stdin.write("\r");
+    await vi.waitFor(() => expect(lastFrame()).toContain("defined in your rc"));
   });
 });

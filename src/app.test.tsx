@@ -66,6 +66,40 @@ test("opens the Setup screen from Home with injected deps", async () => {
     installGroundcrew: () => Promise.resolve(report),
     probeSafehouse: () => Promise.resolve(report),
     installSafehouse: () => Promise.resolve(report),
+    probeClearance: () =>
+      Promise.resolve({
+        personalFileExists: false,
+        personalFileHasClaudeHosts: false,
+        envExported: false,
+        daemonPid: null,
+        daemonAgeSeconds: null,
+      }),
+    probeSafehouseSetup: () =>
+      Promise.resolve({
+        binaryAvailable: false,
+        binaryPath: null,
+        brewFormulaInstalled: false,
+        envExported: false,
+        sidecarPresent: false,
+        sidecarHasFunctions: false,
+      }),
+    writeHosts: () => ({
+      target: "/h/.config/clearance/personal-allow-hosts",
+      wrote: true,
+      refused: false,
+    }),
+    writeClearance: () => ({
+      target: "/h/.config/clearance/env.sh",
+      rcConflicts: [],
+      overridesStub: null,
+    }),
+    writeSafehouse: () => ({
+      target: "/h/.config/agent-safehouse/env.sh",
+      rcConflicts: [],
+      overridesStub: null,
+    }),
+    runCrewDoctor: () =>
+      Promise.resolve({ available: true, code: 0, output: "all good" }),
   };
   const { lastFrame, stdin, unmount } = render(
     <App
