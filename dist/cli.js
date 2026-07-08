@@ -1634,7 +1634,7 @@ function rowText(state) {
         return `${r.version ?? "installed"} \u2713`;
       }
       if (r.action === "missing") return "not installed - enter to install";
-      return `failed: ${r.details}`;
+      return `failed: ${r.details} - enter to retry`;
     }
   }
 }
@@ -1674,7 +1674,16 @@ function SetupScreen({ onBack, deps }) {
   }
   function activate(id) {
     const state = statesRef.current[id];
-    if (state.phase !== "ready" || state.report.action !== "missing") return;
+    if (state.phase !== "ready") return;
+    if (state.report.action === "failed") {
+      const probe = id === "groundcrew" ? d.probeGroundcrew : d.probeSafehouse;
+      setRow(id, { phase: "checking" });
+      void probe().then((report) => {
+        if (mountedRef.current) setRow(id, { phase: "ready", report });
+      });
+      return;
+    }
+    if (state.report.action !== "missing") return;
     const install = id === "groundcrew" ? d.installGroundcrew : d.installSafehouse;
     setRow(id, { phase: "acting" });
     void install().then((report) => {

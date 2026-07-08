@@ -69,7 +69,7 @@ function rowText(state: RowPhase): string {
         return `${r.version ?? "installed"} ✓`;
       }
       if (r.action === "missing") return "not installed - enter to install";
-      return `failed: ${r.details}`;
+      return `failed: ${r.details} - enter to retry`;
     }
   }
 }
@@ -133,9 +133,21 @@ export function SetupScreen({ onBack, deps }: Props) {
 
   function activate(id: InstallRow["id"]): void {
     const state = statesRef.current[id];
-    // Only a probed-missing row has an action; everything else is a no-op
-    // (including "acting": a second enter mid-install must not double-run).
-    if (state.phase !== "ready" || state.report.action !== "missing") return;
+    // "acting"/"checking"/"not-applicable" rows have no action (a second
+    // enter mid-install must not double-run).
+    if (state.phase !== "ready") return;
+    // A failed row (probe timeout, install failure) retries with a fresh
+    // probe: read-only, so a retry can never mutate; the probe's result
+    // decides whether an install is offered next.
+    if (state.report.action === "failed") {
+      const probe = id === "groundcrew" ? d.probeGroundcrew : d.probeSafehouse;
+      setRow(id, { phase: "checking" });
+      void probe().then((report) => {
+        if (mountedRef.current) setRow(id, { phase: "ready", report });
+      });
+      return;
+    }
+    if (state.report.action !== "missing") return;
     const install =
       id === "groundcrew" ? d.installGroundcrew : d.installSafehouse;
     setRow(id, { phase: "acting" });

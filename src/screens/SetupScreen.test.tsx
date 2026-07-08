@@ -119,6 +119,30 @@ describe("SetupScreen", () => {
     await vi.waitFor(() => expect(lastFrame()).toContain("npm not found"));
   });
 
+  it("enter on a failed row re-probes it instead of dead-ending", async () => {
+    const failed: InstallReport = {
+      action: "failed",
+      version: null,
+      details: "timed out after 30000ms",
+    };
+    const deps = stubDeps();
+    let probes = 0;
+    deps.probeGroundcrew = vi.fn(() => {
+      probes += 1;
+      return Promise.resolve(probes === 1 ? failed : missing);
+    });
+    const { stdin, lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={deps} />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("enter to retry"));
+    stdin.write("\r"); // cursor starts on the groundcrew row
+    // The retry is a fresh probe (read-only), whose result replaces the row.
+    await vi.waitFor(() => {
+      expect(deps.probeGroundcrew).toHaveBeenCalledTimes(2);
+      expect(lastFrame()).toContain("not installed - enter to install");
+    });
+  });
+
   it("esc calls onBack", async () => {
     const onBack = vi.fn();
     const { stdin, lastFrame } = render(
