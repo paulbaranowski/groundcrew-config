@@ -111,6 +111,10 @@ export async function installGroundcrew(
   return { action: "installed", version: after.version, details: "" };
 }
 
+// Safehouse install/probe is brew-only and macOS-only: every call site gates on
+// host.isSafehouseSupported first (doctor.ts, SetupScreen.tsx), so these never
+// run on Linux. The Linux sandbox story is srt (see domain/io setup/host.ts),
+// which ships with groundcrew and needs no formula install here.
 export async function probeSafehouseFormula(
   deps: InstallDeps = defaultInstallDeps(),
 ): Promise<InstallReport> {

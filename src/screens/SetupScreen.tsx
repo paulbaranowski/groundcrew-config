@@ -3,8 +3,14 @@ import { homedir } from "node:os";
 import { Box, Text, useInput } from "ink";
 import { RC_SNIPPET } from "../domain/setup/clearance.ts";
 import { FN_SAFE, FN_SAFE_CLAUDE } from "../domain/setup/safehouse.ts";
+import {
+  computeSrtReadiness,
+  srtGuidance,
+  type HostCapabilities,
+} from "../domain/setup/host.ts";
 import type { RcMatch } from "../domain/setup/rcScan.ts";
 import { runCrewDoctor, type CrewDoctorResult } from "../io/setup/crewDoctor.ts";
+import { detectHostCapabilities } from "../io/setup/host.ts";
 import {
   defaultInstallDeps,
   installGroundcrew,
@@ -31,7 +37,8 @@ import { CrewDoctorView } from "./CrewDoctorView.tsx";
 // Every effect is injected so tests drive the screen with stubs and no real
 // npm/brew/filesystem, mirroring how App takes initialDraft/target.
 export interface SetupScreenDeps {
-  platform: string;
+  /** Snapshot the host's sandbox capabilities; re-invoked on an srt re-check. */
+  detectHost: () => HostCapabilities;
   probeGroundcrew: () => Promise<InstallReport>;
   installGroundcrew: () => Promise<InstallReport>;
   probeSafehouse: () => Promise<InstallReport>;
@@ -47,7 +54,7 @@ export interface SetupScreenDeps {
 export function defaultSetupScreenDeps(): SetupScreenDeps {
   const installDeps = defaultInstallDeps();
   return {
-    platform: process.platform,
+    detectHost: () => detectHostCapabilities(),
     probeGroundcrew: () => probeGroundcrew(installDeps),
     installGroundcrew: () => installGroundcrew(installDeps),
     probeSafehouse: () => probeSafehouseFormula(installDeps),
@@ -72,6 +79,7 @@ type SidecarRowId =
   | "clearanceHosts"
   | "clearanceSidecar"
   | "safehouseSidecar"
+  | "srtDeps"
   | "crewDoctor";
 type RowId = InstallRowId | SidecarRowId;
 
@@ -81,38 +89,54 @@ interface Row {
   detail: string;
 }
 
-const ROWS: Row[] = [
-  {
-    id: "groundcrew",
-    label: "groundcrew",
-    detail: "npm global @clipboard-health/groundcrew",
-  },
-  {
-    id: "safehouse",
-    label: "safehouse",
-    detail: "brew eugene1g/safehouse/agent-safehouse (macOS sandbox)",
-  },
-  {
-    id: "clearanceHosts",
-    label: "clearance hosts",
-    detail: "~/.config/clearance/personal-allow-hosts (personal egress allowlist)",
-  },
-  {
-    id: "clearanceSidecar",
-    label: "clearance env.sh",
-    detail: "~/.config/clearance/env.sh (env sidecar; sourced from your rc)",
-  },
-  {
-    id: "safehouseSidecar",
-    label: "safehouse env.sh",
-    detail: "~/.config/agent-safehouse/env.sh (safe/safe-claude wrappers)",
-  },
-  {
+function buildRows(caps: HostCapabilities): Row[] {
+  const rows: Row[] = [
+    {
+      id: "groundcrew",
+      label: "groundcrew",
+      detail: "npm global @clipboard-health/groundcrew",
+    },
+  ];
+  if (caps.isSafehouseSupported) {
+    rows.push({
+      id: "safehouse",
+      label: "safehouse",
+      detail: "brew eugene1g/safehouse/agent-safehouse (macOS sandbox)",
+    });
+  } else if (caps.isSrtSupported) {
+    rows.push({
+      id: "srtDeps",
+      label: "srt sandbox",
+      detail: "bubblewrap/socat/ripgrep for the srt runner (Linux)",
+    });
+  }
+  rows.push(
+    {
+      id: "clearanceHosts",
+      label: "clearance hosts",
+      detail:
+        "~/.config/clearance/personal-allow-hosts (personal egress allowlist)",
+    },
+    {
+      id: "clearanceSidecar",
+      label: "clearance env.sh",
+      detail: "~/.config/clearance/env.sh (env sidecar; sourced from your rc)",
+    },
+  );
+  if (caps.isSafehouseSupported) {
+    rows.push({
+      id: "safehouseSidecar",
+      label: "safehouse env.sh",
+      detail: "~/.config/agent-safehouse/env.sh (safe/safe-claude wrappers)",
+    });
+  }
+  rows.push({
     id: "crewDoctor",
     label: "run crew doctor",
     detail: "groundcrew's own health check (read-only)",
-  },
-];
+  });
+  return rows;
+}
 
 const isInstallRow = (id: RowId): id is InstallRowId =>
   id === "groundcrew" || id === "safehouse";
@@ -147,14 +171,18 @@ interface Props {
 // read (I3) - the sourcing snippet below the rows is a user instruction (N3).
 export function SetupScreen({ onBack, deps }: Props) {
   const d = useRef(deps ?? defaultSetupScreenDeps()).current;
+  // One snapshot fixes the row STRUCTURE (which sandbox story this platform
+  // gets); a live `host` state tracks srt dep readiness across re-checks.
+  const [host0] = useState(() => d.detectHost());
+  const [rows] = useState(() => buildRows(host0));
+  const [host, setHost] = useState<HostCapabilities>(host0);
   const [cursor, setCursor] = useState(0);
   const cursorRef = useRef(0);
   const [states, setStates] = useState<Record<InstallRowId, RowPhase>>({
     groundcrew: { phase: "checking" },
-    safehouse:
-      d.platform === "darwin"
-        ? { phase: "checking" }
-        : { phase: "not-applicable" },
+    safehouse: host0.isSafehouseSupported
+      ? { phase: "checking" }
+      : { phase: "not-applicable" },
   });
   // Mirror the row states in a ref for the same reason ListField mirrors its
   // cursor: a burst of keypresses delivered in one tick all share the same
@@ -171,6 +199,7 @@ export function SetupScreen({ onBack, deps }: Props) {
     clearanceHosts: false,
     clearanceSidecar: false,
     safehouseSidecar: false,
+    srtDeps: false,
     crewDoctor: false,
   });
   const busyRef = useRef(busy);
@@ -224,7 +253,7 @@ export function SetupScreen({ onBack, deps }: Props) {
     void d.probeGroundcrew().then((report) => {
       if (mountedRef.current) setRow("groundcrew", { phase: "ready", report });
     });
-    if (d.platform === "darwin") {
+    if (host0.isSafehouseSupported) {
       void d.probeSafehouse().then((report) => {
         if (mountedRef.current) setRow("safehouse", { phase: "ready", report });
       });
@@ -268,10 +297,11 @@ export function SetupScreen({ onBack, deps }: Props) {
   }
 
   function activateSidecar(id: SidecarRowId): void {
+    if (id === "srtDeps") return; // handled by the re-check branch in useInput
     if (busyRef.current[id]) return;
     if (
       id === "safehouseSidecar" &&
-      d.platform !== "darwin" // N4: no action off macOS
+      !host0.isSafehouseSupported // N4: no action off macOS
     ) {
       return;
     }
@@ -336,11 +366,17 @@ export function SetupScreen({ onBack, deps }: Props) {
       return;
     }
     if (key.downArrow)
-      moveCursor(Math.min(ROWS.length - 1, cursorRef.current + 1));
+      moveCursor(Math.min(rows.length - 1, cursorRef.current + 1));
     if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
     if (key.return) {
-      const row = ROWS[cursorRef.current];
+      const row = rows[cursorRef.current];
       if (!row) return;
+      if (row.id === "srtDeps") {
+        // Synchronous PATH re-probe: the user installs the deps out of band,
+        // then Enter re-checks. No mutation, so no busy guard is needed.
+        setHost(d.detectHost());
+        return;
+      }
       if (isInstallRow(row.id)) activateInstall(row.id);
       else activateSidecar(row.id);
     }
@@ -360,7 +396,11 @@ export function SetupScreen({ onBack, deps }: Props) {
 
   function sidecarRowText(id: SidecarRowId): string {
     if (busy[id]) return id === "crewDoctor" ? "running…" : "writing…";
-    if (id !== "crewDoctor" && writeErrors[id] !== null) {
+    if (
+      id !== "crewDoctor" &&
+      id !== "srtDeps" &&
+      writeErrors[id] !== null
+    ) {
       return `failed: ${writeErrors[id]} - enter to retry`;
     }
     switch (id) {
@@ -379,8 +419,13 @@ export function SetupScreen({ onBack, deps }: Props) {
           ? "written ✓ - now add the rc line below"
           : "write sidecar + add rc line";
       }
+      case "srtDeps": {
+        const readiness = computeSrtReadiness(host);
+        if (readiness.ready) return "ready ✓";
+        return `missing ${readiness.missing.join(", ")} - enter to re-check`;
+      }
       case "safehouseSidecar": {
-        if (d.platform !== "darwin") return "not applicable on this platform";
+        if (!host0.isSafehouseSupported) return "not applicable on this platform";
         if (safehouseSetup === null) return "checking…";
         if (safehouseSetup.sidecarPresent && safehouseSetup.sidecarHasFunctions)
           return "present ✓";
@@ -411,7 +456,7 @@ export function SetupScreen({ onBack, deps }: Props) {
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Setup</Text>
       <Box marginTop={1} flexDirection="column">
-        {ROWS.map((row, index) => (
+        {rows.map((row, index) => (
           <Box key={row.id} flexDirection="column">
             <Box>
               <Text color={cursor === index ? "cyan" : undefined}>
@@ -432,6 +477,12 @@ export function SetupScreen({ onBack, deps }: Props) {
                 {conflictNote(row.id)
                   .map((m) => `${m.file}:${m.line} (${m.item})`)
                   .join(", ")}
+              </Text>
+            ) : null}
+            {row.id === "srtDeps" && !computeSrtReadiness(host).ready ? (
+              <Text dimColor>
+                {"    "}
+                {srtGuidance(computeSrtReadiness(host))}
               </Text>
             ) : null}
             {cursor === index ? (

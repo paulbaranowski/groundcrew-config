@@ -1,7 +1,37 @@
 import { render } from "ink-testing-library";
 import { describe, expect, it, vi } from "vitest";
+import type { HostCapabilities } from "../domain/setup/host.ts";
 import type { InstallReport } from "../io/setup/installs.ts";
 import { SetupScreen, type SetupScreenDeps } from "./SetupScreen.tsx";
+
+const macOSCaps: HostCapabilities = {
+  platform: "darwin",
+  isMacOS: true,
+  isLinux: false,
+  isSafehouseSupported: true,
+  isSrtSupported: true,
+  hasBubblewrap: false,
+  hasSocat: false,
+  hasRipgrep: false,
+};
+
+const linuxReadyCaps: HostCapabilities = {
+  platform: "linux",
+  isMacOS: false,
+  isLinux: true,
+  isSafehouseSupported: false,
+  isSrtSupported: true,
+  hasBubblewrap: true,
+  hasSocat: true,
+  hasRipgrep: true,
+};
+
+const linuxMissingCaps: HostCapabilities = {
+  ...linuxReadyCaps,
+  hasBubblewrap: false,
+  hasSocat: false,
+  hasRipgrep: false,
+};
 
 const installed = (version: string): InstallReport => ({
   action: "already-installed",
@@ -41,7 +71,7 @@ const emptySafehouseSetup = {
 
 function stubDeps(overrides: Partial<SetupScreenDeps> = {}): SetupScreenDeps {
   return {
-    platform: "darwin",
+    detectHost: () => macOSCaps,
     probeGroundcrew: () => Promise.resolve(installed("4.43.2")),
     installGroundcrew: () => Promise.resolve(installed("4.43.2")),
     probeSafehouse: () => Promise.resolve(missing),
@@ -142,11 +172,61 @@ describe("SetupScreen", () => {
     expect(installSpy).not.toHaveBeenCalled();
   });
 
-  it("marks safehouse not applicable off macOS", async () => {
+  it("does not show a safehouse row on Linux (srt sandbox row instead)", async () => {
     const { lastFrame } = render(
-      <SetupScreen onBack={() => {}} deps={stubDeps({ platform: "linux" })} />,
+      <SetupScreen
+        onBack={() => {}}
+        deps={stubDeps({ detectHost: () => linuxReadyCaps })}
+      />,
     );
-    await vi.waitFor(() => expect(lastFrame()).toContain("not applicable"));
+    await vi.waitFor(() => expect(lastFrame()).toContain("srt sandbox"));
+    // No safehouse install row or safehouse-sidecar row on Linux (the
+    // RC_SNIPPET's static "agent-safehouse" mention is unrelated to rows).
+    expect(lastFrame()).not.toContain("brew eugene1g");
+    expect(lastFrame()).not.toContain("safehouse env.sh");
+  });
+
+  it("shows an srt sandbox row (not safehouse) on Linux", async () => {
+    const { lastFrame } = render(
+      <SetupScreen
+        onBack={() => {}}
+        deps={stubDeps({ detectHost: () => linuxMissingCaps })}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain("srt sandbox");
+      expect(lastFrame()).toContain("bubblewrap");
+    });
+    // The macOS-only rows are absent on Linux.
+    expect(lastFrame()).not.toContain("brew eugene1g");
+  });
+
+  it("shows srt ready when the Linux deps are present", async () => {
+    const { lastFrame } = render(
+      <SetupScreen
+        onBack={() => {}}
+        deps={stubDeps({ detectHost: () => linuxReadyCaps })}
+      />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("srt sandbox"));
+    expect(lastFrame()).toContain("ready ✓");
+  });
+
+  it("re-probes the host when Enter is pressed on the srt row", async () => {
+    let caps = linuxMissingCaps;
+    const detectHost = vi.fn(() => caps);
+    const { stdin, lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={stubDeps({ detectHost })} />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("srt sandbox"));
+    // srt is the SECOND row on Linux (after groundcrew): move down once.
+    stdin.write("\u001B[B");
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ srt sandbox"));
+    // The user installs the deps out of band; the next re-check sees them.
+    caps = linuxReadyCaps;
+    stdin.write("\r");
+    await vi.waitFor(() => expect(lastFrame()).toContain("ready ✓"));
+    expect(detectHost.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("degrades a failed probe to a failed row instead of crashing", async () => {
@@ -315,28 +395,12 @@ describe("SetupScreen sidecar rows", () => {
   });
 });
 
-describe("SetupScreen off macOS (N4)", () => {
-  it("enter on the safehouse env.sh row is a no-op", async () => {
-    const deps = stubDeps({ platform: "linux" });
-    const writeSpy = vi.fn(deps.writeSafehouse);
-    deps.writeSafehouse = writeSpy;
-    const { stdin, lastFrame } = render(
-      <SetupScreen onBack={() => {}} deps={deps} />,
-    );
-    await vi.waitFor(() => expect(lastFrame()).toContain("safehouse env.sh"));
-    for (const label of [
-      "▸ safehouse",
-      "▸ clearance hosts",
-      "▸ clearance env.sh",
-      "▸ safehouse env.sh",
-    ]) {
-      stdin.write("\u001B[B");
-      await vi.waitFor(() => expect(lastFrame()).toContain(label));
-    }
-    expect(lastFrame()).toContain("not applicable on this platform");
-    stdin.write("\r");
-    // No action on a not-applicable row; give the handler a tick to prove it.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(writeSpy).not.toHaveBeenCalled();
-  });
-});
+// N4 ("no action off macOS" for the safehouse sidecar) previously had its own
+// describe block here. On Linux the safehouse and safehouse-sidecar rows are
+// now dropped entirely (buildRows), not merely marked "not applicable", so
+// there is no row left to navigate to or press enter on; there is nothing
+// left for the safehouseSidecar write to no-op against from the UI. This is
+// covered instead by "does not show a safehouse row on Linux" above. The
+// `!host0.isSafehouseSupported` guard in activateSidecar remains as
+// defense-in-depth (see SetupScreen.tsx) but is unreachable via input once
+// the row is gone.
