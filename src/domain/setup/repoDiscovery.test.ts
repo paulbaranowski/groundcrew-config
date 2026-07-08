@@ -38,6 +38,11 @@ describe("extractOwnerRepo", () => {
   it("returns null when there is no origin remote", () => {
     expect(extractOwnerRepo("[core]\n\tbare = false\n")).toBeNull();
   });
+
+  it("scans past a non-GitHub url to a later GitHub url in the same origin", () => {
+    const content = `[remote "origin"]\n\turl = https://git.example.com/mirror/widgets.git\n\turl = git@github.com:acme/widgets.git\n`;
+    expect(extractOwnerRepo(content)).toBe("acme/widgets");
+  });
 });
 
 describe("mergeDiscovered", () => {

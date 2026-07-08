@@ -3014,7 +3014,7 @@ function extractOwnerRepo(gitConfigContent) {
     if (m === null) continue;
     const url = m[1].trim();
     const hit = SSH_RE.exec(url) ?? HTTPS_RE.exec(url);
-    return hit === null ? null : `${hit[1]}/${hit[2]}`;
+    if (hit !== null) return `${hit[1]}/${hit[2]}`;
   }
   return null;
 }

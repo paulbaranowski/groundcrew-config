@@ -65,7 +65,9 @@ export function extractOwnerRepo(gitConfigContent: string): string | null {
     if (m === null) continue;
     const url = m[1]!.trim();
     const hit = SSH_RE.exec(url) ?? HTTPS_RE.exec(url);
-    return hit === null ? null : `${hit[1]}/${hit[2]}`;
+    // A remote may carry multiple url lines; a non-GitHub one (e.g. a push
+    // mirror) shouldn't shadow a later GitHub url, so keep scanning on a miss.
+    if (hit !== null) return `${hit[1]}/${hit[2]}`;
   }
   return null;
 }
