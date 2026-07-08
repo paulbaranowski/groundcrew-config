@@ -124,6 +124,15 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
   useEffect(() => {
     routeRef.current = route;
   }, [route]);
+  // A doctor resolution landing after quit must not setState on the unmounted
+  // App (same discipline as SetupScreen's mountedRef).
+  const appMountedRef = useRef(true);
+  useEffect(() => {
+    appMountedRef.current = true;
+    return () => {
+      appMountedRef.current = false;
+    };
+  }, []);
 
   function setOffer(value: "hidden" | "offered" | "running"): void {
     doctorOfferRef.current = value;
@@ -181,7 +190,9 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
     setDirty(false);
     setSaved(true);
     setShadowed(result.shadowed);
-    setOffer("offered");
+    // A doctor run already in flight keeps its "running…" state: re-offering
+    // here would let a second y spawn a concurrent crew-doctor process.
+    if (doctorOfferRef.current !== "running") setOffer("offered");
   }
 
   // Global quit handling on Home, plus the post-save doctor offer's keys.
@@ -195,6 +206,7 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
         if (input === "y") {
           setOffer("running");
           void (crewDoctor ?? runCrewDoctor)().then((result) => {
+            if (!appMountedRef.current) return;
             // Only surface the result if the user is still on Home; popping
             // it over a section would unmount in-progress edits.
             if (routeRef.current.name === "home") setDoctorResult(result);
@@ -287,20 +299,21 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
             {saved && shadowed.length > 0 ? (
               <Text dimColor> (moved {shadowed.join(", ")})</Text>
             ) : null}
+            {/* Folded into this line (not its own row) so Home's chrome-row
+                count stays what visibleRows expects. */}
+            {doctorOffer !== "hidden" ? (
+              <Text>
+                {" "}
+                · Run crew doctor to verify?{" "}
+                <Text dimColor>
+                  {doctorOffer === "running"
+                    ? "running…"
+                    : "[y] run · [esc] dismiss"}
+                </Text>
+              </Text>
+            ) : null}
           </Text>
         </Box>
-        {doctorOffer !== "hidden" ? (
-          <Box>
-            <Text>
-              Run crew doctor to verify?{" "}
-              <Text dimColor>
-                {doctorOffer === "running"
-                  ? "running…"
-                  : "[y] run · [esc] dismiss"}
-              </Text>
-            </Text>
-          </Box>
-        ) : null}
         <Box marginTop={1}>
           <Text dimColor>
             groundcrew picks up your tasks and runs AI coding agents on them

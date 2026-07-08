@@ -50,8 +50,9 @@ function presentHosts(content: string): Set<string> {
  * New hosts-file content with missing hosts appended, or `existing` unchanged
  * (same reference) when nothing is missing - callers skip the write on
  * identity, which is what makes a re-run a no-op (I2). Only uncommented lines
- * count as present; comparison is case-insensitive. Appended hosts go under
- * the section comment, added only if not already in the file.
+ * count as present; comparison is case-insensitive. Missing hosts are appended
+ * at the end of the file, preceded by the section comment when the file does
+ * not already contain it anywhere.
  */
 export function computeAppendContent(
   existing: string,

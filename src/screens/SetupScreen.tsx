@@ -183,10 +183,21 @@ export function SetupScreen({ onBack, deps }: Props) {
   // acknowledge a successful write and users re-press enter suspecting
   // failure.
   const [wroteClearanceSidecar, setWroteClearanceSidecar] = useState(false);
+  // A sidecar write can throw (EACCES, ENOSPC); uncaught it would escape the
+  // useInput handler and take down the whole app. The install rows degrade
+  // failures into report rows; these mirror that with a retryable message.
+  const [writeErrors, setWriteErrors] = useState<
+    Record<"clearanceHosts" | "clearanceSidecar" | "safehouseSidecar", string | null>
+  >({ clearanceHosts: null, clearanceSidecar: null, safehouseSidecar: null });
   const [doctorResult, setDoctorResult] = useState<CrewDoctorResult | null>(
     null,
   );
   const doctorRef = useRef<CrewDoctorResult | null>(null);
+  // Sync the gate from state post-commit; opening also sets it synchronously
+  // (below) so keys arriving before the re-render are already blocked.
+  useEffect(() => {
+    doctorRef.current = doctorResult;
+  }, [doctorResult]);
 
   function setRow(id: InstallRowId, state: RowPhase): void {
     statesRef.current = { ...statesRef.current, [id]: state };
@@ -276,21 +287,31 @@ export function SetupScreen({ onBack, deps }: Props) {
     }
     // The writes are synchronous and idempotent (I2); the re-probe that
     // follows refreshes the affected row so the state text reflects disk.
-    if (id === "clearanceHosts") {
-      d.writeHosts();
-    } else if (id === "clearanceSidecar") {
-      const result = d.writeClearance();
-      setWroteClearanceSidecar(true);
-      setConflicts((prev) => ({
+    try {
+      if (id === "clearanceHosts") {
+        d.writeHosts();
+      } else if (id === "clearanceSidecar") {
+        const result = d.writeClearance();
+        setWroteClearanceSidecar(true);
+        setConflicts((prev) => ({
+          ...prev,
+          clearanceSidecar: result.rcConflicts,
+        }));
+      } else {
+        const result = d.writeSafehouse();
+        setConflicts((prev) => ({
+          ...prev,
+          safehouseSidecar: result.rcConflicts,
+        }));
+      }
+      setWriteErrors((prev) => ({ ...prev, [id]: null }));
+    } catch (error) {
+      setWriteErrors((prev) => ({
         ...prev,
-        clearanceSidecar: result.rcConflicts,
+        [id]: error instanceof Error ? error.message : String(error),
       }));
-    } else {
-      const result = d.writeSafehouse();
-      setConflicts((prev) => ({
-        ...prev,
-        safehouseSidecar: result.rcConflicts,
-      }));
+      setBusyRow(id, false);
+      return;
     }
     const reprobe =
       id === "safehouseSidecar"
@@ -329,16 +350,19 @@ export function SetupScreen({ onBack, deps }: Props) {
     return (
       <CrewDoctorView
         result={doctorResult}
-        onClose={() => {
-          doctorRef.current = null;
-          setDoctorResult(null);
-        }}
+        // The ref is synced from state by the effect above rather than reset
+        // here: a same-tick esc·esc burst would otherwise close the view AND
+        // pop the whole Setup screen (the second esc passing a cleared gate).
+        onClose={() => setDoctorResult(null)}
       />
     );
   }
 
   function sidecarRowText(id: SidecarRowId): string {
     if (busy[id]) return id === "crewDoctor" ? "running…" : "writing…";
+    if (id !== "crewDoctor" && writeErrors[id] !== null) {
+      return `failed: ${writeErrors[id]} - enter to retry`;
+    }
     switch (id) {
       case "clearanceHosts": {
         if (clearance === null) return "checking…";

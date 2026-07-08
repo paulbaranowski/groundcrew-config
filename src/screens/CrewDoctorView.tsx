@@ -18,15 +18,18 @@ export function CrewDoctorView({ result, onClose }: Props) {
   const windowSize = Math.max(4, rows - 7);
   const maxOffset = Math.max(0, lines.length - windowSize);
   const [offset, setOffset] = useState(0);
+  // Clamp at render time: a terminal resize can shrink maxOffset below a
+  // previously valid offset, which would strand the view on a tail slice.
+  const shown = Math.min(offset, maxOffset);
   const scrollable = maxOffset > 0;
 
   useInput((_input, key) => {
     if (scrollable && key.downArrow) {
-      setOffset((o) => Math.min(maxOffset, o + 1));
+      setOffset(Math.min(maxOffset, shown + 1));
       return;
     }
     if (scrollable && key.upArrow) {
-      setOffset((o) => Math.max(0, o - 1));
+      setOffset(Math.max(0, shown - 1));
       return;
     }
     onClose();
@@ -42,14 +45,14 @@ export function CrewDoctorView({ result, onClose }: Props) {
         </Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
-        <Text>{lines.slice(offset, offset + windowSize).join("\n")}</Text>
+        <Text>{lines.slice(shown, shown + windowSize).join("\n")}</Text>
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
           {scrollable
-            ? `↑/↓ scroll (${offset + 1}-${Math.min(
+            ? `↑/↓ scroll (${shown + 1}-${Math.min(
                 lines.length,
-                offset + windowSize,
+                shown + windowSize,
               )}/${lines.length}) · any other key closes`
             : "press any key to close"}
         </Text>

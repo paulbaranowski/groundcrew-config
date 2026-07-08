@@ -983,14 +983,15 @@ function CrewDoctorView({ result, onClose }) {
   const windowSize = Math.max(4, rows - 7);
   const maxOffset = Math.max(0, lines.length - windowSize);
   const [offset, setOffset] = useState2(0);
+  const shown = Math.min(offset, maxOffset);
   const scrollable = maxOffset > 0;
   useInput((_input, key) => {
     if (scrollable && key.downArrow) {
-      setOffset((o) => Math.min(maxOffset, o + 1));
+      setOffset(Math.min(maxOffset, shown + 1));
       return;
     }
     if (scrollable && key.upArrow) {
-      setOffset((o) => Math.max(0, o - 1));
+      setOffset(Math.max(0, shown - 1));
       return;
     }
     onClose();
@@ -1001,10 +1002,10 @@ function CrewDoctorView({ result, onClose }) {
       /* @__PURE__ */ jsx2(Text2, { bold: true, children: "crew doctor" }),
       /* @__PURE__ */ jsx2(Text2, { color: ok ? "green" : "yellow", children: result.available ? `exit ${result.code}` : "not run" })
     ] }),
-    /* @__PURE__ */ jsx2(Box2, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx2(Text2, { children: lines.slice(offset, offset + windowSize).join("\n") }) }),
-    /* @__PURE__ */ jsx2(Box2, { marginTop: 1, children: /* @__PURE__ */ jsx2(Text2, { dimColor: true, children: scrollable ? `\u2191/\u2193 scroll (${offset + 1}-${Math.min(
+    /* @__PURE__ */ jsx2(Box2, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx2(Text2, { children: lines.slice(shown, shown + windowSize).join("\n") }) }),
+    /* @__PURE__ */ jsx2(Box2, { marginTop: 1, children: /* @__PURE__ */ jsx2(Text2, { dimColor: true, children: scrollable ? `\u2191/\u2193 scroll (${shown + 1}-${Math.min(
       lines.length,
-      offset + windowSize
+      shown + windowSize
     )}/${lines.length}) \xB7 any other key closes` : "press any key to close" }) })
   ] });
 }
@@ -2129,10 +2130,14 @@ function SetupScreen({ onBack, deps }) {
   const busyRef = useRef4(busy);
   const [conflicts, setConflicts] = useState7({ clearanceSidecar: [], safehouseSidecar: [] });
   const [wroteClearanceSidecar, setWroteClearanceSidecar] = useState7(false);
+  const [writeErrors, setWriteErrors] = useState7({ clearanceHosts: null, clearanceSidecar: null, safehouseSidecar: null });
   const [doctorResult, setDoctorResult] = useState7(
     null
   );
   const doctorRef = useRef4(null);
+  useEffect3(() => {
+    doctorRef.current = doctorResult;
+  }, [doctorResult]);
   function setRow(id, state) {
     statesRef.current = { ...statesRef.current, [id]: state };
     setStates(statesRef.current);
@@ -2201,21 +2206,31 @@ function SetupScreen({ onBack, deps }) {
       });
       return;
     }
-    if (id === "clearanceHosts") {
-      d.writeHosts();
-    } else if (id === "clearanceSidecar") {
-      const result = d.writeClearance();
-      setWroteClearanceSidecar(true);
-      setConflicts((prev) => ({
+    try {
+      if (id === "clearanceHosts") {
+        d.writeHosts();
+      } else if (id === "clearanceSidecar") {
+        const result = d.writeClearance();
+        setWroteClearanceSidecar(true);
+        setConflicts((prev) => ({
+          ...prev,
+          clearanceSidecar: result.rcConflicts
+        }));
+      } else {
+        const result = d.writeSafehouse();
+        setConflicts((prev) => ({
+          ...prev,
+          safehouseSidecar: result.rcConflicts
+        }));
+      }
+      setWriteErrors((prev) => ({ ...prev, [id]: null }));
+    } catch (error) {
+      setWriteErrors((prev) => ({
         ...prev,
-        clearanceSidecar: result.rcConflicts
+        [id]: error instanceof Error ? error.message : String(error)
       }));
-    } else {
-      const result = d.writeSafehouse();
-      setConflicts((prev) => ({
-        ...prev,
-        safehouseSidecar: result.rcConflicts
-      }));
+      setBusyRow(id, false);
+      return;
     }
     const reprobe = id === "safehouseSidecar" ? d.probeSafehouseSetup().then((status) => {
       if (mountedRef.current) setSafehouseSetup(status);
@@ -2247,15 +2262,15 @@ function SetupScreen({ onBack, deps }) {
       CrewDoctorView,
       {
         result: doctorResult,
-        onClose: () => {
-          doctorRef.current = null;
-          setDoctorResult(null);
-        }
+        onClose: () => setDoctorResult(null)
       }
     );
   }
   function sidecarRowText(id) {
     if (busy[id]) return id === "crewDoctor" ? "running\u2026" : "writing\u2026";
+    if (id !== "crewDoctor" && writeErrors[id] !== null) {
+      return `failed: ${writeErrors[id]} - enter to retry`;
+    }
     switch (id) {
       case "clearanceHosts": {
         if (clearance === null) return "checking\u2026";
@@ -4585,6 +4600,13 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoct
   useEffect5(() => {
     routeRef.current = route;
   }, [route]);
+  const appMountedRef = useRef12(true);
+  useEffect5(() => {
+    appMountedRef.current = true;
+    return () => {
+      appMountedRef.current = false;
+    };
+  }, []);
   function setOffer(value) {
     doctorOfferRef.current = value;
     setDoctorOffer(value);
@@ -4619,7 +4641,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoct
     setDirty(false);
     setSaved(true);
     setShadowed(result.shadowed);
-    setOffer("offered");
+    if (doctorOfferRef.current !== "running") setOffer("offered");
   }
   useInput29(
     (input, key) => {
@@ -4629,6 +4651,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoct
         if (input === "y") {
           setOffer("running");
           void (crewDoctor ?? runCrewDoctor)().then((result) => {
+            if (!appMountedRef.current) return;
             if (routeRef.current.name === "home") setDoctorResult(result);
             setOffer("hidden");
           });
@@ -4703,13 +4726,14 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoct
               " (moved ",
               shadowed.join(", "),
               ")"
+            ] }) : null,
+            doctorOffer !== "hidden" ? /* @__PURE__ */ jsxs31(Text31, { children: [
+              " ",
+              "\xB7 Run crew doctor to verify?",
+              " ",
+              /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: doctorOffer === "running" ? "running\u2026" : "[y] run \xB7 [esc] dismiss" })
             ] }) : null
           ] }) }),
-          doctorOffer !== "hidden" ? /* @__PURE__ */ jsx31(Box31, { children: /* @__PURE__ */ jsxs31(Text31, { children: [
-            "Run crew doctor to verify?",
-            " ",
-            /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: doctorOffer === "running" ? "running\u2026" : "[y] run \xB7 [esc] dismiss" })
-          ] }) }) : null,
           /* @__PURE__ */ jsx31(Box31, { marginTop: 1, children: /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: "groundcrew picks up your tasks and runs AI coding agents on them automatically \u2014 each in its own isolated copy of your repo \u2014 then opens a PR. Set it up below." }) }),
           /* @__PURE__ */ jsx31(Box31, { marginTop: 1, children: /* @__PURE__ */ jsx31(
             Home,
@@ -5163,3 +5187,4 @@ try {
 } finally {
   dispose();
 }
+process.exit(0);
