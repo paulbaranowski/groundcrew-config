@@ -148,6 +148,7 @@ test("an itemAction does NOT fire on an extra action row", async () => {
   stdin.write("\x1b[B"); // c/d
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ c/d"));
   stdin.write("\x1b[B"); // + add
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ + add"));
   stdin.write("\x1b[B"); // + discover
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("▸ + discover repositories…"),
