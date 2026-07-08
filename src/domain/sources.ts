@@ -534,6 +534,17 @@ export function customSourceCount(draft: ConfigDraft): number {
 }
 
 /**
+ * Display names of the enabled unmanaged-kind sources (e.g. an enable-by-kind
+ * manifest source like `{kind:"jira"}`), for the Home summary. Disabled entries
+ * are omitted — the summary lists what crew would actually run.
+ */
+export function customKindNames(draft: ConfigDraft): string[] {
+  return customSources(draft)
+    .filter((s) => !isDisabled(s))
+    .map(sourceName);
+}
+
+/**
  * Per-row modified flags for the Task Sources hub. Each row owns a slice of
  * `draft.sources` (its kind's entry, or the whole shell array); a row is
  * modified iff its slice differs from baseline's. Catches the enable toggle

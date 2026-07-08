@@ -4,8 +4,8 @@
 import { render } from "ink";
 
 // src/app.tsx
-import { useEffect as useEffect4, useMemo as useMemo2, useState as useState23 } from "react";
-import { Box as Box29, Text as Text29, useApp, useInput as useInput27 } from "ink";
+import { useEffect as useEffect5, useMemo as useMemo2, useState as useState24 } from "react";
+import { Box as Box30, Text as Text30, useApp, useInput as useInput28 } from "ink";
 
 // src/components/Footer.tsx
 import { Box, Text } from "ink";
@@ -223,6 +223,9 @@ function isPlanKeeper(source) {
 function isGenericShell(source) {
   return isShellKind(source) && !isPlanKeeper(source);
 }
+function isManaged(source) {
+  return isLinearKind(source) || isTodoTxtKind(source) || isShellKind(source);
+}
 var PLAN_KEEPER_SANDBOX_PATH = "~/plans";
 function migratePlanKeeperSandboxPaths(draft) {
   const sources = draft.sources;
@@ -435,6 +438,12 @@ function applyShellFields(base, fields) {
   if (paths.length === 0) delete src.sandboxWritePaths;
   else src.sandboxWritePaths = paths;
   return src;
+}
+function customSources(draft) {
+  return (draft.sources ?? []).filter((s) => !isManaged(s));
+}
+function customKindNames(draft) {
+  return customSources(draft).filter((s) => !isDisabled(s)).map(sourceName);
 }
 function taskSourceModified(draft, baseline) {
   const draftSources = draft.sources ?? [];
@@ -677,6 +686,7 @@ function sectionSummary(id, draft) {
       if (isTodoTxtEnabled(draft)) kinds.push("todo-txt");
       if (isPlanKeeperEnabled(draft)) kinds.push("plan-keeper");
       kinds.push(...shellSourceNames(draft));
+      kinds.push(...customKindNames(draft));
       return kinds.join(", ");
     }
     case "usage": {
@@ -733,14 +743,14 @@ function sectionForKeyPath(keyPath) {
   }
   return void 0;
 }
-function containsSegment(path13, segment) {
-  if (segment.length > path13.length) return false;
+function containsSegment(path14, segment) {
+  if (segment.length > path14.length) return false;
   let from = 0;
-  while (from <= path13.length - segment.length) {
-    const idx = path13.indexOf(segment, from);
+  while (from <= path14.length - segment.length) {
+    const idx = path14.indexOf(segment, from);
     if (idx === -1) return false;
-    const before = idx === 0 ? "." : path13[idx - 1];
-    const after = idx + segment.length === path13.length ? "." : path13[idx + segment.length];
+    const before = idx === 0 ? "." : path14[idx - 1];
+    const after = idx + segment.length === path14.length ? "." : path14[idx + segment.length];
     if ((before === "." || before === "[") && (after === "." || after === "[")) {
       return true;
     }
@@ -752,8 +762,8 @@ function containsSegment(path13, segment) {
 // src/domain/modified.ts
 function modifiedSections(baseline, draft) {
   const out = /* @__PURE__ */ new Set();
-  for (const path13 of changedPaths(baseline, draft)) {
-    const section = sectionForKeyPath(path13);
+  for (const path14 of changedPaths(baseline, draft)) {
+    const section = sectionForKeyPath(path14);
     if (section !== void 0) out.add(section);
   }
   return out;
@@ -769,7 +779,7 @@ function modifiedByKey(current, baseline, keyOf) {
 }
 
 // src/app.tsx
-import path7 from "path";
+import path8 from "path";
 
 // src/io/save.ts
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "fs";
@@ -1711,16 +1721,16 @@ import { useRef as useRef7, useState as useState9 } from "react";
 import { Box as Box11, Text as Text11, useInput as useInput9 } from "ink";
 
 // src/domain/draftPath.ts
-function getByPath(draft, path13) {
+function getByPath(draft, path14) {
   let current = draft;
-  for (const key of path13.split(".")) {
+  for (const key of path14.split(".")) {
     if (!isObject(current)) return void 0;
     current = current[key];
   }
   return current;
 }
-function setByPath(draft, path13, value) {
-  const keys = path13.split(".");
+function setByPath(draft, path14, value) {
+  const keys = path14.split(".");
   const [head, ...rest] = keys;
   if (head === void 0) return draft;
   const clone = { ...draft };
@@ -1996,12 +2006,12 @@ function PromptsScreen({
     },
     { isActive: mode === "form" }
   );
-  function update(path13, raw) {
+  function update(path14, raw) {
     const value = raw.length === 0 ? void 0 : raw;
     onChange(
       setByPath(
         draft,
-        path13,
+        path14,
         value
       )
     );
@@ -2642,8 +2652,213 @@ function SectionForm({
 }
 
 // src/screens/TaskSourcesMenu.tsx
-import { useRef as useRef10, useState as useState20 } from "react";
-import { Box as Box26, Text as Text26, useInput as useInput24 } from "ink";
+import { useEffect as useEffect4, useRef as useRef11, useState as useState21 } from "react";
+import { Box as Box27, Text as Text27, useInput as useInput25 } from "ink";
+
+// src/domain/manifestSources.ts
+function findKindEntry(draft, kind) {
+  return (draft.sources ?? []).find((s) => s.kind === kind);
+}
+function isKindEnabled(draft, kind) {
+  return (draft.sources ?? []).some(
+    (s) => s.kind === kind && s.enabled !== false
+  );
+}
+function setKindEnabled(draft, kind, enabled) {
+  const sources = draft.sources ?? [];
+  const existing = findKindEntry(draft, kind);
+  if (enabled) {
+    if (existing === void 0) {
+      const entry = { kind };
+      return { ...draft, sources: [...sources, entry] };
+    }
+    const revived = { ...existing };
+    delete revived.enabled;
+    return {
+      ...draft,
+      sources: sources.map((s) => s === existing ? revived : s)
+    };
+  }
+  if (existing === void 0) return draft;
+  const bare = Object.keys(existing).every((k) => k === "kind" || k === "enabled");
+  if (bare) {
+    return { ...draft, sources: sources.filter((s) => s !== existing) };
+  }
+  const disabled = { ...existing, enabled: false };
+  return {
+    ...draft,
+    sources: sources.map((s) => s === existing ? disabled : s)
+  };
+}
+function readKindEnv(draft, kind) {
+  return readShellEnv(findKindEntry(draft, kind));
+}
+function writeKindEnv(draft, kind, entries) {
+  const existing = findKindEntry(draft, kind);
+  if (existing === void 0) return draft;
+  const env = {};
+  for (const entry of entries) {
+    const key = entry.key.trim();
+    if (key.length > 0) env[key] = entry.value;
+  }
+  const next = { ...existing };
+  if (Object.keys(env).length === 0) delete next.env;
+  else next.env = env;
+  return {
+    ...draft,
+    sources: (draft.sources ?? []).map(
+      (s) => s === existing ? next : s
+    )
+  };
+}
+var BESPOKE_KINDS = /* @__PURE__ */ new Set(["linear", "todo-txt", "shell"]);
+function hubRows(catalog, draft, baseline) {
+  const modified = taskSourceModified(draft, baseline);
+  const discovered = catalog.filter((c) => c.origin !== "builtin" && !BESPOKE_KINDS.has(c.name)).sort((a, b) => a.name.localeCompare(b.name)).map((source) => {
+    const kind = source.name;
+    return {
+      route: { screen: "manifest", source },
+      label: kind,
+      status: isKindEnabled(draft, kind) ? "enabled" : "disabled",
+      modified: !valuesEqual(
+        findKindEntry(draft, kind),
+        findKindEntry(baseline, kind)
+      )
+    };
+  });
+  return [
+    {
+      route: { screen: "linear" },
+      label: "Linear",
+      status: isLinearEnabled(draft) ? "enabled" : "disabled",
+      modified: modified.linear
+    },
+    {
+      route: { screen: "todoTxt" },
+      label: "todo-txt",
+      status: isTodoTxtEnabled(draft) ? "enabled" : "disabled",
+      modified: modified.todoTxt
+    },
+    ...discovered,
+    {
+      route: { screen: "planKeeper" },
+      label: "PlanKeeper",
+      status: isPlanKeeperEnabled(draft) ? "enabled" : "disabled",
+      modified: modified.planKeeper
+    },
+    {
+      route: { screen: "shell" },
+      label: "Shell sources",
+      // Names (joined) instead of a bare count so the row can be scanned without
+      // descending into the sub-form. `[].join(", ")` is "", so `|| "none"`
+      // covers the empty case (mirrors the Home summary in sections.ts).
+      status: shellSourceNames(draft).join(", ") || "none",
+      modified: modified.shell
+    }
+  ];
+}
+
+// src/io/sourceCatalog.ts
+var ORIGINS = /* @__PURE__ */ new Set(["builtin", "package", "user"]);
+function asOptionalString(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function narrowPrerequisites(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const entry of raw) {
+    const e = entry;
+    if (typeof e?.bin !== "string") continue;
+    out.push({
+      bin: e.bin,
+      install: asOptionalString(e.install),
+      setup: asOptionalString(e.setup)
+    });
+  }
+  return out;
+}
+function narrowSecrets(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const entry of raw) {
+    const e = entry;
+    if (typeof e?.env !== "string") continue;
+    out.push({
+      env: e.env,
+      file: asOptionalString(e.file),
+      mode: asOptionalString(e.mode),
+      url: asOptionalString(e.url)
+    });
+  }
+  return out;
+}
+function narrowEnv(raw) {
+  if (raw === null || typeof raw !== "object") return {};
+  const out = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") out[key] = value;
+  }
+  return out;
+}
+function narrowManifest(raw) {
+  const m = raw;
+  if (m === null || typeof m !== "object" || typeof m.name !== "string") {
+    return void 0;
+  }
+  return {
+    name: m.name,
+    description: asOptionalString(m.description),
+    installDir: asOptionalString(m.installDir),
+    prerequisites: narrowPrerequisites(m.prerequisites),
+    secrets: narrowSecrets(m.secrets),
+    env: narrowEnv(m.env)
+  };
+}
+async function catalogFromModule(mod) {
+  const { listTaskSources, getTaskSourceManifest } = mod;
+  if (typeof listTaskSources !== "function") return [];
+  let entries;
+  try {
+    entries = await listTaskSources();
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(entries)) return [];
+  const catalog = [];
+  for (const entry of entries) {
+    const e = entry;
+    if (typeof e?.name !== "string" || typeof e.description !== "string") {
+      continue;
+    }
+    const origin = ORIGINS.has(e.origin) ? e.origin : "user";
+    let manifest;
+    if (origin !== "builtin" && typeof getTaskSourceManifest === "function") {
+      try {
+        manifest = narrowManifest(
+          getTaskSourceManifest(e.name)
+        );
+      } catch {
+        manifest = void 0;
+      }
+    }
+    catalog.push({
+      name: e.name,
+      description: e.description,
+      origin,
+      requiresCredentials: e.requiresCredentials === true,
+      manifest
+    });
+  }
+  return catalog;
+}
+async function loadSourceCatalog() {
+  try {
+    const mod = await import("@clipboard-health/groundcrew");
+    return await catalogFromModule(mod);
+  } catch {
+    return [];
+  }
+}
 
 // src/screens/LinearForm.tsx
 import { useState as useState14 } from "react";
@@ -2739,65 +2954,44 @@ function LinearForm({
   ] });
 }
 
-// src/screens/PlanKeeperForm.tsx
-import { Box as Box20, Text as Text20, useInput as useInput18 } from "ink";
-import { jsx as jsx20, jsxs as jsxs20 } from "react/jsx-runtime";
-function PlanKeeperForm({ draft, baseline, onChange, onBack }) {
-  const enabled = isPlanKeeperEnabled(draft);
-  const enableModified = isPlanKeeperEnabled(draft) !== isPlanKeeperEnabled(baseline);
-  const commands = planKeeperCommands(draft);
-  const sandboxPaths = planKeeperSandboxPaths(draft);
-  const labelWidth = (commands ?? []).reduce(
-    (max, [name]) => Math.max(max, name.length),
-    0
-  );
-  useInput18((input, key) => {
-    if (key.escape) onBack();
-    if (input === " ") onChange(setPlanKeeperEnabled(draft, !enabled));
-  });
-  return /* @__PURE__ */ jsxs20(Box20, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx20(Text20, { bold: true, children: "PlanKeeper" }),
-    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsxs20(Text20, { children: [
-      "plan-keeper source:",
-      " ",
-      /* @__PURE__ */ jsx20(Text20, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
-      enableModified ? /* @__PURE__ */ jsx20(Text20, { color: "yellow", children: " \u25CF" }) : null
-    ] }) }),
-    /* @__PURE__ */ jsxs20(Box20, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx20(Text20, { dimColor: true, children: "Feeds saved plans from ~/plans in as tasks (via the plan-keeper tool). Space toggles." }),
-      /* @__PURE__ */ jsx20(Text20, { dimColor: true, children: "Install: brew install paulbaranowski/tap/plan-keeper" })
-    ] }),
-    commands && commands.length > 0 ? /* @__PURE__ */ jsxs20(Box20, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx20(Text20, { children: "Commands:" }),
-      commands.map(([name, command]) => /* @__PURE__ */ jsxs20(Text20, { dimColor: true, children: [
-        "  ",
-        name.padEnd(labelWidth),
-        " ",
-        command
-      ] }, name))
-    ] }) : null,
-    sandboxPaths && sandboxPaths.length > 0 ? /* @__PURE__ */ jsxs20(Box20, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx20(Text20, { children: "Sandbox write paths:" }),
-      sandboxPaths.map((p, i) => /* @__PURE__ */ jsxs20(Text20, { dimColor: true, children: [
-        "  ",
-        p
-      ] }, `${i}:${p}`))
-    ] }) : null
-  ] });
+// src/screens/ManifestSourceForm.tsx
+import { useRef as useRef9, useState as useState16 } from "react";
+import { Box as Box21, Text as Text21, useInput as useInput19 } from "ink";
+
+// src/io/prereqProbes.ts
+import { accessSync as accessSync2, constants as constants2, statSync as statSync3 } from "fs";
+import { homedir as homedir2 } from "os";
+import path7 from "path";
+function expandHome(p) {
+  if (p === "~") return homedir2();
+  if (p.startsWith("~/")) return path7.join(homedir2(), p.slice(2));
+  return p;
 }
-
-// src/screens/ShellSourcesForm.tsx
-import { useState as useState18 } from "react";
-import { Box as Box24, Text as Text24, useInput as useInput22 } from "ink";
-
-// src/screens/ShellSourceSubForm.tsx
-import { useRef as useRef9, useState as useState17 } from "react";
-import { Box as Box23, Text as Text23, useInput as useInput21 } from "ink";
+function isExecutableFile(candidate) {
+  try {
+    if (!statSync3(candidate).isFile()) return false;
+    accessSync2(candidate, constants2.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function binOnPath(bin, env = process.env) {
+  const searchPath = env.PATH ?? "";
+  return searchPath.split(path7.delimiter).filter((dir) => dir.length > 0).some((dir) => isExecutableFile(path7.join(expandHome(dir), bin)));
+}
+function secretFileExists(installDir, file) {
+  try {
+    return statSync3(path7.join(expandHome(installDir), file)).isFile();
+  } catch {
+    return false;
+  }
+}
 
 // src/screens/ShellEnvEditor.tsx
 import { useState as useState15 } from "react";
-import { Box as Box21, Text as Text21, useInput as useInput19 } from "ink";
-import { jsx as jsx21, jsxs as jsxs21 } from "react/jsx-runtime";
+import { Box as Box20, Text as Text20, useInput as useInput18 } from "ink";
+import { jsx as jsx20, jsxs as jsxs20 } from "react/jsx-runtime";
 function EnvEntryEditor({
   entry,
   onSave,
@@ -2807,7 +3001,7 @@ function EnvEntryEditor({
   const [value, setValue] = useState15(entry.value);
   const [active, setActive] = useState15(0);
   const guard = useEditGuard();
-  useInput19(
+  useInput18(
     (_input, k) => {
       if (k.escape) {
         guard.requestCancel(onCancel);
@@ -2820,7 +3014,7 @@ function EnvEntryEditor({
     { isActive: !guard.guarding }
   );
   if (guard.guarding) {
-    return /* @__PURE__ */ jsx21(
+    return /* @__PURE__ */ jsx20(
       SaveGuard,
       {
         onApply: () => onSave({ key, value }),
@@ -2829,10 +3023,10 @@ function EnvEntryEditor({
       }
     );
   }
-  return /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx21(Text21, { bold: true, children: "Environment variable" }),
-    /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", marginTop: 1, children: [
-      /* @__PURE__ */ jsx21(
+  return /* @__PURE__ */ jsxs20(Box20, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx20(Text20, { bold: true, children: "Environment variable" }),
+    /* @__PURE__ */ jsxs20(Box20, { flexDirection: "column", marginTop: 1, children: [
+      /* @__PURE__ */ jsx20(
         TextField,
         {
           label: "key",
@@ -2842,7 +3036,7 @@ function EnvEntryEditor({
           onChange: guard.track(setKey)
         }
       ),
-      /* @__PURE__ */ jsx21(
+      /* @__PURE__ */ jsx20(
         TextField,
         {
           label: "value",
@@ -2853,14 +3047,14 @@ function EnvEntryEditor({
         }
       )
     ] }),
-    key.trim().length === 0 ? /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "\u26A0 key is required (a blank key is dropped)." }) }) : null,
-    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: "\u2191/\u2193 move \xB7 type to edit \xB7 enter apply \xB7 esc cancel." }) })
+    key.trim().length === 0 ? /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsx20(Text20, { color: "yellow", children: "\u26A0 key is required (a blank key is dropped)." }) }) : null,
+    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsx20(Text20, { dimColor: true, children: "\u2191/\u2193 move \xB7 type to edit \xB7 enter apply \xB7 esc cancel." }) })
   ] });
 }
 function ShellEnvEditor({ env, baselineEnv, onChange, onBack }) {
   const [editing, setEditing] = useState15(void 0);
   const modified = modifiedByKey(env, baselineEnv, (e, i) => e.key || `__blank__${i}`);
-  useInput19(
+  useInput18(
     (_input, key) => {
       if (key.escape) onBack();
     },
@@ -2868,7 +3062,7 @@ function ShellEnvEditor({ env, baselineEnv, onChange, onBack }) {
   );
   if (editing !== void 0) {
     const entry = editing === "new" ? { key: "", value: "" } : env[editing] ?? { key: "", value: "" };
-    return /* @__PURE__ */ jsx21(
+    return /* @__PURE__ */ jsx20(
       EnvEntryEditor,
       {
         entry,
@@ -2889,9 +3083,9 @@ function ShellEnvEditor({ env, baselineEnv, onChange, onBack }) {
     error: void 0,
     modified: modified[index]
   }));
-  return /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx21(Text21, { bold: true, children: "Environment variables" }),
-    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx21(
+  return /* @__PURE__ */ jsxs20(Box20, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx20(Text20, { bold: true, children: "Environment variables" }),
+    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx20(
       ListField,
       {
         items,
@@ -2901,34 +3095,253 @@ function ShellEnvEditor({ env, baselineEnv, onChange, onBack }) {
         onDelete: (index) => onChange(env.filter((_, i) => i !== index))
       }
     ) }),
-    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: "Extra environment variables passed to every command for this source (e.g. API tokens, hostnames). Stored literally in the config. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
+    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsx20(Text20, { dimColor: true, children: "Extra environment variables passed to every command for this source (e.g. API tokens, hostnames). Stored literally in the config. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
   ] });
 }
 
-// src/screens/ShellSandboxPathsEditor.tsx
-import { useState as useState16 } from "react";
+// src/screens/ManifestSourceForm.tsx
+import { jsx as jsx21, jsxs as jsxs21 } from "react/jsx-runtime";
+function ManifestSourceForm({
+  source,
+  draft,
+  baseline,
+  onChange,
+  onBack,
+  probeBin = binOnPath,
+  probeSecret = secretFileExists,
+  env = process.env
+}) {
+  const kind = source.name;
+  const manifest = source.manifest;
+  const enabled = isKindEnabled(draft, kind);
+  const [focus, setFocus] = useState16(0);
+  const [editingEnv, setEditingEnv] = useState16(false);
+  const maxRow = enabled ? 1 : 0;
+  const row2 = Math.min(focus, maxRow);
+  const rowRef = useRef9(row2);
+  rowRef.current = row2;
+  const [prereqs] = useState16(
+    () => (manifest?.prerequisites ?? []).map((p) => ({
+      ...p,
+      found: probeBin(p.bin)
+    }))
+  );
+  const [secrets] = useState16(
+    () => (manifest?.secrets ?? []).map((s) => {
+      const envSet = (env[s.env] ?? "").length > 0;
+      const fileSet = s.file !== void 0 && manifest?.installDir !== void 0 && probeSecret(manifest.installDir, s.file);
+      return { ...s, found: envSet || fileSet };
+    })
+  );
+  useInput19(
+    (input, k) => {
+      if (k.escape) {
+        onBack();
+        return;
+      }
+      if (k.downArrow) {
+        rowRef.current = Math.min(maxRow, rowRef.current + 1);
+        setFocus(rowRef.current);
+      }
+      if (k.upArrow) {
+        rowRef.current = Math.max(0, rowRef.current - 1);
+        setFocus(rowRef.current);
+      }
+      if (input === " " && rowRef.current === 0)
+        onChange(setKindEnabled(draft, kind, !enabled));
+      if (k.return && rowRef.current === 1) setEditingEnv(true);
+    },
+    { isActive: !editingEnv }
+  );
+  if (editingEnv) {
+    return /* @__PURE__ */ jsx21(
+      ShellEnvEditor,
+      {
+        env: readKindEnv(draft, kind),
+        baselineEnv: readKindEnv(baseline, kind),
+        onChange: (next) => onChange(writeKindEnv(draft, kind, next)),
+        onBack: () => setEditingEnv(false)
+      }
+    );
+  }
+  const enableModified = enabled !== isKindEnabled(baseline, kind);
+  const envModified = !valuesEqual(
+    readKindEnv(draft, kind),
+    readKindEnv(baseline, kind)
+  );
+  const overrides = readKindEnv(draft, kind);
+  const defaults = Object.entries(manifest?.env ?? {});
+  return /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsxs21(Text21, { bold: true, children: [
+      kind,
+      " ",
+      /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+        "(",
+        source.origin,
+        " source)"
+      ] })
+    ] }),
+    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: source.description }) }),
+    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsxs21(Text21, { color: row2 === 0 ? "cyan" : void 0, children: [
+      row2 === 0 ? "\u25B8 " : "  ",
+      "Source:",
+      " ",
+      /* @__PURE__ */ jsx21(Text21, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
+      enableModified ? /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: " \u25CF" }) : null
+    ] }) }),
+    enabled ? /* @__PURE__ */ jsx21(Box21, { children: /* @__PURE__ */ jsxs21(Text21, { color: row2 === 1 ? "cyan" : void 0, children: [
+      row2 === 1 ? "\u25B8 " : "  ",
+      "env overrides:",
+      " ",
+      /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: overrides.length === 0 ? "none (manifest defaults apply)" : overrides.map((e) => e.key).join(", ") }),
+      envModified ? /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: " \u25CF" }) : null
+    ] }) }) : null,
+    defaults.length > 0 ? /* @__PURE__ */ jsx21(Box21, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+      "defaults: ",
+      defaults.map(([k, v]) => `${k}=${v}`).join(" \xB7 ")
+    ] }) }) : null,
+    prereqs.length > 0 ? /* @__PURE__ */ jsxs21(Box21, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx21(Text21, { children: "Prerequisites:" }),
+      prereqs.map((p) => /* @__PURE__ */ jsx21(Box21, { flexDirection: "column", children: p.found ? /* @__PURE__ */ jsxs21(Text21, { children: [
+        "  ",
+        /* @__PURE__ */ jsx21(Text21, { color: "green", children: "\u2713" }),
+        " ",
+        p.bin
+      ] }) : /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", children: [
+        /* @__PURE__ */ jsxs21(Text21, { children: [
+          "  ",
+          /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "\u2717" }),
+          " ",
+          p.bin,
+          " ",
+          /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "not found" })
+        ] }),
+        p.install ? /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+          "    ",
+          "install: ",
+          p.install
+        ] }) : null,
+        p.setup ? /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+          "    ",
+          "then: ",
+          p.setup
+        ] }) : null
+      ] }) }, p.bin))
+    ] }) : null,
+    secrets.length > 0 ? /* @__PURE__ */ jsxs21(Box21, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx21(Text21, { children: "Credentials:" }),
+      secrets.map((s) => /* @__PURE__ */ jsx21(Box21, { flexDirection: "column", children: s.found ? /* @__PURE__ */ jsxs21(Text21, { children: [
+        "  ",
+        /* @__PURE__ */ jsx21(Text21, { color: "green", children: "\u2713" }),
+        " ",
+        s.env
+      ] }) : /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", children: [
+        /* @__PURE__ */ jsxs21(Text21, { children: [
+          "  ",
+          /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "\u2717" }),
+          " ",
+          s.env,
+          " ",
+          /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "not set" })
+        ] }),
+        s.file !== void 0 && manifest?.installDir !== void 0 ? /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+          "    ",
+          "expected at ",
+          manifest.installDir,
+          "/",
+          s.file,
+          s.mode !== void 0 ? ` (chmod ${s.mode})` : ""
+        ] }) : null,
+        s.url ? /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+          "    ",
+          "create one: ",
+          s.url
+        ] }) : null
+      ] }) }, s.env))
+    ] }) : null,
+    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: "Space toggles the source (top row). Enabling is all groundcrew needs \u2014 it installs the source's scripts itself on the next crew run. Prerequisites and credentials above are set up outside this config. esc back." }) })
+  ] });
+}
+
+// src/screens/PlanKeeperForm.tsx
 import { Box as Box22, Text as Text22, useInput as useInput20 } from "ink";
 import { jsx as jsx22, jsxs as jsxs22 } from "react/jsx-runtime";
+function PlanKeeperForm({ draft, baseline, onChange, onBack }) {
+  const enabled = isPlanKeeperEnabled(draft);
+  const enableModified = isPlanKeeperEnabled(draft) !== isPlanKeeperEnabled(baseline);
+  const commands = planKeeperCommands(draft);
+  const sandboxPaths = planKeeperSandboxPaths(draft);
+  const labelWidth = (commands ?? []).reduce(
+    (max, [name]) => Math.max(max, name.length),
+    0
+  );
+  useInput20((input, key) => {
+    if (key.escape) onBack();
+    if (input === " ") onChange(setPlanKeeperEnabled(draft, !enabled));
+  });
+  return /* @__PURE__ */ jsxs22(Box22, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx22(Text22, { bold: true, children: "PlanKeeper" }),
+    /* @__PURE__ */ jsx22(Box22, { marginTop: 1, children: /* @__PURE__ */ jsxs22(Text22, { children: [
+      "plan-keeper source:",
+      " ",
+      /* @__PURE__ */ jsx22(Text22, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
+      enableModified ? /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: " \u25CF" }) : null
+    ] }) }),
+    /* @__PURE__ */ jsxs22(Box22, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: "Feeds saved plans from ~/plans in as tasks (via the plan-keeper tool). Space toggles." }),
+      /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: "Install: brew install paulbaranowski/tap/plan-keeper" })
+    ] }),
+    commands && commands.length > 0 ? /* @__PURE__ */ jsxs22(Box22, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx22(Text22, { children: "Commands:" }),
+      commands.map(([name, command]) => /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
+        "  ",
+        name.padEnd(labelWidth),
+        " ",
+        command
+      ] }, name))
+    ] }) : null,
+    sandboxPaths && sandboxPaths.length > 0 ? /* @__PURE__ */ jsxs22(Box22, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx22(Text22, { children: "Sandbox write paths:" }),
+      sandboxPaths.map((p, i) => /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
+        "  ",
+        p
+      ] }, `${i}:${p}`))
+    ] }) : null
+  ] });
+}
+
+// src/screens/ShellSourcesForm.tsx
+import { useState as useState19 } from "react";
+import { Box as Box25, Text as Text25, useInput as useInput23 } from "ink";
+
+// src/screens/ShellSourceSubForm.tsx
+import { useRef as useRef10, useState as useState18 } from "react";
+import { Box as Box24, Text as Text24, useInput as useInput22 } from "ink";
+
+// src/screens/ShellSandboxPathsEditor.tsx
+import { useState as useState17 } from "react";
+import { Box as Box23, Text as Text23, useInput as useInput21 } from "ink";
+import { jsx as jsx23, jsxs as jsxs23 } from "react/jsx-runtime";
 function PathEntryEditor({
   value,
   onSave,
   onCancel
 }) {
-  const [path13, setPath] = useState16(value);
+  const [path14, setPath] = useState17(value);
   const guard = useEditGuard();
-  useInput20(
+  useInput21(
     (_input, k) => {
       if (k.escape) {
         guard.requestCancel(onCancel);
         return;
       }
-      if (k.return && path13.trim().length > 0) onSave(path13);
+      if (k.return && path14.trim().length > 0) onSave(path14);
     },
     { isActive: !guard.guarding }
   );
   if (guard.guarding) {
-    const apply = path13.trim().length === 0 ? onCancel : () => onSave(path13);
-    return /* @__PURE__ */ jsx22(
+    const apply = path14.trim().length === 0 ? onCancel : () => onSave(path14);
+    return /* @__PURE__ */ jsx23(
       SaveGuard,
       {
         onApply: apply,
@@ -2937,20 +3350,20 @@ function PathEntryEditor({
       }
     );
   }
-  return /* @__PURE__ */ jsxs22(Box22, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx22(Text22, { bold: true, children: "Sandbox write path" }),
-    /* @__PURE__ */ jsx22(Box22, { flexDirection: "column", marginTop: 1, children: /* @__PURE__ */ jsx22(
+  return /* @__PURE__ */ jsxs23(Box23, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx23(Text23, { bold: true, children: "Sandbox write path" }),
+    /* @__PURE__ */ jsx23(Box23, { flexDirection: "column", marginTop: 1, children: /* @__PURE__ */ jsx23(
       TextField,
       {
         label: "path",
-        value: path13,
+        value: path14,
         placeholder: "absolute or ~ path the command may write to",
         isActive: true,
         onChange: guard.track(setPath)
       }
     ) }),
-    path13.trim().length === 0 ? /* @__PURE__ */ jsx22(Box22, { marginTop: 1, children: /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: "\u26A0 path is required (a blank row is dropped)." }) }) : null,
-    /* @__PURE__ */ jsx22(Box22, { marginTop: 1, children: /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: "type to edit \xB7 enter apply \xB7 esc cancel." }) })
+    path14.trim().length === 0 ? /* @__PURE__ */ jsx23(Box23, { marginTop: 1, children: /* @__PURE__ */ jsx23(Text23, { color: "yellow", children: "\u26A0 path is required (a blank row is dropped)." }) }) : null,
+    /* @__PURE__ */ jsx23(Box23, { marginTop: 1, children: /* @__PURE__ */ jsx23(Text23, { dimColor: true, children: "type to edit \xB7 enter apply \xB7 esc cancel." }) })
   ] });
 }
 function ShellSandboxPathsEditor({
@@ -2959,13 +3372,13 @@ function ShellSandboxPathsEditor({
   onChange,
   onBack
 }) {
-  const [editing, setEditing] = useState16(void 0);
+  const [editing, setEditing] = useState17(void 0);
   const modified = modifiedByKey(
     paths,
     baselinePaths,
     (p, i) => p || `__blank__${i}`
   );
-  useInput20(
+  useInput21(
     (_input, key) => {
       if (key.escape) onBack();
     },
@@ -2973,7 +3386,7 @@ function ShellSandboxPathsEditor({
   );
   if (editing !== void 0) {
     const value = editing === "new" ? "" : paths[editing] ?? "";
-    return /* @__PURE__ */ jsx22(
+    return /* @__PURE__ */ jsx23(
       PathEntryEditor,
       {
         value,
@@ -2988,15 +3401,15 @@ function ShellSandboxPathsEditor({
       String(editing)
     );
   }
-  const items = paths.map((path13, index) => ({
-    label: path13 || "(unnamed)",
+  const items = paths.map((path14, index) => ({
+    label: path14 || "(unnamed)",
     note: void 0,
     error: void 0,
     modified: modified[index]
   }));
-  return /* @__PURE__ */ jsxs22(Box22, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx22(Text22, { bold: true, children: "Sandbox write paths" }),
-    /* @__PURE__ */ jsx22(Box22, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx22(
+  return /* @__PURE__ */ jsxs23(Box23, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx23(Text23, { bold: true, children: "Sandbox write paths" }),
+    /* @__PURE__ */ jsx23(Box23, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx23(
       ListField,
       {
         items,
@@ -3006,12 +3419,12 @@ function ShellSandboxPathsEditor({
         onDelete: (index) => onChange(paths.filter((_, i) => i !== index))
       }
     ) }),
-    /* @__PURE__ */ jsx22(Box22, { marginTop: 1, children: /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: "Extra filesystem paths this source's commands may write to under groundcrew's sandbox. Stored literally; ~ is expanded by groundcrew. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
+    /* @__PURE__ */ jsx23(Box23, { marginTop: 1, children: /* @__PURE__ */ jsx23(Text23, { dimColor: true, children: "Extra filesystem paths this source's commands may write to under groundcrew's sandbox. Stored literally; ~ is expanded by groundcrew. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
   ] });
 }
 
 // src/screens/ShellSourceSubForm.tsx
-import { jsx as jsx23, jsxs as jsxs23 } from "react/jsx-runtime";
+import { jsx as jsx24, jsxs as jsxs24 } from "react/jsx-runtime";
 var ROWS3 = [
   { key: "name", label: "name", placeholder: "kebab-case, e.g. jira" },
   { key: "verify", label: "commands.verify", placeholder: "connectivity check (optional)" },
@@ -3032,17 +3445,17 @@ function ShellSourceSubForm({
   onSave,
   onCancel
 }) {
-  const [fields, setFields] = useState17(() => readShellFields(source));
+  const [fields, setFields] = useState18(() => readShellFields(source));
   const baselineFields = readShellFields(baselineSource);
-  const [active, setActive] = useState17(0);
-  const [mode, setMode] = useState17("fields");
+  const [active, setActive] = useState18(0);
+  const [mode, setMode] = useState18("fields");
   const guard = useEditGuard();
-  const activeRef = useRef9(0);
+  const activeRef = useRef10(0);
   function moveActive(next) {
     activeRef.current = next;
     setActive(next);
   }
-  useInput21(
+  useInput22(
     (_input, key) => {
       if (key.escape) {
         guard.requestCancel(onCancel);
@@ -3059,7 +3472,7 @@ function ShellSourceSubForm({
     { isActive: mode === "fields" && !guard.guarding }
   );
   if (guard.guarding) {
-    return /* @__PURE__ */ jsx23(
+    return /* @__PURE__ */ jsx24(
       SaveGuard,
       {
         onApply: () => onSave(applyShellFields(source, fields)),
@@ -3069,7 +3482,7 @@ function ShellSourceSubForm({
     );
   }
   if (mode === "env") {
-    return /* @__PURE__ */ jsx23(
+    return /* @__PURE__ */ jsx24(
       ShellEnvEditor,
       {
         env: fields.env,
@@ -3083,7 +3496,7 @@ function ShellSourceSubForm({
     );
   }
   if (mode === "paths") {
-    return /* @__PURE__ */ jsx23(
+    return /* @__PURE__ */ jsx24(
       ShellSandboxPathsEditor,
       {
         paths: fields.sandboxWritePaths,
@@ -3104,12 +3517,12 @@ function ShellSourceSubForm({
   const pathsCount = fields.sandboxWritePaths.length;
   const envModified = baselineSource === void 0 || !valuesEqual(fields.env, baselineFields.env);
   const pathsModified = baselineSource === void 0 || !valuesEqual(fields.sandboxWritePaths, baselineFields.sandboxWritePaths);
-  return /* @__PURE__ */ jsxs23(Box23, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx23(Text23, { bold: true, children: "Shell source" }),
-    /* @__PURE__ */ jsxs23(Box23, { flexDirection: "column", marginTop: 1, children: [
+  return /* @__PURE__ */ jsxs24(Box24, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx24(Text24, { bold: true, children: "Shell source" }),
+    /* @__PURE__ */ jsxs24(Box24, { flexDirection: "column", marginTop: 1, children: [
       ROWS3.map((row2, index) => {
         const modified = baselineSource === void 0 || !valuesEqual(fields[row2.key], baselineFields[row2.key]);
-        return /* @__PURE__ */ jsx23(
+        return /* @__PURE__ */ jsx24(
           TextField,
           {
             label: row2.label,
@@ -3125,40 +3538,40 @@ function ShellSourceSubForm({
           row2.key
         );
       }),
-      /* @__PURE__ */ jsxs23(Box23, { children: [
-        /* @__PURE__ */ jsxs23(Text23, { color: envActive ? "cyan" : void 0, children: [
+      /* @__PURE__ */ jsxs24(Box24, { children: [
+        /* @__PURE__ */ jsxs24(Text24, { color: envActive ? "cyan" : void 0, children: [
           envActive ? "\u203A " : "  ",
           "env",
           " "
         ] }),
-        /* @__PURE__ */ jsxs23(Text23, { dimColor: true, children: [
+        /* @__PURE__ */ jsxs24(Text24, { dimColor: true, children: [
           envCount,
           " variable",
           envCount === 1 ? "" : "s",
           " \u2014 enter to edit"
         ] }),
-        envModified ? /* @__PURE__ */ jsx23(Text23, { color: "yellow", children: " \u25CF" }) : null
+        envModified ? /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: " \u25CF" }) : null
       ] }),
-      /* @__PURE__ */ jsxs23(Box23, { children: [
-        /* @__PURE__ */ jsxs23(Text23, { color: pathsActive ? "cyan" : void 0, children: [
+      /* @__PURE__ */ jsxs24(Box24, { children: [
+        /* @__PURE__ */ jsxs24(Text24, { color: pathsActive ? "cyan" : void 0, children: [
           pathsActive ? "\u203A " : "  ",
           "sandboxWritePaths",
           " "
         ] }),
-        /* @__PURE__ */ jsxs23(Text23, { dimColor: true, children: [
+        /* @__PURE__ */ jsxs24(Text24, { dimColor: true, children: [
           pathsCount,
           " path",
           pathsCount === 1 ? "" : "s",
           " \u2014 enter to edit"
         ] }),
-        pathsModified ? /* @__PURE__ */ jsx23(Text23, { color: "yellow", children: " \u25CF" }) : null
+        pathsModified ? /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: " \u25CF" }) : null
       ] })
     ] }),
-    nameMissing || listTasksMissing ? /* @__PURE__ */ jsxs23(Box23, { marginTop: 1, flexDirection: "column", children: [
-      nameMissing ? /* @__PURE__ */ jsx23(Text23, { color: "yellow", children: "\u26A0 name is required (kebab-case)." }) : null,
-      listTasksMissing ? /* @__PURE__ */ jsx23(Text23, { color: "yellow", children: "\u26A0 commands.listTasks is required (or the legacy fetch alias)." }) : null
+    nameMissing || listTasksMissing ? /* @__PURE__ */ jsxs24(Box24, { marginTop: 1, flexDirection: "column", children: [
+      nameMissing ? /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: "\u26A0 name is required (kebab-case)." }) : null,
+      listTasksMissing ? /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: "\u26A0 commands.listTasks is required (or the legacy fetch alias)." }) : null
     ] }) : null,
-    /* @__PURE__ */ jsx23(Box23, { marginTop: 1, children: /* @__PURE__ */ jsxs23(Text23, { dimColor: true, children: [
+    /* @__PURE__ */ jsx24(Box24, { marginTop: 1, children: /* @__PURE__ */ jsxs24(Text24, { dimColor: true, children: [
       "Commands groundcrew runs to talk to your tracker. listTasks is required;",
       " ",
       "${id}",
@@ -3168,14 +3581,14 @@ function ShellSourceSubForm({
 }
 
 // src/screens/ShellSourcesForm.tsx
-import { jsx as jsx24, jsxs as jsxs24 } from "react/jsx-runtime";
+import { jsx as jsx25, jsxs as jsxs25 } from "react/jsx-runtime";
 function ShellSourcesForm({
   draft,
   baseline,
   onChange,
   onBack
 }) {
-  const [editing, setEditing] = useState18(void 0);
+  const [editing, setEditing] = useState19(void 0);
   const entries = shellSources(draft);
   const baseEntries = shellSources(baseline);
   const modified = modifiedByKey(
@@ -3183,7 +3596,7 @@ function ShellSourcesForm({
     baseEntries,
     (s, i) => s.name || `__blank__${i}`
   );
-  useInput22(
+  useInput23(
     (_input, key) => {
       if (editing !== void 0) return;
       if (key.escape) onBack();
@@ -3196,7 +3609,7 @@ function ShellSourcesForm({
   if (editing !== void 0) {
     const current = entries[editing];
     const baselineSource = baseEntries.find((e) => e.name === current?.name);
-    return /* @__PURE__ */ jsx24(
+    return /* @__PURE__ */ jsx25(
       ShellSourceSubForm,
       {
         source: current,
@@ -3220,9 +3633,9 @@ function ShellSourcesForm({
       modified: modified[index]
     };
   });
-  return /* @__PURE__ */ jsxs24(Box24, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx24(Text24, { bold: true, children: "Shell sources" }),
-    /* @__PURE__ */ jsx24(Box24, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx24(
+  return /* @__PURE__ */ jsxs25(Box25, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx25(Text25, { bold: true, children: "Shell sources" }),
+    /* @__PURE__ */ jsx25(Box25, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx25(
       ListField,
       {
         items,
@@ -3232,14 +3645,14 @@ function ShellSourcesForm({
         onDelete: (index) => commit(entries.filter((_, i) => i !== index))
       }
     ) }),
-    /* @__PURE__ */ jsx24(Box24, { marginTop: 1, children: /* @__PURE__ */ jsx24(Text24, { dimColor: true, children: "Connect any other tracker (Jira, GitHub Issues, \u2026) by giving groundcrew shell commands that list and update its tasks. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
+    /* @__PURE__ */ jsx25(Box25, { marginTop: 1, children: /* @__PURE__ */ jsx25(Text25, { dimColor: true, children: "Connect any other tracker (Jira, GitHub Issues, \u2026) by giving groundcrew shell commands that list and update its tasks. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
   ] });
 }
 
 // src/screens/TodoTxtForm.tsx
-import { useState as useState19 } from "react";
-import { Box as Box25, Text as Text25, useInput as useInput23 } from "ink";
-import { jsx as jsx25, jsxs as jsxs25 } from "react/jsx-runtime";
+import { useState as useState20 } from "react";
+import { Box as Box26, Text as Text26, useInput as useInput24 } from "ink";
+import { jsx as jsx26, jsxs as jsxs26 } from "react/jsx-runtime";
 var FIELDS = [
   { field: "todoPath", placeholder: "~/todo.txt  (default)" },
   { field: "tasksDir", placeholder: "~/tasks  (default)" },
@@ -3249,9 +3662,9 @@ var FIELDS = [
 ];
 function TodoTxtForm({ draft, baseline, onChange, onBack }) {
   const enabled = isTodoTxtEnabled(draft);
-  const [focusIndex, setFocusIndex] = useState19(0);
+  const [focusIndex, setFocusIndex] = useState20(0);
   const focus = FIELDS[focusIndex]?.field ?? "todoPath";
-  useInput23((input, key) => {
+  useInput24((input, key) => {
     if (key.escape) onBack();
     if (input === " ") onChange(setTodoTxtEnabled(draft, !enabled));
     if (!enabled) return;
@@ -3259,19 +3672,19 @@ function TodoTxtForm({ draft, baseline, onChange, onBack }) {
     if (key.upArrow) setFocusIndex((f) => Math.max(0, f - 1));
   });
   const enableModified = isTodoTxtEnabled(draft) !== isTodoTxtEnabled(baseline);
-  return /* @__PURE__ */ jsxs25(Box25, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx25(Text25, { bold: true, children: "todo-txt" }),
-    /* @__PURE__ */ jsx25(Box25, { marginTop: 1, children: /* @__PURE__ */ jsxs25(Text25, { children: [
+  return /* @__PURE__ */ jsxs26(Box26, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx26(Text26, { bold: true, children: "todo-txt" }),
+    /* @__PURE__ */ jsx26(Box26, { marginTop: 1, children: /* @__PURE__ */ jsxs26(Text26, { children: [
       "todo-txt source:",
       " ",
-      /* @__PURE__ */ jsx25(Text25, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
-      enableModified ? /* @__PURE__ */ jsx25(Text25, { color: "yellow", children: " \u25CF" }) : null
+      /* @__PURE__ */ jsx26(Text26, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
+      enableModified ? /* @__PURE__ */ jsx26(Text26, { color: "yellow", children: " \u25CF" }) : null
     ] }) }),
-    enabled ? /* @__PURE__ */ jsx25(Box25, { flexDirection: "column", marginTop: 1, children: FIELDS.map(({ field, placeholder }) => {
+    enabled ? /* @__PURE__ */ jsx26(Box26, { flexDirection: "column", marginTop: 1, children: FIELDS.map(({ field, placeholder }) => {
       const value = getTodoTxtField(draft, field) ?? "";
       const baseValue = getTodoTxtField(baseline, field) ?? "";
       const modified = !valuesEqual(value, baseValue);
-      return /* @__PURE__ */ jsx25(
+      return /* @__PURE__ */ jsx26(
         TextField,
         {
           label: field,
@@ -3284,132 +3697,132 @@ function TodoTxtForm({ draft, baseline, onChange, onBack }) {
         field
       );
     }) }) : null,
-    /* @__PURE__ */ jsx25(Box25, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx25(Text25, { dimColor: true, children: "Use a plain todo.txt file on your computer as the task list \u2014 no accounts or API keys needed. Space toggles. \u2191/\u2193 moves between fields." }) })
+    /* @__PURE__ */ jsx26(Box26, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx26(Text26, { dimColor: true, children: "Use a plain todo.txt file on your computer as the task list \u2014 no accounts or API keys needed. Space toggles. \u2191/\u2193 moves between fields." }) })
   ] });
 }
 
 // src/screens/TaskSourcesMenu.tsx
-import { jsx as jsx26, jsxs as jsxs26 } from "react/jsx-runtime";
-var ROWS4 = [
-  "linear",
-  "todoTxt",
-  "planKeeper",
-  "shell"
-];
-function TaskSourcesMenu({ draft, baseline, onChange, onBack }) {
-  const [sub, setSub] = useState20("hub");
-  const [cursor, setCursor] = useState20(0);
-  const cursorRef = useRef10(0);
+import { jsx as jsx27, jsxs as jsxs27 } from "react/jsx-runtime";
+function TaskSourcesMenu({
+  draft,
+  baseline,
+  onChange,
+  onBack,
+  loadCatalog = loadSourceCatalog
+}) {
+  const [sub, setSub] = useState21("hub");
+  const [catalog, setCatalog] = useState21([]);
+  const [cursor, setCursor] = useState21(0);
+  const cursorRef = useRef11(0);
+  useEffect4(() => {
+    let alive = true;
+    void loadCatalog().then((entries) => {
+      if (!alive) return;
+      const before = hubRows([], draft, baseline).map((r) => r.label);
+      const after = hubRows(entries, draft, baseline).map((r) => r.label);
+      const current = before[cursorRef.current];
+      const remapped = current === void 0 ? -1 : after.indexOf(current);
+      if (remapped >= 0) moveCursor(remapped);
+      setCatalog(entries);
+    }).catch(() => {
+      if (alive) setCatalog([]);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loadCatalog]);
+  const rows = hubRows(catalog, draft, baseline);
   function moveCursor(next) {
     cursorRef.current = next;
     setCursor(next);
   }
-  useInput24(
+  useInput25(
     (_input, key) => {
       if (sub !== "hub") return;
       if (key.escape) onBack();
       if (key.downArrow)
-        moveCursor(Math.min(ROWS4.length - 1, cursorRef.current + 1));
+        moveCursor(Math.min(rows.length - 1, cursorRef.current + 1));
       if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
       if (key.return) {
-        const next = ROWS4[cursorRef.current];
-        if (next) setSub(next);
+        const next = rows[cursorRef.current];
+        if (next) setSub(next.route);
       }
     },
     { isActive: sub === "hub" }
   );
   const back = () => setSub("hub");
-  if (sub === "linear")
-    return /* @__PURE__ */ jsx26(
-      LinearForm,
+  if (sub !== "hub") {
+    if (sub.screen === "linear")
+      return /* @__PURE__ */ jsx27(
+        LinearForm,
+        {
+          draft,
+          baseline,
+          onChange,
+          onBack: back
+        }
+      );
+    if (sub.screen === "todoTxt")
+      return /* @__PURE__ */ jsx27(
+        TodoTxtForm,
+        {
+          draft,
+          baseline,
+          onChange,
+          onBack: back
+        }
+      );
+    if (sub.screen === "planKeeper")
+      return /* @__PURE__ */ jsx27(
+        PlanKeeperForm,
+        {
+          draft,
+          baseline,
+          onChange,
+          onBack: back
+        }
+      );
+    if (sub.screen === "shell")
+      return /* @__PURE__ */ jsx27(
+        ShellSourcesForm,
+        {
+          draft,
+          baseline,
+          onChange,
+          onBack: back
+        }
+      );
+    return /* @__PURE__ */ jsx27(
+      ManifestSourceForm,
       {
+        source: sub.source,
         draft,
         baseline,
         onChange,
         onBack: back
       }
     );
-  if (sub === "todoTxt")
-    return /* @__PURE__ */ jsx26(
-      TodoTxtForm,
-      {
-        draft,
-        baseline,
-        onChange,
-        onBack: back
-      }
-    );
-  if (sub === "planKeeper")
-    return /* @__PURE__ */ jsx26(
-      PlanKeeperForm,
-      {
-        draft,
-        baseline,
-        onChange,
-        onBack: back
-      }
-    );
-  if (sub === "shell")
-    return /* @__PURE__ */ jsx26(
-      ShellSourcesForm,
-      {
-        draft,
-        baseline,
-        onChange,
-        onBack: back
-      }
-    );
-  const modified = taskSourceModified(draft, baseline);
-  const rows = [
-    {
-      id: "linear",
-      label: "Linear",
-      status: isLinearEnabled(draft) ? "enabled" : "disabled",
-      modified: modified.linear
-    },
-    {
-      id: "todoTxt",
-      label: "todo-txt",
-      status: isTodoTxtEnabled(draft) ? "enabled" : "disabled",
-      modified: modified.todoTxt
-    },
-    {
-      id: "planKeeper",
-      label: "PlanKeeper",
-      status: isPlanKeeperEnabled(draft) ? "enabled" : "disabled",
-      modified: modified.planKeeper
-    },
-    {
-      id: "shell",
-      label: "Shell sources",
-      // Names (joined) instead of a bare count so the row can be scanned without
-      // descending into the sub-form to see which sources are configured. Matches
-      // the Home summary's shape (`sections.ts` → taskSources case).
-      // `[].join(", ")` is "", so the `|| "none"` covers the empty case.
-      status: shellSourceNames(draft).join(", ") || "none",
-      modified: modified.shell
-    }
-  ];
-  return /* @__PURE__ */ jsxs26(Box26, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx26(Text26, { bold: true, children: "Task Sources" }),
-    /* @__PURE__ */ jsx26(Box26, { marginTop: 1, flexDirection: "column", children: rows.map((row2, index) => /* @__PURE__ */ jsxs26(Box26, { children: [
-      /* @__PURE__ */ jsx26(Text26, { color: cursor === index ? "cyan" : void 0, children: cursor === index ? "\u25B8 " : "  " }),
-      /* @__PURE__ */ jsx26(Box26, { width: 20, children: /* @__PURE__ */ jsx26(Text26, { color: cursor === index ? "cyan" : void 0, children: row2.label }) }),
-      /* @__PURE__ */ jsx26(Text26, { dimColor: true, children: row2.status }),
-      row2.modified ? /* @__PURE__ */ jsx26(Text26, { color: "yellow", children: " \u25CF" }) : null
-    ] }, row2.id)) }),
-    /* @__PURE__ */ jsx26(Box26, { marginTop: 1, children: /* @__PURE__ */ jsx26(Text26, { dimColor: true, children: "Where groundcrew gets its to-do list. Turn on one or more sources of tasks for it to work through. \u2191/\u2193 move \xB7 enter open \xB7 esc back." }) })
+  }
+  return /* @__PURE__ */ jsxs27(Box27, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx27(Text27, { bold: true, children: "Task Sources" }),
+    /* @__PURE__ */ jsx27(Box27, { marginTop: 1, flexDirection: "column", children: rows.map((row2, index) => /* @__PURE__ */ jsxs27(Box27, { children: [
+      /* @__PURE__ */ jsx27(Text27, { color: cursor === index ? "cyan" : void 0, children: cursor === index ? "\u25B8 " : "  " }),
+      /* @__PURE__ */ jsx27(Box27, { width: 20, children: /* @__PURE__ */ jsx27(Text27, { color: cursor === index ? "cyan" : void 0, children: row2.label }) }),
+      /* @__PURE__ */ jsx27(Text27, { dimColor: true, children: row2.status }),
+      row2.modified ? /* @__PURE__ */ jsx27(Text27, { color: "yellow", children: " \u25CF" }) : null
+    ] }, row2.label)) }),
+    /* @__PURE__ */ jsx27(Box27, { marginTop: 1, children: /* @__PURE__ */ jsx27(Text27, { dimColor: true, children: "Where groundcrew gets its to-do list. Turn on one or more sources of tasks for it to work through. \u2191/\u2193 move \xB7 enter open \xB7 esc back." }) })
   ] });
 }
 
 // src/screens/UsageForm.tsx
-import { useState as useState21 } from "react";
-import { Box as Box27, Text as Text27, useInput as useInput25 } from "ink";
-import { jsx as jsx27, jsxs as jsxs27 } from "react/jsx-runtime";
+import { useState as useState22 } from "react";
+import { Box as Box28, Text as Text28, useInput as useInput26 } from "ink";
+import { jsx as jsx28, jsxs as jsxs28 } from "react/jsx-runtime";
 function UsageForm({ draft, baseline, onChange, onBack }) {
   const disabled = isUsageDisabled(draft.agents);
   const hasAgents = Object.keys(draft.agents?.definitions ?? {}).length > 0;
-  const [active, setActive] = useState21(0);
+  const [active, setActive] = useState22(0);
   const limit = draft.orchestrator?.sessionLimitPercentage;
   function setLimit(raw) {
     const value = raw.length === 0 ? void 0 : Number(raw);
@@ -3422,7 +3835,7 @@ function UsageForm({ draft, baseline, onChange, onBack }) {
       )
     );
   }
-  useInput25((input, key) => {
+  useInput26((input, key) => {
     if (key.escape) onBack();
     if (key.downArrow) setActive((a) => Math.min(1, a + 1));
     if (key.upArrow) setActive((a) => Math.max(0, a - 1));
@@ -3435,16 +3848,16 @@ function UsageForm({ draft, baseline, onChange, onBack }) {
     draft.orchestrator?.sessionLimitPercentage
   );
   const trackingModified = isUsageDisabled(baseline.agents) !== disabled;
-  return /* @__PURE__ */ jsxs27(Box27, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx27(Text27, { bold: true, children: "Usage Limits" }),
-    /* @__PURE__ */ jsx27(Box27, { marginTop: 1, children: /* @__PURE__ */ jsxs27(Text27, { color: active === 0 ? "cyan" : void 0, children: [
+  return /* @__PURE__ */ jsxs28(Box28, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx28(Text28, { bold: true, children: "Usage Limits" }),
+    /* @__PURE__ */ jsx28(Box28, { marginTop: 1, children: /* @__PURE__ */ jsxs28(Text28, { color: active === 0 ? "cyan" : void 0, children: [
       active === 0 ? "\u203A " : "  ",
       "Usage tracking:",
       " ",
-      /* @__PURE__ */ jsx27(Text27, { color: disabled ? "yellow" : "green", children: disabled ? "disabled" : "enabled" }),
-      trackingModified ? /* @__PURE__ */ jsx27(Text27, { color: "yellow", children: " \u25CF" }) : null
+      /* @__PURE__ */ jsx28(Text28, { color: disabled ? "yellow" : "green", children: disabled ? "disabled" : "enabled" }),
+      trackingModified ? /* @__PURE__ */ jsx28(Text28, { color: "yellow", children: " \u25CF" }) : null
     ] }) }),
-    /* @__PURE__ */ jsx27(Box27, { marginTop: 1, children: /* @__PURE__ */ jsx27(
+    /* @__PURE__ */ jsx28(Box28, { marginTop: 1, children: /* @__PURE__ */ jsx28(
       TextField,
       {
         label: "sessionLimitPercentage",
@@ -3455,32 +3868,32 @@ function UsageForm({ draft, baseline, onChange, onBack }) {
         onChange: setLimit
       }
     ) }),
-    /* @__PURE__ */ jsxs27(Box27, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx27(Text27, { dimColor: true, children: "Usage tracking lets groundcrew watch your AI subscription's usage so it won't launch agents when you're near your limits. Disabling opts every enabled agent out; the limit % is the ceiling above which it stops launching new agents. \u2191/\u2193 move \xB7 space toggles tracking." }),
-      /* @__PURE__ */ jsx27(Text27, { dimColor: true, children: "Needs the codexbar menu-bar app on Mac (groundcrew reads usage via its codexbar CLI). Install: brew install --cask steipete/tap/codexbar" }),
-      hasAgents ? null : /* @__PURE__ */ jsx27(Text27, { dimColor: true, children: "(no enabled agents to gate \u2014 add one under Agents)" })
+    /* @__PURE__ */ jsxs28(Box28, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: "Usage tracking lets groundcrew watch your AI subscription's usage so it won't launch agents when you're near your limits. Disabling opts every enabled agent out; the limit % is the ceiling above which it stops launching new agents. \u2191/\u2193 move \xB7 space toggles tracking." }),
+      /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: "Needs the codexbar menu-bar app on Mac (groundcrew reads usage via its codexbar CLI). Install: brew install --cask steipete/tap/codexbar" }),
+      hasAgents ? null : /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: "(no enabled agents to gate \u2014 add one under Agents)" })
     ] })
   ] });
 }
 
 // src/screens/WorkspaceForm.tsx
-import { useState as useState22 } from "react";
-import { Box as Box28, Text as Text28, useInput as useInput26 } from "ink";
-import { jsx as jsx28, jsxs as jsxs28 } from "react/jsx-runtime";
+import { useState as useState23 } from "react";
+import { Box as Box29, Text as Text29, useInput as useInput27 } from "ink";
+import { jsx as jsx29, jsxs as jsxs29 } from "react/jsx-runtime";
 var FOCI = ["projectDir", "worktreeDir"];
 function WorkspaceForm({ draft, baseline, onChange, onBack }) {
-  const [focusIndex, setFocusIndex] = useState22(0);
+  const [focusIndex, setFocusIndex] = useState23(0);
   const focus = FOCI[focusIndex] ?? "projectDir";
-  useInput26((_input, key) => {
+  useInput27((_input, key) => {
     if (key.escape) onBack();
     if (key.downArrow) setFocusIndex((f) => Math.min(FOCI.length - 1, f + 1));
     if (key.upArrow) setFocusIndex((f) => Math.max(0, f - 1));
   });
-  function setField(path13, value) {
+  function setField(path14, value) {
     onChange(
       setByPath(
         draft,
-        path13,
+        path14,
         value.length === 0 ? void 0 : value
       )
     );
@@ -3493,10 +3906,10 @@ function WorkspaceForm({ draft, baseline, onChange, onBack }) {
     baseline.workspace.worktreeDir,
     draft.workspace.worktreeDir
   );
-  return /* @__PURE__ */ jsxs28(Box28, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx28(Text28, { bold: true, children: "Workspace" }),
-    /* @__PURE__ */ jsxs28(Box28, { flexDirection: "column", marginTop: 1, children: [
-      /* @__PURE__ */ jsx28(
+  return /* @__PURE__ */ jsxs29(Box29, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx29(Text29, { bold: true, children: "Workspace" }),
+    /* @__PURE__ */ jsxs29(Box29, { flexDirection: "column", marginTop: 1, children: [
+      /* @__PURE__ */ jsx29(
         TextField,
         {
           label: "projectDir",
@@ -3506,7 +3919,7 @@ function WorkspaceForm({ draft, baseline, onChange, onBack }) {
           onChange: (v) => setField("workspace.projectDir", v)
         }
       ),
-      /* @__PURE__ */ jsx28(
+      /* @__PURE__ */ jsx29(
         TextField,
         {
           label: "worktreeDir",
@@ -3518,20 +3931,20 @@ function WorkspaceForm({ draft, baseline, onChange, onBack }) {
         }
       )
     ] }),
-    /* @__PURE__ */ jsx28(Box28, { marginTop: 1, children: /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: 'Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a "git worktree") created under worktreeDir. Add the repos themselves in the Repositories section.' }) })
+    /* @__PURE__ */ jsx29(Box29, { marginTop: 1, children: /* @__PURE__ */ jsx29(Text29, { dimColor: true, children: 'Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a "git worktree") created under worktreeDir. Add the repos themselves in the Repositories section.' }) })
   ] });
 }
 
 // src/app.tsx
-import { jsx as jsx29, jsxs as jsxs29 } from "react/jsx-runtime";
+import { jsx as jsx30, jsxs as jsxs30 } from "react/jsx-runtime";
 function Screen({
   rows,
   columns,
   footer,
   children
 }) {
-  return /* @__PURE__ */ jsxs29(Box29, { width: columns, height: rows, flexDirection: "column", children: [
-    /* @__PURE__ */ jsx29(Box29, { flexGrow: 1, flexDirection: "column", children }),
+  return /* @__PURE__ */ jsxs30(Box30, { width: columns, height: rows, flexDirection: "column", children: [
+    /* @__PURE__ */ jsx30(Box30, { flexGrow: 1, flexDirection: "column", children }),
     footer
   ] });
 }
@@ -3543,24 +3956,24 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
   {
     workspace: { projectDir: "", knownRepositories: [] }
   };
-  const [draft, setDraft] = useState23(
+  const [draft, setDraft] = useState24(
     () => migratePlanKeeperSandboxPaths(rawInitial)
   );
-  const [baseline, setBaseline] = useState23(() => rawInitial);
-  const [route, setRoute] = useState23({ name: "home" });
-  const [homeCursor, setHomeCursor] = useState23(0);
-  const [dirty, setDirty] = useState23(false);
-  const [valid, setValid] = useState23(true);
-  const [checked, setChecked] = useState23(false);
-  const [issues, setIssues] = useState23(/* @__PURE__ */ new Set());
-  const [saved, setSaved] = useState23(false);
-  const [shadowed, setShadowed] = useState23([]);
-  const [quitting, setQuitting] = useState23(false);
+  const [baseline, setBaseline] = useState24(() => rawInitial);
+  const [route, setRoute] = useState24({ name: "home" });
+  const [homeCursor, setHomeCursor] = useState24(0);
+  const [dirty, setDirty] = useState24(false);
+  const [valid, setValid] = useState24(true);
+  const [checked, setChecked] = useState24(false);
+  const [issues, setIssues] = useState24(/* @__PURE__ */ new Set());
+  const [saved, setSaved] = useState24(false);
+  const [shadowed, setShadowed] = useState24([]);
+  const [quitting, setQuitting] = useState24(false);
   const configPath2 = targetPath(target2);
-  useEffect4(() => {
+  useEffect5(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
-      void validateDraft(draft, path7.dirname(targetPath(target2))).then((result) => {
+      void validateDraft(draft, path8.dirname(targetPath(target2))).then((result) => {
         if (cancelled) return;
         setChecked(true);
         setValid(result.ok);
@@ -3586,7 +3999,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
     setSaved(true);
     setShadowed(result.shadowed);
   }
-  useInput27(
+  useInput28(
     (input) => {
       if (route.name !== "home") return;
       if (input === "s") void save();
@@ -3602,7 +4015,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
     [baseline, draft]
   );
   if (quitting) {
-    return /* @__PURE__ */ jsx29(Screen, { rows, columns, children: /* @__PURE__ */ jsx29(
+    return /* @__PURE__ */ jsx30(Screen, { rows, columns, children: /* @__PURE__ */ jsx30(
       QuitGuard,
       {
         onSaveQuit: () => void save().then(() => exit()),
@@ -3614,12 +4027,12 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
   const noSources = enabledSourceCount(draft) === 0;
   const homeIssues = noSources ? /* @__PURE__ */ new Set([...issues, "taskSources"]) : issues;
   if (route.name === "home") {
-    return /* @__PURE__ */ jsxs29(
+    return /* @__PURE__ */ jsxs30(
       Screen,
       {
         rows,
         columns,
-        footer: /* @__PURE__ */ jsx29(
+        footer: /* @__PURE__ */ jsx30(
           Footer,
           {
             dirty,
@@ -3631,23 +4044,23 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
           }
         ),
         children: [
-          /* @__PURE__ */ jsxs29(Box29, { justifyContent: "space-between", children: [
-            /* @__PURE__ */ jsx29(Text29, { bold: true, children: "crew-config" }),
-            /* @__PURE__ */ jsx29(Text29, { dimColor: true, children: target2.scope })
+          /* @__PURE__ */ jsxs30(Box30, { justifyContent: "space-between", children: [
+            /* @__PURE__ */ jsx30(Text30, { bold: true, children: "crew-config" }),
+            /* @__PURE__ */ jsx30(Text30, { dimColor: true, children: target2.scope })
           ] }),
-          /* @__PURE__ */ jsx29(Box29, { children: /* @__PURE__ */ jsxs29(Text29, { dimColor: true, children: [
+          /* @__PURE__ */ jsx30(Box30, { children: /* @__PURE__ */ jsxs30(Text30, { dimColor: true, children: [
             "editing",
             " ",
-            /* @__PURE__ */ jsx29(Text29, { color: saved ? "green" : void 0, children: configPath2 }),
-            saved ? /* @__PURE__ */ jsx29(Text29, { color: "green", children: " \u2713 saved" }) : null,
-            saved && shadowed.length > 0 ? /* @__PURE__ */ jsxs29(Text29, { dimColor: true, children: [
+            /* @__PURE__ */ jsx30(Text30, { color: saved ? "green" : void 0, children: configPath2 }),
+            saved ? /* @__PURE__ */ jsx30(Text30, { color: "green", children: " \u2713 saved" }) : null,
+            saved && shadowed.length > 0 ? /* @__PURE__ */ jsxs30(Text30, { dimColor: true, children: [
               " (moved ",
               shadowed.join(", "),
               ")"
             ] }) : null
           ] }) }),
-          /* @__PURE__ */ jsx29(Box29, { marginTop: 1, children: /* @__PURE__ */ jsx29(Text29, { dimColor: true, children: "groundcrew picks up your tasks and runs AI coding agents on them automatically \u2014 each in its own isolated copy of your repo \u2014 then opens a PR. Set it up below." }) }),
-          /* @__PURE__ */ jsx29(Box29, { marginTop: 1, children: /* @__PURE__ */ jsx29(
+          /* @__PURE__ */ jsx30(Box30, { marginTop: 1, children: /* @__PURE__ */ jsx30(Text30, { dimColor: true, children: "groundcrew picks up your tasks and runs AI coding agents on them automatically \u2014 each in its own isolated copy of your repo \u2014 then opens a PR. Set it up below." }) }),
+          /* @__PURE__ */ jsx30(Box30, { marginTop: 1, children: /* @__PURE__ */ jsx30(
             Home,
             {
               draft,
@@ -3664,8 +4077,8 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
   }
   const id = route.id;
   const back = () => setRoute({ name: "home" });
-  const configDir = path7.dirname(targetPath(target2));
-  const form = id === "setup" ? /* @__PURE__ */ jsx29(SetupScreen, { onBack: back, deps: setupDeps }) : id === "workspace" ? /* @__PURE__ */ jsx29(
+  const configDir = path8.dirname(targetPath(target2));
+  const form = id === "setup" ? /* @__PURE__ */ jsx30(SetupScreen, { onBack: back, deps: setupDeps }) : id === "workspace" ? /* @__PURE__ */ jsx30(
     WorkspaceForm,
     {
       draft,
@@ -3673,7 +4086,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "repositories" ? /* @__PURE__ */ jsx29(
+  ) : id === "repositories" ? /* @__PURE__ */ jsx30(
     RepositoriesForm,
     {
       draft,
@@ -3681,7 +4094,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "taskSources" ? /* @__PURE__ */ jsx29(
+  ) : id === "taskSources" ? /* @__PURE__ */ jsx30(
     TaskSourcesMenu,
     {
       draft,
@@ -3689,7 +4102,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "usage" ? /* @__PURE__ */ jsx29(
+  ) : id === "usage" ? /* @__PURE__ */ jsx30(
     UsageForm,
     {
       draft,
@@ -3697,7 +4110,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "agents" ? /* @__PURE__ */ jsx29(
+  ) : id === "agents" ? /* @__PURE__ */ jsx30(
     AgentsForm,
     {
       draft,
@@ -3705,7 +4118,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "prompts" ? /* @__PURE__ */ jsx29(
+  ) : id === "prompts" ? /* @__PURE__ */ jsx30(
     PromptsScreen,
     {
       draft,
@@ -3714,7 +4127,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onBack: back,
       configDir
     }
-  ) : /* @__PURE__ */ jsx29(
+  ) : /* @__PURE__ */ jsx30(
     SectionForm,
     {
       title: SECTION_LABEL[id],
@@ -3726,12 +4139,12 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onBack: back
     }
   );
-  return /* @__PURE__ */ jsx29(Screen, { rows, columns, children: form });
+  return /* @__PURE__ */ jsx30(Screen, { rows, columns, children: form });
 }
 
 // src/io/load.ts
 import { existsSync as existsSync4, readFileSync as readFileSync2 } from "fs";
-import path8 from "path";
+import path9 from "path";
 import { pathToFileURL } from "url";
 import { cosmiconfig } from "cosmiconfig";
 var importModule = async (filepath) => {
@@ -3743,7 +4156,7 @@ var explorer = cosmiconfig("crew", {
 });
 async function loadDraft(filepath) {
   if (!existsSync4(filepath)) return void 0;
-  if (path8.extname(filepath) === ".json") {
+  if (path9.extname(filepath) === ".json") {
     const text = readFileSync2(filepath, "utf8");
     try {
       return JSON.parse(text);
@@ -3760,7 +4173,7 @@ async function loadDraft(filepath) {
 
 // src/io/locate.ts
 import { existsSync as existsSync5 } from "fs";
-import path9 from "path";
+import path10 from "path";
 var CONFIG_BASENAMES = [
   "crew.config.ts",
   "crew.config.mjs",
@@ -3776,10 +4189,10 @@ function locate(argv2, cwd) {
   const scope = argv2.includes("--local") ? "local" : "global";
   const target2 = { scope, cwd };
   if (explicit !== void 0) {
-    return { target: target2, path: path9.resolve(cwd, explicit) };
+    return { target: target2, path: path10.resolve(cwd, explicit) };
   }
-  const dir = path9.dirname(targetPath(target2));
-  const existing = CONFIG_BASENAMES.map((name) => path9.join(dir, name)).find(
+  const dir = path10.dirname(targetPath(target2));
+  const existing = CONFIG_BASENAMES.map((name) => path10.join(dir, name)).find(
     existsSync5
   );
   return { target: target2, path: existing ?? targetPath(target2) };
@@ -3787,7 +4200,7 @@ function locate(argv2, cwd) {
 
 // src/io/seed.ts
 import { existsSync as existsSync6, mkdirSync as mkdirSync3, writeFileSync as writeFileSync4 } from "fs";
-import path10 from "path";
+import path11 from "path";
 
 // src/domain/defaults.ts
 var DEFAULT_PROMPT_FILE = "prompt-initial.md";
@@ -3832,8 +4245,8 @@ function defaultDraft() {
 
 // src/io/seed.ts
 function seedNewConfig(target2) {
-  const dir = path10.dirname(targetPath(target2));
-  const promptPath = path10.join(dir, DEFAULT_PROMPT_FILE);
+  const dir = path11.dirname(targetPath(target2));
+  const promptPath = path11.join(dir, DEFAULT_PROMPT_FILE);
   try {
     if (!existsSync6(promptPath)) {
       mkdirSync3(dir, { recursive: true });
@@ -3846,11 +4259,11 @@ function seedNewConfig(target2) {
 }
 
 // src/io/setup/doctor.ts
-import { homedir as homedir2 } from "os";
+import { homedir as homedir3 } from "os";
 
 // src/io/setup/probes.ts
-import { readFileSync as readFileSync3, statSync as statSync3 } from "fs";
-import path11 from "path";
+import { readFileSync as readFileSync3, statSync as statSync4 } from "fs";
+import path12 from "path";
 
 // src/domain/setup/rcScan.ts
 var RC_CANDIDATES = [
@@ -3912,7 +4325,7 @@ var SAFEHOUSE_SIDECAR_PATH = ".config/agent-safehouse/env.sh";
 function readRcFiles(home) {
   const out = [];
   for (const name of RC_CANDIDATES) {
-    const file = path11.join(home, name);
+    const file = path12.join(home, name);
     try {
       out.push({ file, content: readFileSync3(file, "utf8") });
     } catch {
@@ -3942,7 +4355,7 @@ function pidIsAlive(pid) {
   }
 }
 function probeClearance(home, env = process.env) {
-  const personalFile = path11.join(home, CLEARANCE_PERSONAL_HOSTS_PATH);
+  const personalFile = path12.join(home, CLEARANCE_PERSONAL_HOSTS_PATH);
   const personalContent = readTextOrNull(personalFile);
   const personalFileExists = personalContent !== null;
   const personalFileHasClaudeHosts = personalContent !== null && personalContent.split("\n").some((line) => {
@@ -3950,11 +4363,11 @@ function probeClearance(home, env = process.env) {
     return stripped.length > 0 && !stripped.startsWith("#") && stripped.includes("downloads.claude.ai");
   });
   const envExported = envVarExported("CLEARANCE_ALLOW_HOSTS_FILES", home, env);
-  const pidFile = path11.join(home, CLEARANCE_PID_PATH);
+  const pidFile = path12.join(home, CLEARANCE_PID_PATH);
   let daemonPid = null;
   let daemonAgeSeconds = null;
   try {
-    const mtimeMs = statSync3(pidFile).mtimeMs;
+    const mtimeMs = statSync4(pidFile).mtimeMs;
     daemonAgeSeconds = Math.round((Date.now() - mtimeMs) / 1e3);
     const raw = readFileSync3(pidFile, "utf8").trim();
     const candidate = Number.parseInt(raw, 10);
@@ -3978,7 +4391,7 @@ async function probeSafehouse(home, env = process.env, deps = defaultInstallDeps
   const formula = await probeSafehouseFormula(deps);
   const envExported = envVarExported("SAFEHOUSE_APPEND_PROFILE", home, env);
   const sidecarContent = readTextOrNull(
-    path11.join(home, SAFEHOUSE_SIDECAR_PATH)
+    path12.join(home, SAFEHOUSE_SIDECAR_PATH)
   );
   const sidecarPresent = sidecarContent !== null;
   const sidecarHasFunctions = sidecarContent !== null && SAFE_FN_RE.test(sidecarContent) && SAFE_CLAUDE_FN_RE.test(sidecarContent);
@@ -3995,7 +4408,7 @@ async function probeSafehouse(home, env = process.env, deps = defaultInstallDeps
 // src/io/setup/doctor.ts
 function defaultDoctorDeps() {
   return {
-    home: homedir2(),
+    home: homedir3(),
     platform: process.platform,
     env: process.env,
     installDeps: defaultInstallDeps()
@@ -4108,14 +4521,14 @@ async function runDoctor(argv2, deps = defaultDoctorDeps(), log = console.log) {
 // src/io/upgrade.ts
 import { spawnSync } from "child_process";
 import { realpathSync } from "fs";
-import path12 from "path";
+import path13 from "path";
 var BREW_FORMULA = "paulbaranowski/tap/crew-config";
 var INSTALLER_URL = "https://github.com/paulbaranowski/groundcrew-config/releases/latest/download/install.sh";
 var INSTALLER_PIPELINE = `curl -fsSL ${INSTALLER_URL} | bash`;
 function isContained(child, parent) {
   if (parent === "") return false;
-  const rel = path12.relative(parent, child);
-  return rel === "" || !rel.startsWith("..") && !path12.isAbsolute(rel);
+  const rel = path13.relative(parent, child);
+  return rel === "" || !rel.startsWith("..") && !path13.isAbsolute(rel);
 }
 function detectChannel(input) {
   if (isContained(input.scriptRealpath, input.brewFormulaPrefix)) return "brew";
@@ -4219,7 +4632,7 @@ function metaOutput(argv2) {
 }
 
 // src/cli.tsx
-import { jsx as jsx30 } from "react/jsx-runtime";
+import { jsx as jsx31 } from "react/jsx-runtime";
 var argv = process.argv.slice(2);
 var meta = metaOutput(argv);
 if (meta !== null) {
@@ -4240,7 +4653,7 @@ var { target, path: configPath } = locate(argv, process.cwd());
 var initialDraft = await loadDraft(configPath) ?? seedNewConfig(target);
 var dispose = installFullscreen(createFullscreen(process.stdout));
 try {
-  const instance = render(/* @__PURE__ */ jsx30(App, { initialDraft, target }));
+  const instance = render(/* @__PURE__ */ jsx31(App, { initialDraft, target }));
   await instance.waitUntilExit();
 } finally {
   dispose();
