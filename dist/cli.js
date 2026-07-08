@@ -1676,6 +1676,57 @@ var OVERRIDES_STUB = `;; ~/.config/agent-safehouse/local-overrides.sb
 ;;     (subpath "/Volumes/Shared/Engineering"))
 `;
 
+// src/domain/setup/host.ts
+var SRT_LINUX_DEPS = [
+  { bin: "bwrap", label: "bubblewrap" },
+  { bin: "socat", label: "socat" },
+  { bin: "rg", label: "ripgrep (rg)" }
+];
+var SRT_APT_INSTALL = "apt install bubblewrap socat ripgrep";
+var SRT_APPARMOR_NOTE = "On Ubuntu 24.04+ also run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0";
+function deriveCapabilities(platform, present) {
+  const isMacOS = platform === "darwin";
+  const isLinux = platform === "linux";
+  return {
+    platform,
+    isMacOS,
+    isLinux,
+    isSafehouseSupported: isMacOS,
+    isSrtSupported: isMacOS || isLinux,
+    hasBubblewrap: isLinux && present.bwrap,
+    hasSocat: isLinux && present.socat,
+    hasRipgrep: isLinux && present.rg
+  };
+}
+function computeSrtReadiness(caps) {
+  if (!caps.isLinux) return { ready: true, missing: [] };
+  const present = {
+    bwrap: caps.hasBubblewrap,
+    socat: caps.hasSocat,
+    rg: caps.hasRipgrep
+  };
+  const missing = SRT_LINUX_DEPS.filter((d) => !present[d.bin]).map(
+    (d) => d.label
+  );
+  return { ready: missing.length === 0, missing };
+}
+function srtGuidance(readiness) {
+  if (readiness.ready) return "";
+  return `${readiness.missing.join(", ")} not found - Debian/Ubuntu: ${SRT_APT_INSTALL}. ${SRT_APPARMOR_NOTE}`;
+}
+
+// src/io/setup/host.ts
+function defaultHostDeps() {
+  return { platform: process.platform, which };
+}
+function detectHostCapabilities(deps = defaultHostDeps()) {
+  return deriveCapabilities(deps.platform, {
+    bwrap: deps.which("bwrap") !== null,
+    socat: deps.which("socat") !== null,
+    rg: deps.which("rg") !== null
+  });
+}
+
 // src/domain/setup/installProbe.ts
 var GROUNDCREW_PACKAGE = "@clipboard-health/groundcrew";
 var SAFEHOUSE_FORMULA_REF = "eugene1g/safehouse/agent-safehouse";
@@ -2043,7 +2094,7 @@ import { jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
 function defaultSetupScreenDeps() {
   const installDeps = defaultInstallDeps();
   return {
-    platform: process.platform,
+    detectHost: () => detectHostCapabilities(),
     probeGroundcrew: () => probeGroundcrew(installDeps),
     installGroundcrew: () => installGroundcrew(installDeps),
     probeSafehouse: () => probeSafehouseFormula(installDeps),
@@ -2056,38 +2107,53 @@ function defaultSetupScreenDeps() {
     runCrewDoctor: () => runCrewDoctor()
   };
 }
-var ROWS2 = [
-  {
-    id: "groundcrew",
-    label: "groundcrew",
-    detail: "npm global @clipboard-health/groundcrew"
-  },
-  {
-    id: "safehouse",
-    label: "safehouse",
-    detail: "brew eugene1g/safehouse/agent-safehouse (macOS sandbox)"
-  },
-  {
-    id: "clearanceHosts",
-    label: "clearance hosts",
-    detail: "~/.config/clearance/personal-allow-hosts (personal egress allowlist)"
-  },
-  {
-    id: "clearanceSidecar",
-    label: "clearance env.sh",
-    detail: "~/.config/clearance/env.sh (env sidecar; sourced from your rc)"
-  },
-  {
-    id: "safehouseSidecar",
-    label: "safehouse env.sh",
-    detail: "~/.config/agent-safehouse/env.sh (safe/safe-claude wrappers)"
-  },
-  {
+function buildRows(caps) {
+  const rows = [
+    {
+      id: "groundcrew",
+      label: "groundcrew",
+      detail: "npm global @clipboard-health/groundcrew"
+    }
+  ];
+  if (caps.isSafehouseSupported) {
+    rows.push({
+      id: "safehouse",
+      label: "safehouse",
+      detail: "brew eugene1g/safehouse/agent-safehouse (macOS sandbox)"
+    });
+  } else if (caps.isSrtSupported) {
+    rows.push({
+      id: "srtDeps",
+      label: "srt sandbox",
+      detail: "bubblewrap/socat/ripgrep for the srt runner (Linux)"
+    });
+  }
+  rows.push(
+    {
+      id: "clearanceHosts",
+      label: "clearance hosts",
+      detail: "~/.config/clearance/personal-allow-hosts (personal egress allowlist)"
+    },
+    {
+      id: "clearanceSidecar",
+      label: "clearance env.sh",
+      detail: "~/.config/clearance/env.sh (env sidecar; sourced from your rc)"
+    }
+  );
+  if (caps.isSafehouseSupported) {
+    rows.push({
+      id: "safehouseSidecar",
+      label: "safehouse env.sh",
+      detail: "~/.config/agent-safehouse/env.sh (safe/safe-claude wrappers)"
+    });
+  }
+  rows.push({
     id: "crewDoctor",
     label: "run crew doctor",
     detail: "groundcrew's own health check (read-only)"
-  }
-];
+  });
+  return rows;
+}
 var isInstallRow = (id) => id === "groundcrew" || id === "safehouse";
 function installRowText(state) {
   switch (state.phase) {
@@ -2109,11 +2175,14 @@ function installRowText(state) {
 }
 function SetupScreen({ onBack, deps }) {
   const d = useRef4(deps ?? defaultSetupScreenDeps()).current;
+  const [host0] = useState7(() => d.detectHost());
+  const [rows] = useState7(() => buildRows(host0));
+  const [host, setHost] = useState7(host0);
   const [cursor, setCursor] = useState7(0);
   const cursorRef = useRef4(0);
   const [states, setStates] = useState7({
     groundcrew: { phase: "checking" },
-    safehouse: d.platform === "darwin" ? { phase: "checking" } : { phase: "not-applicable" }
+    safehouse: host0.isSafehouseSupported ? { phase: "checking" } : { phase: "not-applicable" }
   });
   const statesRef = useRef4(states);
   const [clearance, setClearance] = useState7(null);
@@ -2124,6 +2193,7 @@ function SetupScreen({ onBack, deps }) {
     clearanceHosts: false,
     clearanceSidecar: false,
     safehouseSidecar: false,
+    srtDeps: false,
     crewDoctor: false
   });
   const busyRef = useRef4(busy);
@@ -2156,7 +2226,7 @@ function SetupScreen({ onBack, deps }) {
     void d.probeGroundcrew().then((report) => {
       if (mountedRef.current) setRow("groundcrew", { phase: "ready", report });
     });
-    if (d.platform === "darwin") {
+    if (host0.isSafehouseSupported) {
       void d.probeSafehouse().then((report) => {
         if (mountedRef.current) setRow("safehouse", { phase: "ready", report });
       });
@@ -2191,8 +2261,9 @@ function SetupScreen({ onBack, deps }) {
     });
   }
   function activateSidecar(id) {
+    if (id === "srtDeps") return;
     if (busyRef.current[id]) return;
-    if (id === "safehouseSidecar" && d.platform !== "darwin") {
+    if (id === "safehouseSidecar" && !host0.isSafehouseSupported) {
       return;
     }
     setBusyRow(id, true);
@@ -2247,11 +2318,15 @@ function SetupScreen({ onBack, deps }) {
       return;
     }
     if (key.downArrow)
-      moveCursor(Math.min(ROWS2.length - 1, cursorRef.current + 1));
+      moveCursor(Math.min(rows.length - 1, cursorRef.current + 1));
     if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
     if (key.return) {
-      const row2 = ROWS2[cursorRef.current];
+      const row2 = rows[cursorRef.current];
       if (!row2) return;
+      if (row2.id === "srtDeps") {
+        setHost(d.detectHost());
+        return;
+      }
       if (isInstallRow(row2.id)) activateInstall(row2.id);
       else activateSidecar(row2.id);
     }
@@ -2267,7 +2342,7 @@ function SetupScreen({ onBack, deps }) {
   }
   function sidecarRowText(id) {
     if (busy[id]) return id === "crewDoctor" ? "running\u2026" : "writing\u2026";
-    if (id !== "crewDoctor" && writeErrors[id] !== null) {
+    if (id !== "crewDoctor" && id !== "srtDeps" && writeErrors[id] !== null) {
       return `failed: ${writeErrors[id]} - enter to retry`;
     }
     switch (id) {
@@ -2284,8 +2359,13 @@ function SetupScreen({ onBack, deps }) {
         if (clearance.envExported) return "exported \u2713";
         return wroteClearanceSidecar ? "written \u2713 - now add the rc line below" : "write sidecar + add rc line";
       }
+      case "srtDeps": {
+        const readiness = computeSrtReadiness(host);
+        if (readiness.ready) return "ready \u2713";
+        return `missing ${readiness.missing.join(", ")} - enter to re-check`;
+      }
       case "safehouseSidecar": {
-        if (d.platform !== "darwin") return "not applicable on this platform";
+        if (!host0.isSafehouseSupported) return "not applicable on this platform";
         if (safehouseSetup === null) return "checking\u2026";
         if (safehouseSetup.sidecarPresent && safehouseSetup.sidecarHasFunctions)
           return "present \u2713";
@@ -2307,7 +2387,7 @@ function SetupScreen({ onBack, deps }) {
   }
   return /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
     /* @__PURE__ */ jsx9(Text9, { bold: true, children: "Setup" }),
-    /* @__PURE__ */ jsx9(Box9, { marginTop: 1, flexDirection: "column", children: ROWS2.map((row2, index) => /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", children: [
+    /* @__PURE__ */ jsx9(Box9, { marginTop: 1, flexDirection: "column", children: rows.map((row2, index) => /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", children: [
       /* @__PURE__ */ jsxs9(Box9, { children: [
         /* @__PURE__ */ jsxs9(Text9, { color: cursor === index ? "cyan" : void 0, children: [
           cursor === index ? "\u25B8 " : "  ",
@@ -2323,6 +2403,10 @@ function SetupScreen({ onBack, deps }) {
         "defined in your rc:",
         " ",
         conflictNote(row2.id).map((m) => `${m.file}:${m.line} (${m.item})`).join(", ")
+      ] }) : null,
+      row2.id === "srtDeps" && !computeSrtReadiness(host).ready ? /* @__PURE__ */ jsxs9(Text9, { dimColor: true, children: [
+        "    ",
+        srtGuidance(computeSrtReadiness(host))
       ] }) : null,
       cursor === index ? /* @__PURE__ */ jsxs9(Text9, { dimColor: true, children: [
         "    ",
@@ -4046,7 +4130,7 @@ function ShellSandboxPathsEditor({
 
 // src/screens/ShellSourceSubForm.tsx
 import { jsx as jsx25, jsxs as jsxs25 } from "react/jsx-runtime";
-var ROWS3 = [
+var ROWS2 = [
   { key: "name", label: "name", placeholder: "kebab-case, e.g. jira" },
   { key: "verify", label: "commands.verify", placeholder: "connectivity check (optional)" },
   { key: "validate", label: "commands.validate", placeholder: "emit JSON array of config error strings (optional)" },
@@ -4058,7 +4142,7 @@ var ROWS3 = [
   { key: "markDone", label: "commands.markDone", placeholder: "move ${id} done" },
   { key: "cwd", label: "cwd", placeholder: "working dir for commands (optional)" }
 ];
-var ENV_ROW = ROWS3.length;
+var ENV_ROW = ROWS2.length;
 var SANDBOX_ROW = ENV_ROW + 1;
 function ShellSourceSubForm({
   source,
@@ -4141,7 +4225,7 @@ function ShellSourceSubForm({
   return /* @__PURE__ */ jsxs25(Box25, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
     /* @__PURE__ */ jsx25(Text25, { bold: true, children: "Shell source" }),
     /* @__PURE__ */ jsxs25(Box25, { flexDirection: "column", marginTop: 1, children: [
-      ROWS3.map((row2, index) => {
+      ROWS2.map((row2, index) => {
         const modified = baselineSource === void 0 || !valuesEqual(fields[row2.key], baselineFields[row2.key]);
         return /* @__PURE__ */ jsx25(
           TextField,
@@ -4961,12 +5045,22 @@ function isHealthy(report) {
 async function collectDoctorReport(deps = defaultDoctorDeps()) {
   const groundcrew = await probeGroundcrew(deps.installDeps);
   const clearance = probeClearance(deps.home, deps.env);
-  const safehouse = deps.platform === "darwin" ? await probeSafehouse(deps.home, deps.env, deps.installDeps) : null;
+  const caps = deriveCapabilities(deps.platform, {
+    bwrap: deps.installDeps.which("bwrap") !== null,
+    socat: deps.installDeps.which("socat") !== null,
+    rg: deps.installDeps.which("rg") !== null
+  });
+  const safehouse = caps.isSafehouseSupported ? await probeSafehouse(deps.home, deps.env, deps.installDeps) : null;
+  const srt = caps.isLinux ? {
+    supported: caps.isSrtSupported,
+    ...computeSrtReadiness(caps)
+  } : null;
   const partial = {
     platform: deps.platform,
     groundcrew,
     clearance,
-    safehouse
+    safehouse,
+    srt
   };
   return { ...partial, healthy: isHealthy(partial) };
 }
@@ -5002,8 +5096,19 @@ function formatDoctorReport(report) {
     `  - clearance daemon: ${c.daemonPid === null ? "not running (starts on demand)" : `pid ${c.daemonPid}, refreshed ${c.daemonAgeSeconds ?? "?"}s ago`}`
   );
   const s = report.safehouse;
-  if (s === null) {
-    lines.push(`  - safehouse: not applicable on ${report.platform}`);
+  if (report.srt !== null) {
+    const srt = report.srt;
+    lines.push(
+      row(
+        srt.ready,
+        "srt sandbox (Linux)",
+        srt.ready ? "bubblewrap/socat/ripgrep present" : `missing ${srt.missing.join(", ")} - ${SRT_APT_INSTALL}`
+      )
+    );
+  } else if (s === null) {
+    lines.push(
+      `  - local sandbox: none on ${report.platform} (macOS or Linux only)`
+    );
   } else {
     lines.push(
       row(
