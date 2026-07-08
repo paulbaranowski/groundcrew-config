@@ -1,5 +1,10 @@
 import { homedir } from "node:os";
 import {
+  computeSrtReadiness,
+  deriveCapabilities,
+  SRT_APT_INSTALL,
+} from "../../domain/setup/host.ts";
+import {
   defaultInstallDeps,
   probeGroundcrew,
   type InstallDeps,
@@ -12,12 +17,24 @@ import {
   type SafehouseStatus,
 } from "./probes.ts";
 
+/** srt runner readiness on Linux. null in DoctorReport off Linux (see collect). */
+export interface SrtStatus {
+  /** True when the platform can run srt at all (macOS or Linux). */
+  supported: boolean;
+  /** True when every Linux srt dep is on PATH. */
+  ready: boolean;
+  /** Human labels of the missing Linux deps, in SRT_LINUX_DEPS order. */
+  missing: string[];
+}
+
 export interface DoctorReport {
   platform: string;
   groundcrew: InstallReport;
   clearance: ClearanceStatus;
   /** null = not applicable (safehouse is macOS sandbox-exec based). */
   safehouse: SafehouseStatus | null;
+  /** Linux srt-runner deps; null off Linux (macOS uses safehouse). */
+  srt: SrtStatus | null;
   healthy: boolean;
 }
 
@@ -39,9 +56,9 @@ export function defaultDoctorDeps(): DoctorDeps {
   };
 }
 
-// Daemon staleness (daemonPid/daemonAgeSeconds) is deliberately not a health
-// gate: the clearance daemon starts on demand when crew runs. It is reported
-// for visibility only.
+// Daemon staleness and srt readiness are deliberately NOT health gates: the
+// clearance daemon starts on demand, and srt is an opt-in Linux runner (the
+// platform default is sdx), so missing srt deps degrade a row, not the machine.
 export function isHealthy(report: Omit<DoctorReport, "healthy">): boolean {
   if (report.groundcrew.action !== "already-installed") return false;
   const c = report.clearance;
@@ -72,15 +89,28 @@ export async function collectDoctorReport(
 ): Promise<DoctorReport> {
   const groundcrew = await probeGroundcrew(deps.installDeps);
   const clearance = probeClearance(deps.home, deps.env);
-  const safehouse =
-    deps.platform === "darwin"
-      ? await probeSafehouse(deps.home, deps.env, deps.installDeps)
-      : null;
+  // One capability snapshot decides which sandbox story this platform gets:
+  // macOS -> safehouse, Linux -> srt deps, other -> neither.
+  const caps = deriveCapabilities(deps.platform, {
+    bwrap: deps.installDeps.which("bwrap") !== null,
+    socat: deps.installDeps.which("socat") !== null,
+    rg: deps.installDeps.which("rg") !== null,
+  });
+  const safehouse = caps.isSafehouseSupported
+    ? await probeSafehouse(deps.home, deps.env, deps.installDeps)
+    : null;
+  const srt = caps.isLinux
+    ? {
+        supported: caps.isSrtSupported,
+        ...computeSrtReadiness(caps),
+      }
+    : null;
   const partial = {
     platform: deps.platform,
     groundcrew,
     clearance,
     safehouse,
+    srt,
   };
   return { ...partial, healthy: isHealthy(partial) };
 }
@@ -130,8 +160,21 @@ export function formatDoctorReport(report: DoctorReport): string {
   );
 
   const s = report.safehouse;
-  if (s === null) {
-    lines.push(`  - safehouse: not applicable on ${report.platform}`);
+  if (report.srt !== null) {
+    const srt = report.srt;
+    lines.push(
+      row(
+        srt.ready,
+        "srt sandbox (Linux)",
+        srt.ready
+          ? "bubblewrap/socat/ripgrep present"
+          : `missing ${srt.missing.join(", ")} - ${SRT_APT_INSTALL}`,
+      ),
+    );
+  } else if (s === null) {
+    lines.push(
+      `  - local sandbox: none on ${report.platform} (macOS or Linux only)`,
+    );
   } else {
     lines.push(
       row(

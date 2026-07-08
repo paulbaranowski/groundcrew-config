@@ -1,4 +1,6 @@
-/** Canonical login-shell scan order on macOS (zshrc first). */
+// Login-shell rc candidates, scanned in this order for conflict precedence.
+// Missing files are skipped, so the same order is correct on macOS (zsh-first)
+// and Linux (a bash box simply has no ~/.zshrc and starts at ~/.bashrc).
 export const RC_CANDIDATES = [
   ".zshrc",
   ".bash_profile",

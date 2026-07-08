@@ -61,7 +61,16 @@ test("opens the Setup screen from Home with injected deps", async () => {
     details: "",
   };
   const setupDeps = {
-    platform: "darwin",
+    detectHost: () => ({
+      platform: "darwin",
+      isMacOS: true,
+      isLinux: false,
+      isSafehouseSupported: true,
+      isSrtSupported: true,
+      hasBubblewrap: false,
+      hasSocat: false,
+      hasRipgrep: false,
+    }),
     probeGroundcrew: () => Promise.resolve(report),
     installGroundcrew: () => Promise.resolve(report),
     probeSafehouse: () => Promise.resolve(report),
