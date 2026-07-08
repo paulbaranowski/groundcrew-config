@@ -335,6 +335,41 @@ test("offers crew doctor after a successful save and runs it on y", async () => 
   }
 });
 
+test("an edit after saving hides the doctor offer", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "cc-app-doctor-edit-test-"));
+  try {
+    const crewDoctor = vi.fn(() =>
+      Promise.resolve({ available: true, code: 0, output: "healthy" }),
+    );
+    const { stdin, lastFrame, unmount } = render(
+      <App
+        initialDraft={draft}
+        target={{ scope: "local", cwd: dir }}
+        crewDoctor={crewDoctor}
+      />,
+    );
+    stdin.write("s");
+    await vi.waitFor(() => expect(lastFrame()).toContain("Run crew doctor"));
+    // Make an edit: open Workspace and type into its first field.
+    stdin.write(DOWN);
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ Repositories"));
+    stdin.write(DOWN);
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ Workspace"));
+    stdin.write("\r");
+    await vi.waitFor(() => expect(lastFrame()).toContain("worktreeDir"));
+    await new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_MOUNT_MS));
+    stdin.write("x");
+    await vi.waitFor(() => expect(lastFrame() ?? "").toContain("●"));
+    stdin.write(ESC);
+    await vi.waitFor(() => expect(lastFrame()).toContain("crew-config"));
+    expect(lastFrame()).not.toContain("Run crew doctor");
+    expect(crewDoctor).not.toHaveBeenCalled();
+    unmount();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("dismisses the doctor offer on esc without running anything", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "cc-app-doctor-esc-test-"));
   try {

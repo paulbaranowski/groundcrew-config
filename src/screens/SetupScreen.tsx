@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { homedir } from "node:os";
 import { Box, Text, useInput } from "ink";
 import { RC_SNIPPET } from "../domain/setup/clearance.ts";
+import { FN_SAFE, FN_SAFE_CLAUDE } from "../domain/setup/safehouse.ts";
 import type { RcMatch } from "../domain/setup/rcScan.ts";
 import { runCrewDoctor, type CrewDoctorResult } from "../io/setup/crewDoctor.ts";
 import {
@@ -177,6 +178,11 @@ export function SetupScreen({ onBack, deps }: Props) {
     clearanceSidecar: RcMatch[];
     safehouseSidecar: RcMatch[];
   }>({ clearanceSidecar: [], safehouseSidecar: [] });
+  // The clearance sidecar has no file-presence probe field and envExported
+  // only flips in a fresh shell, so without this the row text would never
+  // acknowledge a successful write and users re-press enter suspecting
+  // failure.
+  const [wroteClearanceSidecar, setWroteClearanceSidecar] = useState(false);
   const [doctorResult, setDoctorResult] = useState<CrewDoctorResult | null>(
     null,
   );
@@ -274,6 +280,7 @@ export function SetupScreen({ onBack, deps }: Props) {
       d.writeHosts();
     } else if (id === "clearanceSidecar") {
       const result = d.writeClearance();
+      setWroteClearanceSidecar(true);
       setConflicts((prev) => ({
         ...prev,
         clearanceSidecar: result.rcConflicts,
@@ -343,8 +350,9 @@ export function SetupScreen({ onBack, deps }: Props) {
       }
       case "clearanceSidecar": {
         if (clearance === null) return "checking…";
-        return clearance.envExported
-          ? "exported ✓"
+        if (clearance.envExported) return "exported ✓";
+        return wroteClearanceSidecar
+          ? "written ✓ - now add the rc line below"
           : "write sidecar + add rc line";
       }
       case "safehouseSidecar": {
@@ -353,11 +361,14 @@ export function SetupScreen({ onBack, deps }: Props) {
         if (safehouseSetup.sidecarPresent && safehouseSetup.sidecarHasFunctions)
           return "present ✓";
         if (safehouseSetup.sidecarPresent) {
-          // Task 10 subtlety: a wrapper the rc owns is commented out in the
-          // sidecar, so "functions missing" can mean "rc-defined", not broken.
-          return conflicts.safehouseSidecar.some((m) => m.value === null)
+          // A wrapper the rc owns is commented out in the sidecar, so
+          // "functions missing" can mean "rc-defined", not broken - the
+          // probe field alone is not the whole story.
+          return conflicts.safehouseSidecar.some(
+            (m) => m.item === FN_SAFE || m.item === FN_SAFE_CLAUDE,
+          )
             ? "sidecar present (wrappers defined in your rc)"
-            : "incomplete - enter to regenerate";
+            : "wrappers not in sidecar - enter to regenerate";
         }
         return "not written - enter to write";
       }

@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { useFullscreen } from "../hooks/useFullscreen.ts";
 import type { CrewDoctorResult } from "../io/setup/crewDoctor.ts";
 
 interface Props {
@@ -7,9 +9,29 @@ interface Props {
 }
 
 // Read-only output pane for a `crew doctor` run, shared by the Setup screen's
-// doctor row and App's post-save offer. Any key closes it.
+// doctor row and App's post-save offer. Arrows scroll when the output is
+// taller than the terminal; any other key closes.
 export function CrewDoctorView({ result, onClose }: Props) {
-  useInput(() => onClose());
+  const { rows } = useFullscreen();
+  const lines = result.output.split("\n");
+  // Header, spacing, and footer chrome eat ~7 rows of the alt screen.
+  const windowSize = Math.max(4, rows - 7);
+  const maxOffset = Math.max(0, lines.length - windowSize);
+  const [offset, setOffset] = useState(0);
+  const scrollable = maxOffset > 0;
+
+  useInput((_input, key) => {
+    if (scrollable && key.downArrow) {
+      setOffset((o) => Math.min(maxOffset, o + 1));
+      return;
+    }
+    if (scrollable && key.upArrow) {
+      setOffset((o) => Math.max(0, o - 1));
+      return;
+    }
+    onClose();
+  });
+
   const ok = result.available && result.code === 0;
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
@@ -20,10 +42,17 @@ export function CrewDoctorView({ result, onClose }: Props) {
         </Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
-        <Text>{result.output}</Text>
+        <Text>{lines.slice(offset, offset + windowSize).join("\n")}</Text>
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>press any key to close</Text>
+        <Text dimColor>
+          {scrollable
+            ? `↑/↓ scroll (${offset + 1}-${Math.min(
+                lines.length,
+                offset + windowSize,
+              )}/${lines.length}) · any other key closes`
+            : "press any key to close"}
+        </Text>
       </Box>
     </Box>
   );

@@ -304,3 +304,25 @@ describe("SetupScreen sidecar rows", () => {
     await vi.waitFor(() => expect(lastFrame()).toContain("defined in your rc"));
   });
 });
+
+describe("SetupScreen off macOS (N4)", () => {
+  it("enter on the safehouse env.sh row is a no-op", async () => {
+    const deps = stubDeps({ platform: "linux" });
+    const writeSpy = vi.fn(deps.writeSafehouse);
+    deps.writeSafehouse = writeSpy;
+    const { stdin, lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={deps} />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("safehouse env.sh"));
+    for (const _ of Array.from({ length: 4 })) {
+      stdin.write("\u001B[B");
+      await vi.waitFor(() => expect(lastFrame()).toBeTruthy());
+    }
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ safehouse env.sh"));
+    expect(lastFrame()).toContain("not applicable on this platform");
+    stdin.write("\r");
+    // No action on a not-applicable row; give the handler a tick to prove it.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+});

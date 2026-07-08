@@ -4,8 +4,8 @@
 import { render } from "ink";
 
 // src/app.tsx
-import { useEffect as useEffect5, useMemo as useMemo2, useState as useState24 } from "react";
-import { Box as Box30, Text as Text30, useApp, useInput as useInput28 } from "ink";
+import { useEffect as useEffect5, useMemo as useMemo2, useRef as useRef12, useState as useState25 } from "react";
+import { Box as Box31, Text as Text31, useApp, useInput as useInput29 } from "ink";
 
 // src/components/Footer.tsx
 import { Box, Text } from "ink";
@@ -743,14 +743,14 @@ function sectionForKeyPath(keyPath) {
   }
   return void 0;
 }
-function containsSegment(path14, segment) {
-  if (segment.length > path14.length) return false;
+function containsSegment(path15, segment) {
+  if (segment.length > path15.length) return false;
   let from = 0;
-  while (from <= path14.length - segment.length) {
-    const idx = path14.indexOf(segment, from);
+  while (from <= path15.length - segment.length) {
+    const idx = path15.indexOf(segment, from);
     if (idx === -1) return false;
-    const before = idx === 0 ? "." : path14[idx - 1];
-    const after = idx + segment.length === path14.length ? "." : path14[idx + segment.length];
+    const before = idx === 0 ? "." : path15[idx - 1];
+    const after = idx + segment.length === path15.length ? "." : path15[idx + segment.length];
     if ((before === "." || before === "[") && (after === "." || after === "[")) {
       return true;
     }
@@ -762,8 +762,8 @@ function containsSegment(path14, segment) {
 // src/domain/modified.ts
 function modifiedSections(baseline, draft) {
   const out = /* @__PURE__ */ new Set();
-  for (const path14 of changedPaths(baseline, draft)) {
-    const section = sectionForKeyPath(path14);
+  for (const path15 of changedPaths(baseline, draft)) {
+    const section = sectionForKeyPath(path15);
     if (section !== void 0) out.add(section);
   }
   return out;
@@ -779,7 +779,7 @@ function modifiedByKey(current, baseline, keyOf) {
 }
 
 // src/app.tsx
-import path8 from "path";
+import path10 from "path";
 
 // src/io/save.ts
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "fs";
@@ -875,14 +875,70 @@ async function saveDraft(target2, draft) {
   return { path: out, shadowed };
 }
 
-// src/io/validate.ts
+// src/io/setup/exec.ts
 import { execFile } from "child_process";
+import { accessSync, constants } from "fs";
+import path3 from "path";
+var runCommand = (cmd, args, timeoutMs) => new Promise((resolve) => {
+  execFile(
+    cmd,
+    args,
+    { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024, encoding: "utf8" },
+    (error, stdout, stderr) => {
+      if (error === null) {
+        resolve({ code: 0, stdout, stderr });
+        return;
+      }
+      const err = error;
+      if (typeof err.code === "number") {
+        resolve({ code: err.code, stdout, stderr });
+        return;
+      }
+      const reason = err.killed === true ? `timed out after ${timeoutMs}ms` : String(err.code ?? err.message);
+      resolve({ code: -1, stdout, stderr, error: reason });
+    }
+  );
+});
+function which(cmd, env = process.env) {
+  const dirs = (env.PATH ?? "").split(path3.delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    const candidate = path3.join(dir, cmd);
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+    }
+  }
+  return null;
+}
+
+// src/io/setup/crewDoctor.ts
+var CREW_DOCTOR_TIMEOUT_MS = 12e4;
+async function runCrewDoctor(deps = { run: runCommand, which }) {
+  if (deps.which("crew") === null) {
+    return {
+      available: false,
+      code: -1,
+      output: "crew not found on PATH - install groundcrew first (Setup screen, first row)"
+    };
+  }
+  const result = await deps.run("crew", ["doctor"], CREW_DOCTOR_TIMEOUT_MS);
+  const pieces = [result.stdout, result.stderr, result.error ?? ""].map((s) => s.trim()).filter((s) => s.length > 0);
+  return {
+    available: true,
+    code: result.code,
+    output: pieces.length > 0 ? pieces.join("\n") : "(no output)"
+  };
+}
+
+// src/io/validate.ts
+import { execFile as execFile2 } from "child_process";
 import { randomUUID } from "crypto";
 import { existsSync as existsSync2, mkdtempSync, rmSync, statSync, writeFileSync as writeFileSync2 } from "fs";
 import { tmpdir } from "os";
-import path3 from "path";
+import path4 from "path";
 import { promisify } from "util";
-var run = promisify(execFile);
+var run = promisify(execFile2);
 var groundcrewUrl = import.meta.resolve("@clipboard-health/groundcrew");
 var CHILD = `
 const { loadConfig } = await import(${JSON.stringify(groundcrewUrl)});
@@ -900,8 +956,8 @@ function mapSection(message) {
 }
 async function validateDraft(draft, configDir) {
   const inPlace = configDir !== void 0 && existsSync2(configDir) && statSync(configDir).isDirectory();
-  const dir = inPlace ? configDir : mkdtempSync(path3.join(tmpdir(), "cc-validate-"));
-  const file = path3.join(dir, `.crew.config.validate-${randomUUID()}.json`);
+  const dir = inPlace ? configDir : mkdtempSync(path4.join(tmpdir(), "cc-validate-"));
+  const file = path4.join(dir, `.crew.config.validate-${randomUUID()}.json`);
   writeFileSync2(file, JSON.stringify(pruneEmpty(draft)));
   try {
     await run(process.execPath, ["--input-type=module", "-e", CHILD], {
@@ -917,13 +973,49 @@ async function validateDraft(draft, configDir) {
   }
 }
 
+// src/screens/CrewDoctorView.tsx
+import { useState as useState2 } from "react";
+import { Box as Box2, Text as Text2, useInput } from "ink";
+import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+function CrewDoctorView({ result, onClose }) {
+  const { rows } = useFullscreen();
+  const lines = result.output.split("\n");
+  const windowSize = Math.max(4, rows - 7);
+  const maxOffset = Math.max(0, lines.length - windowSize);
+  const [offset, setOffset] = useState2(0);
+  const scrollable = maxOffset > 0;
+  useInput((_input, key) => {
+    if (scrollable && key.downArrow) {
+      setOffset((o) => Math.min(maxOffset, o + 1));
+      return;
+    }
+    if (scrollable && key.upArrow) {
+      setOffset((o) => Math.max(0, o - 1));
+      return;
+    }
+    onClose();
+  });
+  const ok = result.available && result.code === 0;
+  return /* @__PURE__ */ jsxs2(Box2, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsxs2(Box2, { justifyContent: "space-between", children: [
+      /* @__PURE__ */ jsx2(Text2, { bold: true, children: "crew doctor" }),
+      /* @__PURE__ */ jsx2(Text2, { color: ok ? "green" : "yellow", children: result.available ? `exit ${result.code}` : "not run" })
+    ] }),
+    /* @__PURE__ */ jsx2(Box2, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx2(Text2, { children: lines.slice(offset, offset + windowSize).join("\n") }) }),
+    /* @__PURE__ */ jsx2(Box2, { marginTop: 1, children: /* @__PURE__ */ jsx2(Text2, { dimColor: true, children: scrollable ? `\u2191/\u2193 scroll (${offset + 1}-${Math.min(
+      lines.length,
+      offset + windowSize
+    )}/${lines.length}) \xB7 any other key closes` : "press any key to close" }) })
+  ] });
+}
+
 // src/screens/Home.tsx
 import { useRef } from "react";
-import { Box as Box3, Text as Text3, useInput } from "ink";
+import { Box as Box4, Text as Text4, useInput as useInput2 } from "ink";
 
 // src/components/ScrollableList.tsx
-import { Box as Box2, Text as Text2 } from "ink";
-import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+import { Box as Box3, Text as Text3 } from "ink";
+import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
 function computeWindow(count, cursor, maxVisible) {
   if (maxVisible <= 0 || maxVisible >= count) return { start: 0, end: count };
   const half = Math.floor(maxVisible / 2);
@@ -934,10 +1026,10 @@ function ScrollableList({ count, cursor, maxVisible, renderRow }) {
   const { start, end } = computeWindow(count, cursor, maxVisible);
   const rows = [];
   for (let index = start; index < end; index += 1) rows.push(renderRow(index));
-  return /* @__PURE__ */ jsxs2(Box2, { flexDirection: "column", children: [
-    start > 0 ? /* @__PURE__ */ jsx2(Text2, { dimColor: true, children: `  \u2191 ${start} more` }) : null,
+  return /* @__PURE__ */ jsxs3(Box3, { flexDirection: "column", children: [
+    start > 0 ? /* @__PURE__ */ jsx3(Text3, { dimColor: true, children: `  \u2191 ${start} more` }) : null,
     rows,
-    end < count ? /* @__PURE__ */ jsx2(Text2, { dimColor: true, children: `  \u2193 ${count - end} more` }) : null
+    end < count ? /* @__PURE__ */ jsx3(Text3, { dimColor: true, children: `  \u2193 ${count - end} more` }) : null
   ] });
 }
 function visibleRows(terminalRows, reserve) {
@@ -946,7 +1038,7 @@ function visibleRows(terminalRows, reserve) {
 var MIN_VISIBLE_ROWS = 4;
 
 // src/screens/Home.tsx
-import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
 var HOME_CHROME_ROWS = 9;
 function Home({
   draft,
@@ -964,7 +1056,7 @@ function Home({
     cursorRef.current = next;
     onCursorChange(next);
   }
-  useInput((_input, key) => {
+  useInput2((_input, key) => {
     if (key.downArrow)
       moveCursor(Math.min(SECTION_ORDER.length - 1, cursorRef.current + 1));
     if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
@@ -977,18 +1069,18 @@ function Home({
     const id = SECTION_ORDER[index];
     const bad = issues.has(id);
     const edited = modified.has(id);
-    return /* @__PURE__ */ jsxs3(Box3, { children: [
-      /* @__PURE__ */ jsx3(Text3, { color: cursor === index ? "cyan" : void 0, children: cursor === index ? "\u25B8 " : "  " }),
-      /* @__PURE__ */ jsx3(Box3, { width: 16, children: /* @__PURE__ */ jsx3(Text3, { color: cursor === index ? "cyan" : void 0, children: SECTION_LABEL[id] }) }),
-      /* @__PURE__ */ jsxs3(Text3, { color: bad ? "yellow" : "green", children: [
+    return /* @__PURE__ */ jsxs4(Box4, { children: [
+      /* @__PURE__ */ jsx4(Text4, { color: cursor === index ? "cyan" : void 0, children: cursor === index ? "\u25B8 " : "  " }),
+      /* @__PURE__ */ jsx4(Box4, { width: 16, children: /* @__PURE__ */ jsx4(Text4, { color: cursor === index ? "cyan" : void 0, children: SECTION_LABEL[id] }) }),
+      /* @__PURE__ */ jsxs4(Text4, { color: bad ? "yellow" : "green", children: [
         bad ? "\u26A0" : "\u2713",
         " "
       ] }),
-      /* @__PURE__ */ jsx3(Text3, { dimColor: true, children: sectionSummary(id, draft) }),
-      edited ? /* @__PURE__ */ jsx3(Text3, { color: "yellow", children: " (edited)" }) : null
+      /* @__PURE__ */ jsx4(Text4, { dimColor: true, children: sectionSummary(id, draft) }),
+      edited ? /* @__PURE__ */ jsx4(Text4, { color: "yellow", children: " (edited)" }) : null
     ] }, id);
   }
-  return /* @__PURE__ */ jsx3(
+  return /* @__PURE__ */ jsx4(
     ScrollableList,
     {
       count: SECTION_ORDER.length,
@@ -1000,8 +1092,8 @@ function Home({
 }
 
 // src/screens/AgentsForm.tsx
-import { useState as useState5 } from "react";
-import { Box as Box7, Text as Text7, useInput as useInput5 } from "ink";
+import { useState as useState6 } from "react";
+import { Box as Box8, Text as Text8, useInput as useInput6 } from "ink";
 
 // src/domain/agents.ts
 var BUILTIN_AGENTS = ["claude", "codex"];
@@ -1087,13 +1179,13 @@ function setBypass(agents, name, enabled) {
 }
 
 // src/screens/AgentSubForm.tsx
-import { useState as useState4 } from "react";
-import { Box as Box6, Text as Text6, useInput as useInput4 } from "ink";
+import { useState as useState5 } from "react";
+import { Box as Box7, Text as Text7, useInput as useInput5 } from "ink";
 
 // src/components/TextField.tsx
-import { useEffect as useEffect2, useRef as useRef2, useState as useState2 } from "react";
-import { Box as Box4, Text as Text4, useInput as useInput2 } from "ink";
-import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
+import { useEffect as useEffect2, useRef as useRef2, useState as useState3 } from "react";
+import { Box as Box5, Text as Text5, useInput as useInput3 } from "ink";
+import { jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
 var VALUE_INDENT = 4;
 function TextField({
   label,
@@ -1105,7 +1197,7 @@ function TextField({
   disabledHint,
   modified = false
 }) {
-  const [caret, setCaret] = useState2(value.length);
+  const [caret, setCaret] = useState3(value.length);
   const caretRef = useRef2(value.length);
   function moveCaret(next) {
     caretRef.current = next;
@@ -1121,7 +1213,7 @@ function TextField({
   useEffect2(() => {
     if (isActive && !disabled) moveCaret(value.length);
   }, [isActive, disabled]);
-  useInput2(
+  useInput3(
     (input, key) => {
       const current = valueRef.current;
       const pos2 = Math.min(caretRef.current, current.length);
@@ -1159,45 +1251,45 @@ function TextField({
     },
     { isActive: isActive && !disabled }
   );
-  const labelRow = /* @__PURE__ */ jsxs4(Box4, { children: [
-    /* @__PURE__ */ jsxs4(Text4, { color: isActive ? "cyan" : void 0, children: [
+  const labelRow = /* @__PURE__ */ jsxs5(Box5, { children: [
+    /* @__PURE__ */ jsxs5(Text5, { color: isActive ? "cyan" : void 0, children: [
       isActive ? "\u203A " : "  ",
       label,
       " "
     ] }),
-    modified ? /* @__PURE__ */ jsx4(Text4, { color: "yellow", children: "\u25CF" }) : null
+    modified ? /* @__PURE__ */ jsx5(Text5, { color: "yellow", children: "\u25CF" }) : null
   ] });
   if (disabled) {
-    return /* @__PURE__ */ jsxs4(Box4, { flexDirection: "column", children: [
+    return /* @__PURE__ */ jsxs5(Box5, { flexDirection: "column", children: [
       labelRow,
-      /* @__PURE__ */ jsx4(Box4, { paddingLeft: VALUE_INDENT, children: /* @__PURE__ */ jsx4(Text4, { dimColor: true, children: disabledHint ?? "(disabled)" }) })
+      /* @__PURE__ */ jsx5(Box5, { paddingLeft: VALUE_INDENT, children: /* @__PURE__ */ jsx5(Text5, { dimColor: true, children: disabledHint ?? "(disabled)" }) })
     ] });
   }
   const hasValue = value.length > 0;
   const pos = Math.min(caret, value.length);
-  const endBar = isActive ? /* @__PURE__ */ jsx4(Text4, { color: "cyan", children: "\u258F" }) : null;
+  const endBar = isActive ? /* @__PURE__ */ jsx5(Text5, { color: "cyan", children: "\u258F" }) : null;
   const atEnd = pos >= value.length;
-  return /* @__PURE__ */ jsxs4(Box4, { flexDirection: "column", children: [
+  return /* @__PURE__ */ jsxs5(Box5, { flexDirection: "column", children: [
     labelRow,
-    /* @__PURE__ */ jsx4(Box4, { paddingLeft: VALUE_INDENT, children: !hasValue ? /* @__PURE__ */ jsxs4(Text4, { children: [
+    /* @__PURE__ */ jsx5(Box5, { paddingLeft: VALUE_INDENT, children: !hasValue ? /* @__PURE__ */ jsxs5(Text5, { children: [
       endBar,
-      /* @__PURE__ */ jsx4(Text4, { dimColor: true, children: placeholder ?? "" })
-    ] }) : atEnd ? /* @__PURE__ */ jsxs4(Text4, { children: [
+      /* @__PURE__ */ jsx5(Text5, { dimColor: true, children: placeholder ?? "" })
+    ] }) : atEnd ? /* @__PURE__ */ jsxs5(Text5, { children: [
       value,
       endBar
-    ] }) : /* @__PURE__ */ jsxs4(Text4, { children: [
+    ] }) : /* @__PURE__ */ jsxs5(Text5, { children: [
       value.slice(0, pos),
-      /* @__PURE__ */ jsx4(Text4, { inverse: isActive, children: value[pos] }),
+      /* @__PURE__ */ jsx5(Text5, { inverse: isActive, children: value[pos] }),
       value.slice(pos + 1)
     ] }) })
   ] });
 }
 
 // src/hooks/useEditGuard.ts
-import { useRef as useRef3, useState as useState3 } from "react";
+import { useRef as useRef3, useState as useState4 } from "react";
 function useEditGuard() {
   const dirtyRef = useRef3(false);
-  const [guarding, setGuarding] = useState3(false);
+  const [guarding, setGuarding] = useState4(false);
   const markDirty = () => {
     dirtyRef.current = true;
   };
@@ -1217,22 +1309,22 @@ function useEditGuard() {
 }
 
 // src/screens/SaveGuard.tsx
-import { Box as Box5, Text as Text5, useInput as useInput3 } from "ink";
-import { jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
+import { Box as Box6, Text as Text6, useInput as useInput4 } from "ink";
+import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 function SaveGuard({ onApply, onDiscard, onCancel }) {
-  useInput3((input, key) => {
+  useInput4((input, key) => {
     if (input === "a") onApply();
     if (input === "d") onDiscard();
     if (key.escape) onCancel();
   });
-  return /* @__PURE__ */ jsxs5(Box5, { flexDirection: "column", borderStyle: "double", paddingX: 2, paddingY: 1, children: [
-    /* @__PURE__ */ jsx5(Text5, { children: "Save these edits to current draft config? (will not save to disk)" }),
-    /* @__PURE__ */ jsx5(Box5, { marginTop: 1, children: /* @__PURE__ */ jsx5(Text5, { dimColor: true, children: "[a] Apply [d] Discard [esc] Keep editing" }) })
+  return /* @__PURE__ */ jsxs6(Box6, { flexDirection: "column", borderStyle: "double", paddingX: 2, paddingY: 1, children: [
+    /* @__PURE__ */ jsx6(Text6, { children: "Save these edits to current draft config? (will not save to disk)" }),
+    /* @__PURE__ */ jsx6(Box6, { marginTop: 1, children: /* @__PURE__ */ jsx6(Text6, { dimColor: true, children: "[a] Apply [d] Discard [esc] Keep editing" }) })
   ] });
 }
 
 // src/screens/AgentSubForm.tsx
-import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
+import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
 var ROWS = [
   { key: "cmd", label: "cmd", placeholder: "agent-native launch command" },
   { key: "color", label: "color", placeholder: "#C15F3C" },
@@ -1248,11 +1340,11 @@ function AgentSubForm({
   onSave,
   onCancel
 }) {
-  const [fields, setFields] = useState4(() => readAgentFields(def));
+  const [fields, setFields] = useState5(() => readAgentFields(def));
   const baselineFields = readAgentFields(baselineDef ?? {});
-  const [active, setActive] = useState4(0);
+  const [active, setActive] = useState5(0);
   const guard = useEditGuard();
-  useInput4(
+  useInput5(
     (_input, key) => {
       if (key.escape) {
         guard.requestCancel(onCancel);
@@ -1265,7 +1357,7 @@ function AgentSubForm({
     { isActive: !guard.guarding }
   );
   if (guard.guarding) {
-    return /* @__PURE__ */ jsx6(
+    return /* @__PURE__ */ jsx7(
       SaveGuard,
       {
         onApply: () => onSave(applyAgentFields(def, fields)),
@@ -1275,14 +1367,14 @@ function AgentSubForm({
     );
   }
   const sandboxMissing = sandboxRequired && fields.sandboxAgent.trim().length === 0;
-  return /* @__PURE__ */ jsxs6(Box6, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsxs6(Text6, { bold: true, children: [
+  return /* @__PURE__ */ jsxs7(Box7, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsxs7(Text7, { bold: true, children: [
       "Agent: ",
       name
     ] }),
-    /* @__PURE__ */ jsx6(Box6, { flexDirection: "column", marginTop: 1, children: ROWS.map((rowField, index) => {
+    /* @__PURE__ */ jsx7(Box7, { flexDirection: "column", marginTop: 1, children: ROWS.map((rowField, index) => {
       const modified = baselineDef === void 0 || !valuesEqual(fields[rowField.key], baselineFields[rowField.key]);
-      return /* @__PURE__ */ jsx6(
+      return /* @__PURE__ */ jsx7(
         TextField,
         {
           label: rowField.label,
@@ -1298,16 +1390,16 @@ function AgentSubForm({
         rowField.key
       );
     }) }),
-    sandboxMissing ? /* @__PURE__ */ jsx6(Box6, { marginTop: 1, children: /* @__PURE__ */ jsx6(Text6, { color: "yellow", children: "\u26A0 runner resolves to sdx \u2014 sandbox.agent is required or launch fails." }) }) : null,
-    /* @__PURE__ */ jsx6(Box6, { marginTop: 1, children: /* @__PURE__ */ jsx6(Text6, { dimColor: true, children: "Fine-tune how this agent launches \u2014 most people can leave these blank. Blank fields inherit the built-in preset. \u2191/\u2193 move \xB7 type to edit \xB7 enter apply \xB7 esc cancel." }) })
+    sandboxMissing ? /* @__PURE__ */ jsx7(Box7, { marginTop: 1, children: /* @__PURE__ */ jsx7(Text7, { color: "yellow", children: "\u26A0 runner resolves to sdx \u2014 sandbox.agent is required or launch fails." }) }) : null,
+    /* @__PURE__ */ jsx7(Box7, { marginTop: 1, children: /* @__PURE__ */ jsx7(Text7, { dimColor: true, children: "Fine-tune how this agent launches \u2014 most people can leave these blank. Blank fields inherit the built-in preset. \u2191/\u2193 move \xB7 type to edit \xB7 enter apply \xB7 esc cancel." }) })
   ] });
 }
 
 // src/screens/AgentsForm.tsx
-import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
+import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
 function AgentsForm({ draft, baseline, onChange, onBack }) {
-  const [cursor, setCursor] = useState5(0);
-  const [editing, setEditing] = useState5(void 0);
+  const [cursor, setCursor] = useState6(0);
+  const [editing, setEditing] = useState6(void 0);
   const agents = draft.agents ?? {};
   const definitions = agents.definitions ?? {};
   const baseAgents = baseline.agents ?? {};
@@ -1335,7 +1427,7 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
       });
     }
   }
-  useInput5(
+  useInput6(
     (input, key) => {
       if (key.escape) {
         onBack();
@@ -1356,7 +1448,7 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
     { isActive: editing === void 0 }
   );
   if (editing !== void 0) {
-    return /* @__PURE__ */ jsx7(
+    return /* @__PURE__ */ jsx8(
       AgentSubForm,
       {
         name: editing,
@@ -1371,54 +1463,218 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
       }
     );
   }
-  return /* @__PURE__ */ jsxs7(Box7, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx7(Text7, { bold: true, children: "Agents" }),
-    /* @__PURE__ */ jsx7(Box7, { marginTop: 1, flexDirection: "column", children: rows.map((row2, index) => {
+  return /* @__PURE__ */ jsxs8(Box8, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx8(Text8, { bold: true, children: "Agents" }),
+    /* @__PURE__ */ jsx8(Box8, { marginTop: 1, flexDirection: "column", children: rows.map((row2, index) => {
       const active = index === focused;
       const marker = active ? "\u25B8 " : "  ";
       if (row2.kind === "enable") {
         const on2 = isAgentEnabled(agents, row2.name);
         const baseOn = isAgentEnabled(baseAgents, row2.name);
         const modified2 = on2 !== baseOn || !valuesEqual(definitions[row2.name], baseDefinitions[row2.name]);
-        return /* @__PURE__ */ jsxs7(Text7, { color: active ? "cyan" : void 0, children: [
+        return /* @__PURE__ */ jsxs8(Text8, { color: active ? "cyan" : void 0, children: [
           marker,
-          /* @__PURE__ */ jsxs7(Text7, { color: on2 ? "green" : void 0, children: [
+          /* @__PURE__ */ jsxs8(Text8, { color: on2 ? "green" : void 0, children: [
             "[",
             on2 ? "x" : " ",
             "]"
           ] }),
           " ",
           row2.name,
-          modified2 ? /* @__PURE__ */ jsx7(Text7, { color: "yellow", children: " \u25CF" }) : null
+          modified2 ? /* @__PURE__ */ jsx8(Text8, { color: "yellow", children: " \u25CF" }) : null
         ] }, row2.name);
       }
       const on = isBypassEnabled("claude", definitions.claude);
       const baseBypass = isBypassEnabled("claude", baseDefinitions.claude);
       const modified = on !== baseBypass;
-      return /* @__PURE__ */ jsxs7(Text7, { color: active ? "cyan" : void 0, children: [
+      return /* @__PURE__ */ jsxs8(Text8, { color: active ? "cyan" : void 0, children: [
         marker,
         "    ",
-        /* @__PURE__ */ jsxs7(Text7, { color: on ? "green" : void 0, children: [
+        /* @__PURE__ */ jsxs8(Text8, { color: on ? "green" : void 0, children: [
           "[",
           on ? "x" : " ",
           "]"
         ] }),
         " ",
         "bypass permission prompts",
-        modified ? /* @__PURE__ */ jsx7(Text7, { color: "yellow", children: " \u25CF" }) : null
+        modified ? /* @__PURE__ */ jsx8(Text8, { color: "yellow", children: " \u25CF" }) : null
       ] }, "bypass");
     }) }),
-    custom.length > 0 ? /* @__PURE__ */ jsx7(Box7, { marginTop: 1, flexDirection: "column", children: custom.map((name) => /* @__PURE__ */ jsxs7(Text7, { dimColor: true, children: [
+    custom.length > 0 ? /* @__PURE__ */ jsx8(Box8, { marginTop: 1, flexDirection: "column", children: custom.map((name) => /* @__PURE__ */ jsxs8(Text8, { dimColor: true, children: [
       name,
       " \u2014 defined in crew.config.json"
     ] }, name)) }) : null,
-    /* @__PURE__ */ jsx7(Box7, { marginTop: 1, children: /* @__PURE__ */ jsx7(Text7, { dimColor: true, children: 'The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex). Check the ones installed on your machine. "bypass permission prompts" lets the agent act without stopping to ask. \u2191/\u2193 move \xB7 space toggle \xB7 enter edit fields \xB7 esc back.' }) })
+    /* @__PURE__ */ jsx8(Box8, { marginTop: 1, children: /* @__PURE__ */ jsx8(Text8, { dimColor: true, children: 'The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex). Check the ones installed on your machine. "bypass permission prompts" lets the agent act without stopping to ask. \u2191/\u2193 move \xB7 space toggle \xB7 enter edit fields \xB7 esc back.' }) })
   ] });
 }
 
 // src/screens/SetupScreen.tsx
-import { useEffect as useEffect3, useRef as useRef4, useState as useState6 } from "react";
-import { Box as Box8, Text as Text8, useInput as useInput6 } from "ink";
+import { useEffect as useEffect3, useRef as useRef4, useState as useState7 } from "react";
+import { homedir as homedir2 } from "os";
+import { Box as Box9, Text as Text9, useInput as useInput7 } from "ink";
+
+// src/domain/setup/clearance.ts
+var VAR_PERSONAL = "CLEARANCE_PERSONAL_HOSTS";
+var VAR_ALLOW_HOSTS = "CLEARANCE_ALLOW_HOSTS_FILES";
+var CLAUDE_HOSTS = [
+  "downloads.claude.ai",
+  "mcp-proxy.anthropic.com"
+];
+var SECTION_COMMENT = "# Claude Code runtime";
+var ALLOW_HOSTS_VALUE = '"$(npm root -g)/@clipboard-health/groundcrew/clearance-allow-hosts${CLEARANCE_PERSONAL_HOSTS:+:$HOME/.config/clearance/personal-allow-hosts}"';
+var HOSTS_DEFAULT_BODY = `# Personal egress allowlist, layered on top of groundcrew's starter file.
+# Loaded when CLEARANCE_PERSONAL_HOSTS is set in your shell env.
+# One host per line, # comments, *.example.com wildcards OK.
+
+${SECTION_COMMENT}
+downloads.claude.ai
+mcp-proxy.anthropic.com
+
+# Uncomment as needed
+#storage.googleapis.com
+#mcp.render.com
+#api.x.ai
+`;
+var RC_SNIPPET = `for f in ~/.config/clearance/env.sh ~/.config/agent-safehouse/env.sh; do
+  [ -f "$f" ] && . "$f"
+done`;
+function presentHosts(content) {
+  const hosts = /* @__PURE__ */ new Set();
+  for (const line of content.split("\n")) {
+    const stripped = line.trim();
+    if (stripped.length === 0 || stripped.startsWith("#")) continue;
+    hosts.add(stripped.toLowerCase());
+  }
+  return hosts;
+}
+function computeAppendContent(existing, hostsToAdd) {
+  const already = presentHosts(existing);
+  const missing = hostsToAdd.filter((h) => !already.has(h.toLowerCase()));
+  if (missing.length === 0) return existing;
+  const base = existing.replace(/\n+$/, "") + "\n";
+  const needsSectionComment = !existing.split("\n").some((line) => line.trim() === SECTION_COMMENT);
+  const lines = [];
+  if (needsSectionComment) {
+    lines.push("", SECTION_COMMENT);
+  }
+  lines.push(...missing);
+  return base + lines.join("\n") + "\n";
+}
+function renderClearanceSidecar(rcConflicts) {
+  const lines = [
+    "# Generated by crew-config setup - safe to regenerate.",
+    "# Source this from your shell rc:",
+    "#   for f in ~/.config/clearance/env.sh ~/.config/agent-safehouse/env.sh; do",
+    '#     [ -f "$f" ] && . "$f"',
+    "#   done",
+    "",
+    `# ${VAR_PERSONAL} - opt into the personal allowlist append.`,
+    `# Exported FIRST so the \${${VAR_PERSONAL}:+...} branch below resolves.`
+  ];
+  const personal = rcConflicts.get(VAR_PERSONAL);
+  if (personal !== void 0) {
+    lines.push(
+      `# Already exported in ${personal.file}:${personal.line} - sidecar leaving this alone.`,
+      `# export ${VAR_PERSONAL}=1`
+    );
+  } else {
+    lines.push(`export ${VAR_PERSONAL}=1`);
+  }
+  lines.push("");
+  lines.push(
+    `# ${VAR_ALLOW_HOSTS} - groundcrew's baseline allowlist, plus your`,
+    `# personal allowlist when ${VAR_PERSONAL} is set.`
+  );
+  const allow = rcConflicts.get(VAR_ALLOW_HOSTS);
+  if (allow !== void 0) {
+    lines.push(
+      `# Already exported in ${allow.file}:${allow.line} - sidecar leaving this alone.`,
+      `# export ${VAR_ALLOW_HOSTS}=${ALLOW_HOSTS_VALUE}`
+    );
+  } else {
+    lines.push(`export ${VAR_ALLOW_HOSTS}=${ALLOW_HOSTS_VALUE}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+// src/domain/setup/safehouse.ts
+var VAR_APPEND_PROFILE = "SAFEHOUSE_APPEND_PROFILE";
+var FN_SAFE = "safe";
+var FN_SAFE_CLAUDE = "safe-claude";
+var SAFE_BODY = [
+  "safe() {",
+  "  safehouse \\",
+  `    --append-profile="$${VAR_APPEND_PROFILE}" \\`,
+  '    "$@"',
+  "}"
+];
+var SAFE_CLAUDE_BODY = [
+  "safe-claude() {",
+  '  safe claude --dangerously-skip-permissions "$@"',
+  "}"
+];
+function commentedOut(body) {
+  return body.map((line) => line.length > 0 ? `# ${line}` : "#");
+}
+function renderSafehouseSidecar(rcConflicts, overridesPath) {
+  const lines = [
+    "# Generated by crew-config setup - safe to regenerate.",
+    "# Source this from your shell rc:",
+    "#   for f in ~/.config/clearance/env.sh ~/.config/agent-safehouse/env.sh; do",
+    '#     [ -f "$f" ] && . "$f"',
+    "#   done",
+    "",
+    `# ${VAR_APPEND_PROFILE} - path to your machine-local policy overrides.`
+  ];
+  const exportConflict = rcConflicts.get(VAR_APPEND_PROFILE);
+  if (exportConflict !== void 0) {
+    const rcValue = exportConflict.value ?? "(see rc line for value)";
+    lines.push(
+      `# Already exported in ${exportConflict.file}:${exportConflict.line} - sidecar leaving this alone.`,
+      `# (rc value: "${rcValue}")`
+    );
+  } else {
+    lines.push(`export ${VAR_APPEND_PROFILE}="${overridesPath}"`);
+  }
+  lines.push("");
+  lines.push("# safe - wrapper that always applies your append-profile.");
+  const safeConflict = rcConflicts.get(FN_SAFE);
+  if (safeConflict !== void 0) {
+    lines.push(
+      `# Already defined in ${safeConflict.file}:${safeConflict.line} - sidecar leaving this alone.`,
+      ...commentedOut(SAFE_BODY)
+    );
+  } else {
+    lines.push(...SAFE_BODY);
+  }
+  lines.push("");
+  lines.push("# safe-claude - convenience wrapper for sandboxed claude code.");
+  const safeClaudeConflict = rcConflicts.get(FN_SAFE_CLAUDE);
+  if (safeClaudeConflict !== void 0) {
+    lines.push(
+      `# Already defined in ${safeClaudeConflict.file}:${safeClaudeConflict.line} - sidecar leaving this alone.`,
+      ...commentedOut(SAFE_CLAUDE_BODY)
+    );
+  } else {
+    lines.push(...SAFE_CLAUDE_BODY);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+var OVERRIDES_STUB = `;; ~/.config/agent-safehouse/local-overrides.sb
+;;
+;; Empty stub created by crew-config setup so the
+;; SAFEHOUSE_APPEND_PROFILE flag resolves to a real file from day one.
+;;
+;; Add machine-local sandbox-exec rules below; see
+;; https://agent-safehouse.dev/docs/ for the policy DSL.
+;;
+;; Example:
+;;   (allow file-read*
+;;     (home-literal "/.gitignore_global")
+;;     (subpath "/Volumes/Shared/Engineering"))
+`;
 
 // src/domain/setup/installProbe.ts
 var GROUNDCREW_PACKAGE = "@clipboard-health/groundcrew";
@@ -1455,43 +1711,6 @@ function parseBrewVersions(stdout) {
     installed: true,
     version: VERSION_RE.test(version) ? version : null
   };
-}
-
-// src/io/setup/exec.ts
-import { execFile as execFile2 } from "child_process";
-import { accessSync, constants } from "fs";
-import path4 from "path";
-var runCommand = (cmd, args, timeoutMs) => new Promise((resolve) => {
-  execFile2(
-    cmd,
-    args,
-    { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024, encoding: "utf8" },
-    (error, stdout, stderr) => {
-      if (error === null) {
-        resolve({ code: 0, stdout, stderr });
-        return;
-      }
-      const err = error;
-      if (typeof err.code === "number") {
-        resolve({ code: err.code, stdout, stderr });
-        return;
-      }
-      const reason = err.killed === true ? `timed out after ${timeoutMs}ms` : String(err.code ?? err.message);
-      resolve({ code: -1, stdout, stderr, error: reason });
-    }
-  );
-});
-function which(cmd, env = process.env) {
-  const dirs = (env.PATH ?? "").split(path4.delimiter).filter(Boolean);
-  for (const dir of dirs) {
-    const candidate = path4.join(dir, cmd);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-    }
-  }
-  return null;
 }
 
 // src/io/setup/installs.ts
@@ -1596,8 +1815,231 @@ async function installSafehouse(deps = defaultInstallDeps()) {
   return { action: "installed", version: after.version, details: "" };
 }
 
+// src/io/setup/probes.ts
+import { readFileSync, statSync as statSync2 } from "fs";
+import path5 from "path";
+
+// src/domain/setup/rcScan.ts
+var RC_CANDIDATES = [
+  ".zshrc",
+  ".bash_profile",
+  ".bashrc",
+  ".profile"
+];
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function exportPattern(name) {
+  return new RegExp(`^\\s*export\\s+${escapeRegExp(name)}(?=[=\\s]|$)`);
+}
+function functionPattern(name) {
+  return new RegExp(`^\\s*${escapeRegExp(name)}\\s*\\(\\s*\\)`);
+}
+function extractExportValue(strippedLine, name) {
+  const m = strippedLine.match(
+    new RegExp(`^\\s*export\\s+${escapeRegExp(name)}=(.*)$`)
+  );
+  if (m === null) return null;
+  const raw = m[1].trim();
+  const first = raw[0];
+  if (raw.length >= 2 && first === raw[raw.length - 1] && (first === '"' || first === "'")) {
+    return raw.slice(1, -1);
+  }
+  return raw.length > 0 ? raw : null;
+}
+function scanRcContents(files, targets) {
+  const found = /* @__PURE__ */ new Map();
+  for (const { file, content } of files) {
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i += 1) {
+      const stripped = lines[i].trim();
+      if (stripped.length === 0 || stripped.startsWith("#")) continue;
+      for (const target2 of targets) {
+        if (found.has(target2.name)) continue;
+        const pattern = target2.kind === "export" ? exportPattern(target2.name) : functionPattern(target2.name);
+        if (pattern.test(stripped)) {
+          found.set(target2.name, {
+            item: target2.name,
+            file,
+            line: i + 1,
+            value: target2.kind === "export" ? extractExportValue(stripped, target2.name) : null
+          });
+        }
+      }
+    }
+    if (found.size === targets.length) break;
+  }
+  return found;
+}
+
+// src/io/setup/probes.ts
+var CLEARANCE_PERSONAL_HOSTS_PATH = ".config/clearance/personal-allow-hosts";
+var CLEARANCE_SIDECAR_PATH = ".config/clearance/env.sh";
+var CLEARANCE_PID_PATH = ".cache/clearance/clearance.pid";
+var SAFEHOUSE_SIDECAR_PATH = ".config/agent-safehouse/env.sh";
+var SAFEHOUSE_OVERRIDES_PATH = ".config/agent-safehouse/local-overrides.sb";
+function readRcFiles(home) {
+  const out = [];
+  for (const name of RC_CANDIDATES) {
+    const file = path5.join(home, name);
+    try {
+      out.push({ file, content: readFileSync(file, "utf8") });
+    } catch {
+    }
+  }
+  return out;
+}
+function readTextOrNull(file) {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+function envVarExported(name, home, env) {
+  if (env[name] !== void 0 && env[name] !== "") return true;
+  return scanRcContents(readRcFiles(home), [{ kind: "export", name }]).has(
+    name
+  );
+}
+function pidIsAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+function probeClearance(home, env = process.env) {
+  const personalFile = path5.join(home, CLEARANCE_PERSONAL_HOSTS_PATH);
+  const personalContent = readTextOrNull(personalFile);
+  const personalFileExists = personalContent !== null;
+  const personalFileHasClaudeHosts = personalContent !== null && personalContent.split("\n").some((line) => {
+    const stripped = line.trim();
+    return stripped.length > 0 && !stripped.startsWith("#") && stripped.includes("downloads.claude.ai");
+  });
+  const envExported = envVarExported("CLEARANCE_ALLOW_HOSTS_FILES", home, env);
+  const pidFile = path5.join(home, CLEARANCE_PID_PATH);
+  let daemonPid = null;
+  let daemonAgeSeconds = null;
+  try {
+    const mtimeMs = statSync2(pidFile).mtimeMs;
+    daemonAgeSeconds = Math.round((Date.now() - mtimeMs) / 1e3);
+    const raw = readFileSync(pidFile, "utf8").trim();
+    const candidate = Number.parseInt(raw, 10);
+    if (String(candidate) === raw && pidIsAlive(candidate)) {
+      daemonPid = candidate;
+    }
+  } catch {
+  }
+  return {
+    personalFileExists,
+    personalFileHasClaudeHosts,
+    envExported,
+    daemonPid,
+    daemonAgeSeconds
+  };
+}
+var SAFE_FN_RE = /^\s*safe\s*\(\s*\)/m;
+var SAFE_CLAUDE_FN_RE = /^\s*safe-claude\s*\(\s*\)/m;
+async function probeSafehouse(home, env = process.env, deps = defaultInstallDeps()) {
+  const binaryPath = deps.which("safehouse");
+  const formula = await probeSafehouseFormula(deps);
+  const envExported = envVarExported("SAFEHOUSE_APPEND_PROFILE", home, env);
+  const sidecarContent = readTextOrNull(
+    path5.join(home, SAFEHOUSE_SIDECAR_PATH)
+  );
+  const sidecarPresent = sidecarContent !== null;
+  const sidecarHasFunctions = sidecarContent !== null && SAFE_FN_RE.test(sidecarContent) && SAFE_CLAUDE_FN_RE.test(sidecarContent);
+  return {
+    binaryAvailable: binaryPath !== null,
+    binaryPath,
+    brewFormulaInstalled: formula.action === "already-installed",
+    envExported,
+    sidecarPresent,
+    sidecarHasFunctions
+  };
+}
+
+// src/io/setup/sidecars.ts
+import { randomUUID as randomUUID2 } from "crypto";
+import {
+  closeSync,
+  existsSync as existsSync3,
+  fsyncSync,
+  mkdirSync as mkdirSync2,
+  openSync,
+  readFileSync as readFileSync2,
+  renameSync as renameSync2,
+  rmSync as rmSync2,
+  writeSync
+} from "fs";
+import path6 from "path";
+function writeAtomic(target2, content, mode = 420) {
+  mkdirSync2(path6.dirname(target2), { recursive: true });
+  const tmp = path6.join(
+    path6.dirname(target2),
+    `.${path6.basename(target2)}.${randomUUID2()}.tmp`
+  );
+  try {
+    const fd = openSync(tmp, "w", mode);
+    try {
+      writeSync(fd, content);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync2(tmp, target2);
+  } catch (error) {
+    rmSync2(tmp, { force: true });
+    throw error;
+  }
+}
+function writeClearanceHosts(home, mode) {
+  const target2 = path6.join(home, CLEARANCE_PERSONAL_HOSTS_PATH);
+  if (!existsSync3(target2)) {
+    writeAtomic(target2, HOSTS_DEFAULT_BODY);
+    return { target: target2, wrote: true, refused: false };
+  }
+  if (mode === "create") {
+    return { target: target2, wrote: false, refused: true };
+  }
+  const existing = readFileSync2(target2, "utf8");
+  const next = computeAppendContent(existing, CLAUDE_HOSTS);
+  if (next === existing) {
+    return { target: target2, wrote: false, refused: false };
+  }
+  writeAtomic(target2, next);
+  return { target: target2, wrote: true, refused: false };
+}
+function writeClearanceSidecar(home) {
+  const conflicts = scanRcContents(readRcFiles(home), [
+    { kind: "export", name: VAR_ALLOW_HOSTS },
+    { kind: "export", name: VAR_PERSONAL }
+  ]);
+  const target2 = path6.join(home, CLEARANCE_SIDECAR_PATH);
+  writeAtomic(target2, renderClearanceSidecar(conflicts));
+  return { target: target2, rcConflicts: [...conflicts.values()], overridesStub: null };
+}
+function writeSafehouseSidecar(home) {
+  const conflicts = scanRcContents(readRcFiles(home), [
+    { kind: "export", name: VAR_APPEND_PROFILE },
+    { kind: "function", name: FN_SAFE },
+    { kind: "function", name: FN_SAFE_CLAUDE }
+  ]);
+  const overridesPath = path6.join(home, SAFEHOUSE_OVERRIDES_PATH);
+  const target2 = path6.join(home, SAFEHOUSE_SIDECAR_PATH);
+  writeAtomic(target2, renderSafehouseSidecar(conflicts, overridesPath));
+  let overridesStub = null;
+  if (!existsSync3(overridesPath)) {
+    writeAtomic(overridesPath, OVERRIDES_STUB);
+    overridesStub = overridesPath;
+  }
+  return { target: target2, rcConflicts: [...conflicts.values()], overridesStub };
+}
+
 // src/screens/SetupScreen.tsx
-import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
+import { jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
 function defaultSetupScreenDeps() {
   const installDeps = defaultInstallDeps();
   return {
@@ -1605,7 +2047,13 @@ function defaultSetupScreenDeps() {
     probeGroundcrew: () => probeGroundcrew(installDeps),
     installGroundcrew: () => installGroundcrew(installDeps),
     probeSafehouse: () => probeSafehouseFormula(installDeps),
-    installSafehouse: () => installSafehouse(installDeps)
+    installSafehouse: () => installSafehouse(installDeps),
+    probeClearance: () => Promise.resolve(probeClearance(homedir2())),
+    probeSafehouseSetup: () => probeSafehouse(homedir2()),
+    writeHosts: () => writeClearanceHosts(homedir2(), "append"),
+    writeClearance: () => writeClearanceSidecar(homedir2()),
+    writeSafehouse: () => writeSafehouseSidecar(homedir2()),
+    runCrewDoctor: () => runCrewDoctor()
   };
 }
 var ROWS2 = [
@@ -1618,9 +2066,30 @@ var ROWS2 = [
     id: "safehouse",
     label: "safehouse",
     detail: "brew eugene1g/safehouse/agent-safehouse (macOS sandbox)"
+  },
+  {
+    id: "clearanceHosts",
+    label: "clearance hosts",
+    detail: "~/.config/clearance/personal-allow-hosts (personal egress allowlist)"
+  },
+  {
+    id: "clearanceSidecar",
+    label: "clearance env.sh",
+    detail: "~/.config/clearance/env.sh (env sidecar; sourced from your rc)"
+  },
+  {
+    id: "safehouseSidecar",
+    label: "safehouse env.sh",
+    detail: "~/.config/agent-safehouse/env.sh (safe/safe-claude wrappers)"
+  },
+  {
+    id: "crewDoctor",
+    label: "run crew doctor",
+    detail: "groundcrew's own health check (read-only)"
   }
 ];
-function rowText(state) {
+var isInstallRow = (id) => id === "groundcrew" || id === "safehouse";
+function installRowText(state) {
   switch (state.phase) {
     case "checking":
       return "checking\u2026";
@@ -1640,16 +2109,37 @@ function rowText(state) {
 }
 function SetupScreen({ onBack, deps }) {
   const d = useRef4(deps ?? defaultSetupScreenDeps()).current;
-  const [cursor, setCursor] = useState6(0);
+  const [cursor, setCursor] = useState7(0);
   const cursorRef = useRef4(0);
-  const [states, setStates] = useState6({
+  const [states, setStates] = useState7({
     groundcrew: { phase: "checking" },
     safehouse: d.platform === "darwin" ? { phase: "checking" } : { phase: "not-applicable" }
   });
   const statesRef = useRef4(states);
+  const [clearance, setClearance] = useState7(null);
+  const [safehouseSetup, setSafehouseSetup] = useState7(
+    null
+  );
+  const [busy, setBusy] = useState7({
+    clearanceHosts: false,
+    clearanceSidecar: false,
+    safehouseSidecar: false,
+    crewDoctor: false
+  });
+  const busyRef = useRef4(busy);
+  const [conflicts, setConflicts] = useState7({ clearanceSidecar: [], safehouseSidecar: [] });
+  const [wroteClearanceSidecar, setWroteClearanceSidecar] = useState7(false);
+  const [doctorResult, setDoctorResult] = useState7(
+    null
+  );
+  const doctorRef = useRef4(null);
   function setRow(id, state) {
     statesRef.current = { ...statesRef.current, [id]: state };
     setStates(statesRef.current);
+  }
+  function setBusyRow(id, value) {
+    busyRef.current = { ...busyRef.current, [id]: value };
+    setBusy(busyRef.current);
   }
   const mountedRef = useRef4(true);
   useEffect3(() => {
@@ -1666,13 +2156,19 @@ function SetupScreen({ onBack, deps }) {
       void d.probeSafehouse().then((report) => {
         if (mountedRef.current) setRow("safehouse", { phase: "ready", report });
       });
+      void d.probeSafehouseSetup().then((status) => {
+        if (mountedRef.current) setSafehouseSetup(status);
+      });
     }
+    void d.probeClearance().then((status) => {
+      if (mountedRef.current) setClearance(status);
+    });
   }, [d]);
   function moveCursor(next) {
     cursorRef.current = next;
     setCursor(next);
   }
-  function activate(id) {
+  function activateInstall(id) {
     const state = statesRef.current[id];
     if (state.phase !== "ready") return;
     if (state.report.action === "failed") {
@@ -1690,7 +2186,48 @@ function SetupScreen({ onBack, deps }) {
       if (mountedRef.current) setRow(id, { phase: "ready", report });
     });
   }
-  useInput6((_input, key) => {
+  function activateSidecar(id) {
+    if (busyRef.current[id]) return;
+    if (id === "safehouseSidecar" && d.platform !== "darwin") {
+      return;
+    }
+    setBusyRow(id, true);
+    if (id === "crewDoctor") {
+      void d.runCrewDoctor().then((result) => {
+        if (!mountedRef.current) return;
+        doctorRef.current = result;
+        setDoctorResult(result);
+        setBusyRow(id, false);
+      });
+      return;
+    }
+    if (id === "clearanceHosts") {
+      d.writeHosts();
+    } else if (id === "clearanceSidecar") {
+      const result = d.writeClearance();
+      setWroteClearanceSidecar(true);
+      setConflicts((prev) => ({
+        ...prev,
+        clearanceSidecar: result.rcConflicts
+      }));
+    } else {
+      const result = d.writeSafehouse();
+      setConflicts((prev) => ({
+        ...prev,
+        safehouseSidecar: result.rcConflicts
+      }));
+    }
+    const reprobe = id === "safehouseSidecar" ? d.probeSafehouseSetup().then((status) => {
+      if (mountedRef.current) setSafehouseSetup(status);
+    }) : d.probeClearance().then((status) => {
+      if (mountedRef.current) setClearance(status);
+    });
+    void reprobe.then(() => {
+      if (mountedRef.current) setBusyRow(id, false);
+    });
+  }
+  useInput7((_input, key) => {
+    if (doctorRef.current !== null) return;
     if (key.escape) {
       onBack();
       return;
@@ -1700,46 +2237,107 @@ function SetupScreen({ onBack, deps }) {
     if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
     if (key.return) {
       const row2 = ROWS2[cursorRef.current];
-      if (row2) activate(row2.id);
+      if (!row2) return;
+      if (isInstallRow(row2.id)) activateInstall(row2.id);
+      else activateSidecar(row2.id);
     }
   });
-  return /* @__PURE__ */ jsxs8(Box8, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx8(Text8, { bold: true, children: "Setup" }),
-    /* @__PURE__ */ jsx8(Box8, { marginTop: 1, flexDirection: "column", children: ROWS2.map((row2, index) => /* @__PURE__ */ jsxs8(Box8, { flexDirection: "column", children: [
-      /* @__PURE__ */ jsxs8(Box8, { children: [
-        /* @__PURE__ */ jsxs8(Text8, { color: cursor === index ? "cyan" : void 0, children: [
+  if (doctorResult !== null) {
+    return /* @__PURE__ */ jsx9(
+      CrewDoctorView,
+      {
+        result: doctorResult,
+        onClose: () => {
+          doctorRef.current = null;
+          setDoctorResult(null);
+        }
+      }
+    );
+  }
+  function sidecarRowText(id) {
+    if (busy[id]) return id === "crewDoctor" ? "running\u2026" : "writing\u2026";
+    switch (id) {
+      case "clearanceHosts": {
+        if (clearance === null) return "checking\u2026";
+        if (clearance.personalFileExists && clearance.personalFileHasClaudeHosts)
+          return "present \u2713";
+        if (clearance.personalFileExists)
+          return "missing claude hosts - enter to append";
+        return "not written - enter to create";
+      }
+      case "clearanceSidecar": {
+        if (clearance === null) return "checking\u2026";
+        if (clearance.envExported) return "exported \u2713";
+        return wroteClearanceSidecar ? "written \u2713 - now add the rc line below" : "write sidecar + add rc line";
+      }
+      case "safehouseSidecar": {
+        if (d.platform !== "darwin") return "not applicable on this platform";
+        if (safehouseSetup === null) return "checking\u2026";
+        if (safehouseSetup.sidecarPresent && safehouseSetup.sidecarHasFunctions)
+          return "present \u2713";
+        if (safehouseSetup.sidecarPresent) {
+          return conflicts.safehouseSidecar.some(
+            (m) => m.item === FN_SAFE || m.item === FN_SAFE_CLAUDE
+          ) ? "sidecar present (wrappers defined in your rc)" : "wrappers not in sidecar - enter to regenerate";
+        }
+        return "not written - enter to write";
+      }
+      case "crewDoctor":
+        return "enter to run";
+    }
+  }
+  function conflictNote(id) {
+    if (id === "clearanceSidecar") return conflicts.clearanceSidecar;
+    if (id === "safehouseSidecar") return conflicts.safehouseSidecar;
+    return [];
+  }
+  return /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx9(Text9, { bold: true, children: "Setup" }),
+    /* @__PURE__ */ jsx9(Box9, { marginTop: 1, flexDirection: "column", children: ROWS2.map((row2, index) => /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", children: [
+      /* @__PURE__ */ jsxs9(Box9, { children: [
+        /* @__PURE__ */ jsxs9(Text9, { color: cursor === index ? "cyan" : void 0, children: [
           cursor === index ? "\u25B8 " : "  ",
           row2.label
         ] }),
-        /* @__PURE__ */ jsxs8(Text8, { dimColor: true, children: [
+        /* @__PURE__ */ jsxs9(Text9, { dimColor: true, children: [
           " ",
-          rowText(states[row2.id])
+          isInstallRow(row2.id) ? installRowText(states[row2.id]) : sidecarRowText(row2.id)
         ] })
       ] }),
-      cursor === index ? /* @__PURE__ */ jsxs8(Text8, { dimColor: true, children: [
+      conflictNote(row2.id).length > 0 ? /* @__PURE__ */ jsxs9(Text9, { dimColor: true, children: [
+        "    ",
+        "defined in your rc:",
+        " ",
+        conflictNote(row2.id).map((m) => `${m.file}:${m.line} (${m.item})`).join(", ")
+      ] }) : null,
+      cursor === index ? /* @__PURE__ */ jsxs9(Text9, { dimColor: true, children: [
         "    ",
         row2.detail
       ] }) : null
     ] }, row2.id)) }),
-    /* @__PURE__ */ jsx8(Box8, { marginTop: 1, children: /* @__PURE__ */ jsx8(Text8, { dimColor: true, children: "Installs and checks the tools groundcrew needs on this machine (it does not edit crew.config.json; the Sandbox section holds the related networkEgress setting). \u2191/\u2193 move \xB7 enter install \xB7 esc back. Headless: crew-config doctor." }) })
+    /* @__PURE__ */ jsxs9(Box9, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx9(Text9, { children: "Add this line to your shell rc (~/.zshrc) yourself - crew-config never edits rc files:" }),
+      /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: RC_SNIPPET })
+    ] }),
+    /* @__PURE__ */ jsx9(Box9, { marginTop: 1, children: /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: "Installs and checks the tools groundcrew needs on this machine (it does not edit crew.config.json). The Sandbox section's networkEgress setting controls whether crew uses this allowlist. \u2191/\u2193 move \xB7 enter fix \xB7 esc back. Headless: crew-config doctor." }) })
   ] });
 }
 
 // src/screens/PromptsScreen.tsx
-import { useRef as useRef7, useState as useState9 } from "react";
-import { Box as Box11, Text as Text11, useInput as useInput9 } from "ink";
+import { useRef as useRef7, useState as useState10 } from "react";
+import { Box as Box12, Text as Text12, useInput as useInput10 } from "ink";
 
 // src/domain/draftPath.ts
-function getByPath(draft, path14) {
+function getByPath(draft, path15) {
   let current = draft;
-  for (const key of path14.split(".")) {
+  for (const key of path15.split(".")) {
     if (!isObject(current)) return void 0;
     current = current[key];
   }
   return current;
 }
-function setByPath(draft, path14, value) {
-  const keys = path14.split(".");
+function setByPath(draft, path15, value) {
+  const keys = path15.split(".");
   const [head, ...rest] = keys;
   if (head === void 0) return draft;
   const clone = { ...draft };
@@ -1754,16 +2352,16 @@ function setByPath(draft, path14, value) {
 }
 
 // src/screens/PromptsBrowser.tsx
-import { useMemo, useRef as useRef6, useState as useState8 } from "react";
-import { Box as Box10, Text as Text10, useInput as useInput8 } from "ink";
+import { useMemo, useRef as useRef6, useState as useState9 } from "react";
+import { Box as Box11, Text as Text11, useInput as useInput9 } from "ink";
 
 // src/prompts/install.ts
-import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync3 } from "fs";
-import path5 from "path";
+import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync3 } from "fs";
+import path7 from "path";
 function installPrompt(draft, configDir, prompt) {
-  const promptsDir = path5.join(configDir, "prompts");
-  mkdirSync2(promptsDir, { recursive: true });
-  const absolutePath = path5.join(promptsDir, `${prompt.slug}.md`);
+  const promptsDir = path7.join(configDir, "prompts");
+  mkdirSync3(promptsDir, { recursive: true });
+  const absolutePath = path7.join(promptsDir, `${prompt.slug}.md`);
   const body = prompt.body.endsWith("\n") ? prompt.body : `${prompt.body}
 `;
   writeFileSync3(absolutePath, body);
@@ -1782,23 +2380,23 @@ function installPrompt(draft, configDir, prompt) {
 }
 
 // src/prompts/loader.ts
-import { existsSync as existsSync3, readdirSync, readFileSync, statSync as statSync2 } from "fs";
-import path6 from "path";
+import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync3, statSync as statSync3 } from "fs";
+import path8 from "path";
 import { fileURLToPath } from "url";
 function resolvePromptsDir(moduleUrl = import.meta.url) {
   const bundled = fileURLToPath(new URL("./prompts/", moduleUrl));
-  if (existsSync3(bundled) && statSync2(bundled).isDirectory()) return bundled;
+  if (existsSync4(bundled) && statSync3(bundled).isDirectory()) return bundled;
   return fileURLToPath(new URL("./", moduleUrl));
 }
 var PROMPTS_DIR = resolvePromptsDir();
 function listPackagedPrompts(dir = PROMPTS_DIR) {
   const files = readdirSync(dir).filter((name) => name.endsWith(".md")).sort();
-  return files.map((name) => readPackagedPrompt(path6.join(dir, name)));
+  return files.map((name) => readPackagedPrompt(path8.join(dir, name)));
 }
 function readPackagedPrompt(filepath) {
-  const raw = readFileSync(filepath, "utf8");
+  const raw = readFileSync3(filepath, "utf8");
   const { frontmatter, body } = parseFrontmatter(raw);
-  const slug = path6.basename(filepath, ".md");
+  const slug = path8.basename(filepath, ".md");
   return {
     slug,
     title: frontmatter.title ?? slug,
@@ -1833,9 +2431,9 @@ function unquote(value) {
 }
 
 // src/screens/PromptsReader.tsx
-import { useRef as useRef5, useState as useState7 } from "react";
-import { Box as Box9, Text as Text9, useInput as useInput7 } from "ink";
-import { jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
+import { useRef as useRef5, useState as useState8 } from "react";
+import { Box as Box10, Text as Text10, useInput as useInput8 } from "ink";
+import { jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
 var CHROME_ROWS = 8;
 var MIN_VISIBLE = 4;
 function PromptsReader({ prompt, onInstall, onBack }) {
@@ -1843,14 +2441,14 @@ function PromptsReader({ prompt, onInstall, onBack }) {
   const lines = prompt.body.split("\n");
   const visible = Math.max(MIN_VISIBLE, terminalRows - CHROME_ROWS);
   const maxTop = Math.max(0, lines.length - visible);
-  const [scrollTop, setScrollTop] = useState7(0);
+  const [scrollTop, setScrollTop] = useState8(0);
   const scrollRef = useRef5(0);
   function moveScroll(next) {
     const clamped = Math.max(0, Math.min(maxTop, next));
     scrollRef.current = clamped;
     setScrollTop(clamped);
   }
-  useInput7((input, key) => {
+  useInput8((input, key) => {
     if (key.escape) {
       onBack();
       return;
@@ -1870,20 +2468,20 @@ function PromptsReader({ prompt, onInstall, onBack }) {
   const above = scrollTop;
   const below = lines.length - end;
   const slice = lines.slice(scrollTop, end);
-  return /* @__PURE__ */ jsxs9(Box9, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx9(Text9, { bold: true, children: prompt.title }),
-    prompt.description ? /* @__PURE__ */ jsx9(Box9, { marginTop: 1, children: /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: prompt.description }) }) : null,
-    /* @__PURE__ */ jsxs9(Box9, { marginTop: 1, flexDirection: "column", children: [
-      above > 0 ? /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: `\u2191 ${above} more line${above === 1 ? "" : "s"}` }) : null,
-      slice.map((line, index) => /* @__PURE__ */ jsx9(Text9, { children: line === "" ? " " : line }, scrollTop + index)),
-      below > 0 ? /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: `\u2193 ${below} more line${below === 1 ? "" : "s"}` }) : null
+  return /* @__PURE__ */ jsxs10(Box10, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx10(Text10, { bold: true, children: prompt.title }),
+    prompt.description ? /* @__PURE__ */ jsx10(Box10, { marginTop: 1, children: /* @__PURE__ */ jsx10(Text10, { dimColor: true, children: prompt.description }) }) : null,
+    /* @__PURE__ */ jsxs10(Box10, { marginTop: 1, flexDirection: "column", children: [
+      above > 0 ? /* @__PURE__ */ jsx10(Text10, { dimColor: true, children: `\u2191 ${above} more line${above === 1 ? "" : "s"}` }) : null,
+      slice.map((line, index) => /* @__PURE__ */ jsx10(Text10, { children: line === "" ? " " : line }, scrollTop + index)),
+      below > 0 ? /* @__PURE__ */ jsx10(Text10, { dimColor: true, children: `\u2193 ${below} more line${below === 1 ? "" : "s"}` }) : null
     ] }),
-    /* @__PURE__ */ jsx9(Box9, { marginTop: 1, children: /* @__PURE__ */ jsx9(Text9, { dimColor: true, children: "\u2191/\u2193 scroll \xB7 space/b page \xB7 g/G top/bottom \xB7 i install \xB7 esc back" }) })
+    /* @__PURE__ */ jsx10(Box10, { marginTop: 1, children: /* @__PURE__ */ jsx10(Text10, { dimColor: true, children: "\u2191/\u2193 scroll \xB7 space/b page \xB7 g/G top/bottom \xB7 i install \xB7 esc back" }) })
   ] });
 }
 
 // src/screens/PromptsBrowser.tsx
-import { jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
+import { jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
 function PromptsBrowser({
   draft,
   configDir,
@@ -1891,10 +2489,10 @@ function PromptsBrowser({
   onBack
 }) {
   const { prompts, error: listError } = useMemo(() => safeList(), []);
-  const [cursor, setCursor] = useState8(0);
+  const [cursor, setCursor] = useState9(0);
   const cursorRef = useRef6(0);
-  const [mode, setMode] = useState8("list");
-  const [error, setError] = useState8(void 0);
+  const [mode, setMode] = useState9("list");
+  const [error, setError] = useState9(void 0);
   function moveCursor(next) {
     cursorRef.current = next;
     setCursor(next);
@@ -1908,7 +2506,7 @@ function PromptsBrowser({
       setMode("list");
     }
   }
-  useInput8(
+  useInput9(
     (input, key) => {
       if (key.escape) {
         onBack();
@@ -1932,7 +2530,7 @@ function PromptsBrowser({
       setMode("list");
       return null;
     }
-    return /* @__PURE__ */ jsx10(
+    return /* @__PURE__ */ jsx11(
       PromptsReader,
       {
         prompt: focused,
@@ -1941,29 +2539,29 @@ function PromptsBrowser({
       }
     );
   }
-  return /* @__PURE__ */ jsxs10(Box10, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx10(Text10, { bold: true, children: "Packaged prompts" }),
-    listError ? /* @__PURE__ */ jsx10(Box10, { marginTop: 1, children: /* @__PURE__ */ jsxs10(Text10, { color: "red", children: [
+  return /* @__PURE__ */ jsxs11(Box11, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx11(Text11, { bold: true, children: "Packaged prompts" }),
+    listError ? /* @__PURE__ */ jsx11(Box11, { marginTop: 1, children: /* @__PURE__ */ jsxs11(Text11, { color: "red", children: [
       "Could not load packaged prompts: ",
       listError
-    ] }) }) : prompts.length === 0 ? /* @__PURE__ */ jsx10(Box10, { marginTop: 1, children: /* @__PURE__ */ jsx10(Text10, { dimColor: true, children: "No packaged prompts found." }) }) : /* @__PURE__ */ jsx10(Box10, { flexDirection: "column", marginTop: 1, children: prompts.map((p, index) => /* @__PURE__ */ jsxs10(Box10, { flexDirection: "column", marginBottom: 1, children: [
-      /* @__PURE__ */ jsxs10(Text10, { color: cursor === index ? "cyan" : void 0, children: [
+    ] }) }) : prompts.length === 0 ? /* @__PURE__ */ jsx11(Box11, { marginTop: 1, children: /* @__PURE__ */ jsx11(Text11, { dimColor: true, children: "No packaged prompts found." }) }) : /* @__PURE__ */ jsx11(Box11, { flexDirection: "column", marginTop: 1, children: prompts.map((p, index) => /* @__PURE__ */ jsxs11(Box11, { flexDirection: "column", marginBottom: 1, children: [
+      /* @__PURE__ */ jsxs11(Text11, { color: cursor === index ? "cyan" : void 0, children: [
         cursor === index ? "\u25B8 " : "  ",
-        /* @__PURE__ */ jsx10(Text10, { bold: true, children: p.title })
+        /* @__PURE__ */ jsx11(Text11, { bold: true, children: p.title })
       ] }),
-      p.description ? /* @__PURE__ */ jsx10(Box10, { marginLeft: 2, children: /* @__PURE__ */ jsx10(Text10, { dimColor: true, children: p.description }) }) : null
+      p.description ? /* @__PURE__ */ jsx11(Box11, { marginLeft: 2, children: /* @__PURE__ */ jsx11(Text11, { dimColor: true, children: p.description }) }) : null
     ] }, p.slug)) }),
-    error ? /* @__PURE__ */ jsx10(Box10, { marginTop: 1, children: /* @__PURE__ */ jsxs10(Text10, { color: "red", children: [
+    error ? /* @__PURE__ */ jsx11(Box11, { marginTop: 1, children: /* @__PURE__ */ jsxs11(Text11, { color: "red", children: [
       "Install failed: ",
       error
     ] }) }) : null,
-    /* @__PURE__ */ jsxs10(Box10, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsxs10(Text10, { dimColor: true, children: [
+    /* @__PURE__ */ jsxs11(Box11, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsxs11(Text11, { dimColor: true, children: [
         "Each entry is a pre-written initial prompt. Installing one writes it under ",
         configDir,
         "/prompts/ and points promptFile at it."
       ] }),
-      /* @__PURE__ */ jsx10(Text10, { dimColor: true, children: "\u2191/\u2193 select \xB7 i install \xB7 v/enter view \xB7 esc back" })
+      /* @__PURE__ */ jsx11(Text11, { dimColor: true, children: "\u2191/\u2193 select \xB7 i install \xB7 v/enter view \xB7 esc back" })
     ] })
   ] });
 }
@@ -1978,7 +2576,7 @@ function safeList() {
 }
 
 // src/screens/PromptsScreen.tsx
-import { jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
+import { jsx as jsx12, jsxs as jsxs12 } from "react/jsx-runtime";
 var ROW_COUNT = 3;
 var INITIAL_ROW = 0;
 var PROMPT_FILE_ROW = 1;
@@ -1993,15 +2591,15 @@ function PromptsScreen({
   onBack,
   configDir
 }) {
-  const [mode, setMode] = useState9("form");
-  const [cursor, setCursor] = useState9(0);
+  const [mode, setMode] = useState10("form");
+  const [cursor, setCursor] = useState10(0);
   const cursorRef = useRef7(0);
-  const [installed, setInstalled] = useState9(void 0);
+  const [installed, setInstalled] = useState10(void 0);
   function moveCursor(next) {
     cursorRef.current = next;
     setCursor(next);
   }
-  useInput9(
+  useInput10(
     (_input, key) => {
       if (mode !== "form") return;
       if (key.escape) {
@@ -2015,18 +2613,18 @@ function PromptsScreen({
     },
     { isActive: mode === "form" }
   );
-  function update(path14, raw) {
+  function update(path15, raw) {
     const value = raw.length === 0 ? void 0 : raw;
     onChange(
       setByPath(
         draft,
-        path14,
+        path15,
         value
       )
     );
   }
   if (mode === "browse") {
-    return /* @__PURE__ */ jsx11(
+    return /* @__PURE__ */ jsx12(
       PromptsBrowser,
       {
         draft,
@@ -2041,10 +2639,10 @@ function PromptsScreen({
       }
     );
   }
-  return /* @__PURE__ */ jsxs11(Box11, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx11(Text11, { bold: true, children: "Prompts" }),
-    /* @__PURE__ */ jsxs11(Box11, { flexDirection: "column", marginTop: 1, children: [
-      /* @__PURE__ */ jsx11(
+  return /* @__PURE__ */ jsxs12(Box12, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx12(Text12, { bold: true, children: "Prompts" }),
+    /* @__PURE__ */ jsxs12(Box12, { flexDirection: "column", marginTop: 1, children: [
+      /* @__PURE__ */ jsx12(
         TextField,
         {
           label: "initial",
@@ -2057,7 +2655,7 @@ function PromptsScreen({
           onChange: (v) => update("prompts.initial", v)
         }
       ),
-      /* @__PURE__ */ jsx11(
+      /* @__PURE__ */ jsx12(
         TextField,
         {
           label: "promptFile",
@@ -2070,46 +2668,46 @@ function PromptsScreen({
           onChange: (v) => update("prompts.promptFile", v)
         }
       ),
-      /* @__PURE__ */ jsx11(Box11, { children: /* @__PURE__ */ jsxs11(Text11, { color: cursor === BROWSE_ROW ? "cyan" : void 0, children: [
+      /* @__PURE__ */ jsx12(Box12, { children: /* @__PURE__ */ jsxs12(Text12, { color: cursor === BROWSE_ROW ? "cyan" : void 0, children: [
         cursor === BROWSE_ROW ? "\u203A " : "  ",
         "Browse packaged prompts \u2192"
       ] }) })
     ] }),
-    installed ? /* @__PURE__ */ jsx11(Box11, { marginTop: 1, children: /* @__PURE__ */ jsxs11(Text11, { color: "green", children: [
+    installed ? /* @__PURE__ */ jsx12(Box12, { marginTop: 1, children: /* @__PURE__ */ jsxs12(Text12, { color: "green", children: [
       "Installed \u2192 promptFile = ",
       installed
     ] }) }) : null,
-    /* @__PURE__ */ jsxs11(Box11, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx11(Text11, { dimColor: true, children: "The instructions groundcrew gives the agent at the start of every task. `initial` and `promptFile` are mutually exclusive \u2014 installing a packaged prompt sets `promptFile` and clears `initial`." }),
-      /* @__PURE__ */ jsx11(Text11, { dimColor: true, children: "\u2191/\u2193 move \xB7 type to edit \xB7 enter on browse \xB7 esc back" })
+    /* @__PURE__ */ jsxs12(Box12, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx12(Text12, { dimColor: true, children: "The instructions groundcrew gives the agent at the start of every task. `initial` and `promptFile` are mutually exclusive \u2014 installing a packaged prompt sets `promptFile` and clears `initial`." }),
+      /* @__PURE__ */ jsx12(Text12, { dimColor: true, children: "\u2191/\u2193 move \xB7 type to edit \xB7 enter on browse \xB7 esc back" })
     ] })
   ] });
 }
 
 // src/screens/QuitGuard.tsx
-import { Box as Box12, Text as Text12, useInput as useInput10 } from "ink";
-import { jsx as jsx12, jsxs as jsxs12 } from "react/jsx-runtime";
+import { Box as Box13, Text as Text13, useInput as useInput11 } from "ink";
+import { jsx as jsx13, jsxs as jsxs13 } from "react/jsx-runtime";
 function QuitGuard({ onSaveQuit, onDiscard, onCancel }) {
-  useInput10((input, key) => {
+  useInput11((input, key) => {
     if (input === "s") onSaveQuit();
     if (input === "d") onDiscard();
     if (key.escape) onCancel();
   });
-  return /* @__PURE__ */ jsxs12(Box12, { flexDirection: "column", borderStyle: "double", paddingX: 2, paddingY: 1, children: [
-    /* @__PURE__ */ jsx12(Text12, { bold: true, children: "Unsaved changes" }),
-    /* @__PURE__ */ jsx12(Box12, { marginTop: 1, children: /* @__PURE__ */ jsx12(Text12, { children: "Save before quitting?" }) }),
-    /* @__PURE__ */ jsx12(Box12, { marginTop: 1, children: /* @__PURE__ */ jsx12(Text12, { dimColor: true, children: "[s] Save & quit [d] Discard [esc] Cancel" }) })
+  return /* @__PURE__ */ jsxs13(Box13, { flexDirection: "column", borderStyle: "double", paddingX: 2, paddingY: 1, children: [
+    /* @__PURE__ */ jsx13(Text13, { bold: true, children: "Unsaved changes" }),
+    /* @__PURE__ */ jsx13(Box13, { marginTop: 1, children: /* @__PURE__ */ jsx13(Text13, { children: "Save before quitting?" }) }),
+    /* @__PURE__ */ jsx13(Box13, { marginTop: 1, children: /* @__PURE__ */ jsx13(Text13, { dimColor: true, children: "[s] Save & quit [d] Discard [esc] Cancel" }) })
   ] });
 }
 
 // src/screens/RepositoriesForm.tsx
-import { useState as useState12 } from "react";
-import { Box as Box16, Text as Text16, useInput as useInput14 } from "ink";
+import { useState as useState13 } from "react";
+import { Box as Box17, Text as Text17, useInput as useInput15 } from "ink";
 
 // src/components/ListField.tsx
-import { useRef as useRef8, useState as useState10 } from "react";
-import { Box as Box13, Text as Text13, useInput as useInput11 } from "ink";
-import { jsx as jsx13, jsxs as jsxs13 } from "react/jsx-runtime";
+import { useRef as useRef8, useState as useState11 } from "react";
+import { Box as Box14, Text as Text14, useInput as useInput12 } from "ink";
+import { jsx as jsx14, jsxs as jsxs14 } from "react/jsx-runtime";
 var LIST_CHROME_ROWS = 11;
 function ListField({
   items,
@@ -2119,7 +2717,7 @@ function ListField({
   addLabel = "+ add repository\u2026",
   itemActions
 }) {
-  const [cursor, setCursor] = useState10(0);
+  const [cursor, setCursor] = useState11(0);
   const cursorRef = useRef8(0);
   const { rows: terminalRows } = useFullscreen();
   const rows = items.length + 1;
@@ -2128,7 +2726,7 @@ function ListField({
     cursorRef.current = next;
     setCursor(next);
   }
-  useInput11(
+  useInput12(
     (input, key) => {
       if (key.downArrow) moveCursor(Math.min(rows - 1, cursorRef.current + 1));
       if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
@@ -2146,8 +2744,8 @@ function ListField({
   );
   function renderRow(index) {
     if (index === items.length) {
-      return /* @__PURE__ */ jsxs13(
-        Text13,
+      return /* @__PURE__ */ jsxs14(
+        Text14,
         {
           color: isActive && cursor === items.length ? "cyan" : void 0,
           dimColor: true,
@@ -2160,23 +2758,23 @@ function ListField({
       );
     }
     const item = items[index];
-    return /* @__PURE__ */ jsxs13(Box13, { children: [
-      /* @__PURE__ */ jsxs13(Text13, { color: isActive && cursor === index ? "cyan" : void 0, children: [
+    return /* @__PURE__ */ jsxs14(Box14, { children: [
+      /* @__PURE__ */ jsxs14(Text14, { color: isActive && cursor === index ? "cyan" : void 0, children: [
         isActive && cursor === index ? "\u25B8 " : "  ",
         item.label
       ] }),
-      item.note ? /* @__PURE__ */ jsxs13(Text13, { dimColor: true, children: [
+      item.note ? /* @__PURE__ */ jsxs14(Text14, { dimColor: true, children: [
         " ",
         item.note
       ] }) : null,
-      item.error ? /* @__PURE__ */ jsxs13(Text13, { color: "yellow", children: [
+      item.error ? /* @__PURE__ */ jsxs14(Text14, { color: "yellow", children: [
         " \u26A0 ",
         item.error
       ] }) : null,
-      item.modified ? /* @__PURE__ */ jsx13(Text13, { color: "yellow", children: " \u25CF" }) : null
+      item.modified ? /* @__PURE__ */ jsx14(Text14, { color: "yellow", children: " \u25CF" }) : null
     ] }, index);
   }
-  return /* @__PURE__ */ jsx13(Box13, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: /* @__PURE__ */ jsx13(
+  return /* @__PURE__ */ jsx14(Box14, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: /* @__PURE__ */ jsx14(
     ScrollableList,
     {
       count: rows,
@@ -2259,9 +2857,9 @@ function repoErrors(entries) {
 }
 
 // src/screens/RepoSubForm.tsx
-import { useState as useState11 } from "react";
-import { Box as Box14, Text as Text14, useInput as useInput12 } from "ink";
-import { jsx as jsx14, jsxs as jsxs14 } from "react/jsx-runtime";
+import { useState as useState12 } from "react";
+import { Box as Box15, Text as Text15, useInput as useInput13 } from "ink";
+import { jsx as jsx15, jsxs as jsxs15 } from "react/jsx-runtime";
 var FIELD_COUNT = 6;
 function RepoSubForm({
   entry,
@@ -2270,17 +2868,17 @@ function RepoSubForm({
   onSave,
   onCancel
 }) {
-  const [name, setName] = useState11(entry.name);
-  const [override, setOverride] = useState11(entry.projectDirOverride ?? "");
-  const [workdir, setWorkdir] = useState11(entry.workdir ?? "");
-  const [provisionCreate, setProvisionCreate] = useState11(
+  const [name, setName] = useState12(entry.name);
+  const [override, setOverride] = useState12(entry.projectDirOverride ?? "");
+  const [workdir, setWorkdir] = useState12(entry.workdir ?? "");
+  const [provisionCreate, setProvisionCreate] = useState12(
     entry.provision?.create ?? ""
   );
-  const [provisionRemove, setProvisionRemove] = useState11(
+  const [provisionRemove, setProvisionRemove] = useState12(
     entry.provision?.remove ?? ""
   );
-  const [prepareHook, setPrepareHook] = useState11(entry.prepareWorktreeHook ?? "");
-  const [active, setActive] = useState11(0);
+  const [prepareHook, setPrepareHook] = useState12(entry.prepareWorktreeHook ?? "");
+  const [active, setActive] = useState12(0);
   const guard = useEditGuard();
   const nameModified = baselineEntry === void 0 || !valuesEqual(name, baselineEntry.name);
   const overrideModified = baselineEntry === void 0 || !valuesEqual(
@@ -2307,7 +2905,7 @@ function RepoSubForm({
       prepareWorktreeHook: prepareHook.length === 0 ? void 0 : prepareHook
     };
   }
-  useInput12(
+  useInput13(
     (_input, key) => {
       if (key.escape) {
         guard.requestCancel(onCancel);
@@ -2320,7 +2918,7 @@ function RepoSubForm({
     { isActive: !guard.guarding }
   );
   if (guard.guarding) {
-    return /* @__PURE__ */ jsx14(
+    return /* @__PURE__ */ jsx15(
       SaveGuard,
       {
         onApply: () => onSave(buildEntry()),
@@ -2334,10 +2932,10 @@ function RepoSubForm({
   const overrideDisabled = provisionFilled && !overrideFilled;
   const provisionDisabled = overrideFilled && !provisionFilled;
   const base = override.length === 0 ? projectDir : override;
-  return /* @__PURE__ */ jsxs14(Box14, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx14(Text14, { bold: true, children: "Repository" }),
-    /* @__PURE__ */ jsxs14(Box14, { flexDirection: "column", marginTop: 1, children: [
-      /* @__PURE__ */ jsx14(
+  return /* @__PURE__ */ jsxs15(Box15, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx15(Text15, { bold: true, children: "Repository" }),
+    /* @__PURE__ */ jsxs15(Box15, { flexDirection: "column", marginTop: 1, children: [
+      /* @__PURE__ */ jsx15(
         TextField,
         {
           label: "name",
@@ -2347,7 +2945,7 @@ function RepoSubForm({
           onChange: guard.track(setName)
         }
       ),
-      /* @__PURE__ */ jsx14(
+      /* @__PURE__ */ jsx15(
         TextField,
         {
           label: "projectDirOverride",
@@ -2360,7 +2958,7 @@ function RepoSubForm({
           disabledHint: "(disabled \u2014 clear provision to use)"
         }
       ),
-      /* @__PURE__ */ jsx14(
+      /* @__PURE__ */ jsx15(
         TextField,
         {
           label: "workdir",
@@ -2371,7 +2969,7 @@ function RepoSubForm({
           onChange: guard.track(setWorkdir)
         }
       ),
-      /* @__PURE__ */ jsx14(
+      /* @__PURE__ */ jsx15(
         TextField,
         {
           label: "provision.create",
@@ -2384,7 +2982,7 @@ function RepoSubForm({
           disabledHint: "(disabled \u2014 clear projectDirOverride to use)"
         }
       ),
-      /* @__PURE__ */ jsx14(
+      /* @__PURE__ */ jsx15(
         TextField,
         {
           label: "provision.remove",
@@ -2397,7 +2995,7 @@ function RepoSubForm({
           disabledHint: "(disabled \u2014 clear projectDirOverride to use)"
         }
       ),
-      /* @__PURE__ */ jsx14(
+      /* @__PURE__ */ jsx15(
         TextField,
         {
           label: "hooks.prepareWorktree",
@@ -2409,45 +3007,45 @@ function RepoSubForm({
         }
       )
     ] }),
-    /* @__PURE__ */ jsx14(Box14, { marginTop: 1, children: /* @__PURE__ */ jsxs14(Text14, { dimColor: true, children: [
+    /* @__PURE__ */ jsx15(Box15, { marginTop: 1, children: /* @__PURE__ */ jsxs15(Text15, { dimColor: true, children: [
       "Repo located at: ",
       base,
       "/",
       name
     ] }) }),
-    /* @__PURE__ */ jsx14(Box14, { children: /* @__PURE__ */ jsx14(Text14, { dimColor: true, children: `Settings for one repository. "name" is its folder name; everything else is an optional override. provision is scripted worktree setup \u2014 it needs both templates and can't combine with projectDirOverride.` }) }),
-    /* @__PURE__ */ jsx14(Box14, { marginTop: 1, children: /* @__PURE__ */ jsx14(Text14, { dimColor: true, children: "hooks.prepareWorktree cascade: a repo-committed .groundcrew/config.json wins, then this per-repo setting, then defaults.hooks.prepareWorktree." }) })
+    /* @__PURE__ */ jsx15(Box15, { children: /* @__PURE__ */ jsx15(Text15, { dimColor: true, children: `Settings for one repository. "name" is its folder name; everything else is an optional override. provision is scripted worktree setup \u2014 it needs both templates and can't combine with projectDirOverride.` }) }),
+    /* @__PURE__ */ jsx15(Box15, { marginTop: 1, children: /* @__PURE__ */ jsx15(Text15, { dimColor: true, children: "hooks.prepareWorktree cascade: a repo-committed .groundcrew/config.json wins, then this per-repo setting, then defaults.hooks.prepareWorktree." }) })
   ] });
 }
 
 // src/screens/DeleteGuard.tsx
-import { Box as Box15, Text as Text15, useInput as useInput13 } from "ink";
-import { jsx as jsx15, jsxs as jsxs15 } from "react/jsx-runtime";
+import { Box as Box16, Text as Text16, useInput as useInput14 } from "ink";
+import { jsx as jsx16, jsxs as jsxs16 } from "react/jsx-runtime";
 function DeleteGuard({ name, onConfirm, onCancel }) {
-  useInput13((input, key) => {
+  useInput14((input, key) => {
     if (input === "y" || key.return) onConfirm();
     if (key.escape) onCancel();
   });
-  return /* @__PURE__ */ jsxs15(Box15, { flexDirection: "column", borderStyle: "double", paddingX: 2, paddingY: 1, children: [
-    /* @__PURE__ */ jsxs15(Text15, { bold: true, children: [
+  return /* @__PURE__ */ jsxs16(Box16, { flexDirection: "column", borderStyle: "double", paddingX: 2, paddingY: 1, children: [
+    /* @__PURE__ */ jsxs16(Text16, { bold: true, children: [
       "Delete ",
       name,
       "?"
     ] }),
-    /* @__PURE__ */ jsx15(Box15, { marginTop: 1, children: /* @__PURE__ */ jsx15(Text15, { dimColor: true, children: "[y] Delete [esc] Cancel" }) })
+    /* @__PURE__ */ jsx16(Box16, { marginTop: 1, children: /* @__PURE__ */ jsx16(Text16, { dimColor: true, children: "[y] Delete [esc] Cancel" }) })
   ] });
 }
 
 // src/screens/RepositoriesForm.tsx
-import { jsx as jsx16, jsxs as jsxs16 } from "react/jsx-runtime";
+import { jsx as jsx17, jsxs as jsxs17 } from "react/jsx-runtime";
 function RepositoriesForm({
   draft,
   baseline,
   onChange,
   onBack
 }) {
-  const [editing, setEditing] = useState12(void 0);
-  const [pendingDelete, setPendingDelete] = useState12(
+  const [editing, setEditing] = useState13(void 0);
+  const [pendingDelete, setPendingDelete] = useState13(
     void 0
   );
   const entries = normalizeRepos(draft.workspace.knownRepositories);
@@ -2455,7 +3053,7 @@ function RepositoriesForm({
   const modified = modifiedByKey(entries, baseEntries, (entry) => entry.name);
   const errors = repoErrors(entries);
   const listActive = editing === void 0 && pendingDelete === void 0;
-  useInput14(
+  useInput15(
     (_input, key) => {
       if (!listActive) return;
       if (key.escape) onBack();
@@ -2489,7 +3087,7 @@ function RepositoriesForm({
       projectDirOverride: void 0
     };
     const baselineEntry = baseEntries.find((e) => e.name === current.name);
-    return /* @__PURE__ */ jsx16(
+    return /* @__PURE__ */ jsx17(
       RepoSubForm,
       {
         entry: current,
@@ -2513,7 +3111,7 @@ function RepositoriesForm({
   }));
   if (pendingDelete !== void 0) {
     const target2 = entries[pendingDelete];
-    return /* @__PURE__ */ jsx16(
+    return /* @__PURE__ */ jsx17(
       DeleteGuard,
       {
         name: target2?.name ?? "this repo",
@@ -2525,9 +3123,9 @@ function RepositoriesForm({
       }
     );
   }
-  return /* @__PURE__ */ jsxs16(Box16, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx16(Text16, { bold: true, children: "Repositories" }),
-    /* @__PURE__ */ jsx16(Box16, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx16(
+  return /* @__PURE__ */ jsxs17(Box17, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx17(Text17, { bold: true, children: "Repositories" }),
+    /* @__PURE__ */ jsx17(Box17, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx17(
       ListField,
       {
         items,
@@ -2537,17 +3135,17 @@ function RepositoriesForm({
         itemActions: [{ key: "c", onPress: duplicateAt }]
       }
     ) }),
-    /* @__PURE__ */ jsx16(Box16, { marginTop: 1, children: /* @__PURE__ */ jsx16(Text16, { dimColor: true, children: "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir). \u2191/\u2193 move \xB7 enter edit \xB7 c duplicate \xB7 d delete (confirm) \xB7 esc back." }) })
+    /* @__PURE__ */ jsx17(Box17, { marginTop: 1, children: /* @__PURE__ */ jsx17(Text17, { dimColor: true, children: "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir). \u2191/\u2193 move \xB7 enter edit \xB7 c duplicate \xB7 d delete (confirm) \xB7 esc back." }) })
   ] });
 }
 
 // src/screens/SectionForm.tsx
-import { useState as useState13 } from "react";
-import { Box as Box18, Text as Text18, useInput as useInput16 } from "ink";
+import { useState as useState14 } from "react";
+import { Box as Box19, Text as Text19, useInput as useInput17 } from "ink";
 
 // src/components/SelectField.tsx
-import { Box as Box17, Text as Text17, useInput as useInput15 } from "ink";
-import { jsx as jsx17, jsxs as jsxs17 } from "react/jsx-runtime";
+import { Box as Box18, Text as Text18, useInput as useInput16 } from "ink";
+import { jsx as jsx18, jsxs as jsxs18 } from "react/jsx-runtime";
 function SelectField({
   label,
   value,
@@ -2556,7 +3154,7 @@ function SelectField({
   onChange,
   modified = false
 }) {
-  useInput15(
+  useInput16(
     (_input, key) => {
       if (options.length === 0) return;
       const index = Math.max(0, options.indexOf(value));
@@ -2569,19 +3167,19 @@ function SelectField({
     },
     { isActive }
   );
-  return /* @__PURE__ */ jsxs17(Box17, { children: [
-    /* @__PURE__ */ jsxs17(Text17, { color: isActive ? "cyan" : void 0, children: [
+  return /* @__PURE__ */ jsxs18(Box18, { children: [
+    /* @__PURE__ */ jsxs18(Text18, { color: isActive ? "cyan" : void 0, children: [
       isActive ? "\u203A " : "  ",
       label,
       " "
     ] }),
-    /* @__PURE__ */ jsx17(Text17, { children: options.map((opt) => opt === value ? `[${opt}]` : ` ${opt} `).join(" ") }),
-    modified ? /* @__PURE__ */ jsx17(Text17, { color: "yellow", children: " \u25CF" }) : null
+    /* @__PURE__ */ jsx18(Text18, { children: options.map((opt) => opt === value ? `[${opt}]` : ` ${opt} `).join(" ") }),
+    modified ? /* @__PURE__ */ jsx18(Text18, { color: "yellow", children: " \u25CF" }) : null
   ] });
 }
 
 // src/screens/SectionForm.tsx
-import { jsx as jsx18, jsxs as jsxs18 } from "react/jsx-runtime";
+import { jsx as jsx19, jsxs as jsxs19 } from "react/jsx-runtime";
 function asString4(value) {
   return value === void 0 ? "" : String(value);
 }
@@ -2594,8 +3192,8 @@ function SectionForm({
   onChange,
   onBack
 }) {
-  const [active, setActive] = useState13(0);
-  useInput16((_input, key) => {
+  const [active, setActive] = useState14(0);
+  useInput17((_input, key) => {
     if (key.escape) onBack();
     if (key.downArrow) setActive((a) => Math.min(spec.length - 1, a + 1));
     if (key.upArrow) setActive((a) => Math.max(0, a - 1));
@@ -2620,14 +3218,14 @@ function SectionForm({
     );
   }
   const focused = spec[active];
-  return /* @__PURE__ */ jsxs18(Box18, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx18(Text18, { bold: true, children: title }),
-    /* @__PURE__ */ jsx18(Box18, { flexDirection: "column", marginTop: 1, children: spec.map((field, index) => {
+  return /* @__PURE__ */ jsxs19(Box19, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx19(Text19, { bold: true, children: title }),
+    /* @__PURE__ */ jsx19(Box19, { flexDirection: "column", marginTop: 1, children: spec.map((field, index) => {
       const modified = !valuesEqual(
         getByPath(baseline, field.path),
         getByPath(draft, field.path)
       );
-      return field.kind === "select" ? /* @__PURE__ */ jsx18(
+      return field.kind === "select" ? /* @__PURE__ */ jsx19(
         SelectField,
         {
           label: field.label,
@@ -2640,7 +3238,7 @@ function SectionForm({
           onChange: (v) => update(field, v)
         },
         field.path
-      ) : /* @__PURE__ */ jsx18(
+      ) : /* @__PURE__ */ jsx19(
         TextField,
         {
           label: field.label,
@@ -2653,16 +3251,16 @@ function SectionForm({
         field.path
       );
     }) }),
-    /* @__PURE__ */ jsxs18(Box18, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx18(Text18, { dimColor: true, children: description }),
-      focused ? /* @__PURE__ */ jsx18(Text18, { dimColor: true, children: focused.help }) : null
+    /* @__PURE__ */ jsxs19(Box19, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx19(Text19, { dimColor: true, children: description }),
+      focused ? /* @__PURE__ */ jsx19(Text19, { dimColor: true, children: focused.help }) : null
     ] })
   ] });
 }
 
 // src/screens/TaskSourcesMenu.tsx
-import { useEffect as useEffect4, useRef as useRef11, useState as useState21 } from "react";
-import { Box as Box27, Text as Text27, useInput as useInput25 } from "ink";
+import { useEffect as useEffect4, useRef as useRef11, useState as useState22 } from "react";
+import { Box as Box28, Text as Text28, useInput as useInput26 } from "ink";
 
 // src/domain/manifestSources.ts
 function findKindEntry(draft, kind) {
@@ -2870,8 +3468,8 @@ async function loadSourceCatalog() {
 }
 
 // src/screens/LinearForm.tsx
-import { useState as useState14 } from "react";
-import { Box as Box19, Text as Text19, useInput as useInput17 } from "ink";
+import { useState as useState15 } from "react";
+import { Box as Box20, Text as Text20, useInput as useInput18 } from "ink";
 
 // src/domain/env.ts
 var LINEAR_KEY_SOURCES = [
@@ -2889,7 +3487,7 @@ function linearApiKeyStatus(env) {
 }
 
 // src/screens/LinearForm.tsx
-import { jsx as jsx19, jsxs as jsxs19 } from "react/jsx-runtime";
+import { jsx as jsx20, jsxs as jsxs20 } from "react/jsx-runtime";
 var FIELD_ROWS = [
   { key: "team", label: "team" },
   { key: "name", label: "name" },
@@ -2905,10 +3503,10 @@ function LinearForm({
 }) {
   const enabled = isLinearEnabled(draft);
   const key = linearApiKeyStatus(env);
-  const [focus, setFocus] = useState14(0);
+  const [focus, setFocus] = useState15(0);
   const maxRow = enabled ? FIELD_ROWS.length : 0;
   const row2 = Math.min(focus, maxRow);
-  useInput17((input, k) => {
+  useInput18((input, k) => {
     if (k.escape) {
       onBack();
       return;
@@ -2918,21 +3516,21 @@ function LinearForm({
     if (input === " " && row2 === 0) onChange(setLinearEnabled(draft, !enabled));
   });
   const enableModified = isLinearEnabled(draft) !== isLinearEnabled(baseline);
-  return /* @__PURE__ */ jsxs19(Box19, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx19(Text19, { bold: true, children: "Linear (built-in)" }),
-    /* @__PURE__ */ jsx19(Box19, { marginTop: 1, children: /* @__PURE__ */ jsxs19(Text19, { color: row2 === 0 ? "cyan" : void 0, children: [
+  return /* @__PURE__ */ jsxs20(Box20, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx20(Text20, { bold: true, children: "Linear (built-in)" }),
+    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsxs20(Text20, { color: row2 === 0 ? "cyan" : void 0, children: [
       row2 === 0 ? "\u25B8 " : "  ",
       "Built-in Linear source:",
       " ",
-      /* @__PURE__ */ jsx19(Text19, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
-      enableModified ? /* @__PURE__ */ jsx19(Text19, { color: "yellow", children: " \u25CF" }) : null
+      /* @__PURE__ */ jsx20(Text20, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
+      enableModified ? /* @__PURE__ */ jsx20(Text20, { color: "yellow", children: " \u25CF" }) : null
     ] }) }),
-    enabled ? /* @__PURE__ */ jsx19(Box19, { flexDirection: "column", marginTop: 1, children: FIELD_ROWS.map((field, index) => {
+    enabled ? /* @__PURE__ */ jsx20(Box20, { flexDirection: "column", marginTop: 1, children: FIELD_ROWS.map((field, index) => {
       const isStatus = field.key === "inProgress" || field.key === "inReview";
       const value = isStatus ? getLinearStatuses(draft, field.key) : getLinearField(draft, field.key) ?? "";
       const baselineValue = isStatus ? getLinearStatuses(baseline, field.key) : getLinearField(baseline, field.key) ?? "";
       const modified = !valuesEqual(value, baselineValue);
-      return /* @__PURE__ */ jsx19(
+      return /* @__PURE__ */ jsx20(
         TextField,
         {
           label: field.label,
@@ -2947,38 +3545,38 @@ function LinearForm({
         field.key
       );
     }) }) : null,
-    /* @__PURE__ */ jsx19(Box19, { marginTop: 1, children: /* @__PURE__ */ jsxs19(Text19, { children: [
+    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsxs20(Text20, { children: [
       "API key:",
       " ",
-      key.set ? /* @__PURE__ */ jsxs19(Text19, { color: "green", children: [
+      key.set ? /* @__PURE__ */ jsxs20(Text20, { color: "green", children: [
         "detected (",
         key.source,
         ")"
-      ] }) : /* @__PURE__ */ jsx19(Text19, { color: "yellow", children: "not set" })
+      ] }) : /* @__PURE__ */ jsx20(Text20, { color: "yellow", children: "not set" })
     ] }) }),
-    /* @__PURE__ */ jsxs19(Box19, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx19(Text19, { dimColor: true, children: "Pull tasks from Linear. Space toggles the source (top row). team/name and the inProgress/inReview status names are optional overrides. Your API key is read from the environment, not stored here." }),
-      key.set ? null : /* @__PURE__ */ jsx19(Text19, { dimColor: true, children: 'Set it: export GROUNDCREW_LINEAR_API_KEY="lin_api_..."' })
+    /* @__PURE__ */ jsxs20(Box20, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx20(Text20, { dimColor: true, children: "Pull tasks from Linear. Space toggles the source (top row). team/name and the inProgress/inReview status names are optional overrides. Your API key is read from the environment, not stored here." }),
+      key.set ? null : /* @__PURE__ */ jsx20(Text20, { dimColor: true, children: 'Set it: export GROUNDCREW_LINEAR_API_KEY="lin_api_..."' })
     ] })
   ] });
 }
 
 // src/screens/ManifestSourceForm.tsx
-import { useRef as useRef9, useState as useState16 } from "react";
-import { Box as Box21, Text as Text21, useInput as useInput19 } from "ink";
+import { useRef as useRef9, useState as useState17 } from "react";
+import { Box as Box22, Text as Text22, useInput as useInput20 } from "ink";
 
 // src/io/prereqProbes.ts
-import { accessSync as accessSync2, constants as constants2, statSync as statSync3 } from "fs";
-import { homedir as homedir2 } from "os";
-import path7 from "path";
+import { accessSync as accessSync2, constants as constants2, statSync as statSync4 } from "fs";
+import { homedir as homedir3 } from "os";
+import path9 from "path";
 function expandHome(p) {
-  if (p === "~") return homedir2();
-  if (p.startsWith("~/")) return path7.join(homedir2(), p.slice(2));
+  if (p === "~") return homedir3();
+  if (p.startsWith("~/")) return path9.join(homedir3(), p.slice(2));
   return p;
 }
 function isExecutableFile(candidate) {
   try {
-    if (!statSync3(candidate).isFile()) return false;
+    if (!statSync4(candidate).isFile()) return false;
     accessSync2(candidate, constants2.X_OK);
     return true;
   } catch {
@@ -2987,30 +3585,30 @@ function isExecutableFile(candidate) {
 }
 function binOnPath(bin, env = process.env) {
   const searchPath = env.PATH ?? "";
-  return searchPath.split(path7.delimiter).filter((dir) => dir.length > 0).some((dir) => isExecutableFile(path7.join(expandHome(dir), bin)));
+  return searchPath.split(path9.delimiter).filter((dir) => dir.length > 0).some((dir) => isExecutableFile(path9.join(expandHome(dir), bin)));
 }
 function secretFileExists(installDir, file) {
   try {
-    return statSync3(path7.join(expandHome(installDir), file)).isFile();
+    return statSync4(path9.join(expandHome(installDir), file)).isFile();
   } catch {
     return false;
   }
 }
 
 // src/screens/ShellEnvEditor.tsx
-import { useState as useState15 } from "react";
-import { Box as Box20, Text as Text20, useInput as useInput18 } from "ink";
-import { jsx as jsx20, jsxs as jsxs20 } from "react/jsx-runtime";
+import { useState as useState16 } from "react";
+import { Box as Box21, Text as Text21, useInput as useInput19 } from "ink";
+import { jsx as jsx21, jsxs as jsxs21 } from "react/jsx-runtime";
 function EnvEntryEditor({
   entry,
   onSave,
   onCancel
 }) {
-  const [key, setKey] = useState15(entry.key);
-  const [value, setValue] = useState15(entry.value);
-  const [active, setActive] = useState15(0);
+  const [key, setKey] = useState16(entry.key);
+  const [value, setValue] = useState16(entry.value);
+  const [active, setActive] = useState16(0);
   const guard = useEditGuard();
-  useInput18(
+  useInput19(
     (_input, k) => {
       if (k.escape) {
         guard.requestCancel(onCancel);
@@ -3023,7 +3621,7 @@ function EnvEntryEditor({
     { isActive: !guard.guarding }
   );
   if (guard.guarding) {
-    return /* @__PURE__ */ jsx20(
+    return /* @__PURE__ */ jsx21(
       SaveGuard,
       {
         onApply: () => onSave({ key, value }),
@@ -3032,10 +3630,10 @@ function EnvEntryEditor({
       }
     );
   }
-  return /* @__PURE__ */ jsxs20(Box20, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx20(Text20, { bold: true, children: "Environment variable" }),
-    /* @__PURE__ */ jsxs20(Box20, { flexDirection: "column", marginTop: 1, children: [
-      /* @__PURE__ */ jsx20(
+  return /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx21(Text21, { bold: true, children: "Environment variable" }),
+    /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", marginTop: 1, children: [
+      /* @__PURE__ */ jsx21(
         TextField,
         {
           label: "key",
@@ -3045,7 +3643,7 @@ function EnvEntryEditor({
           onChange: guard.track(setKey)
         }
       ),
-      /* @__PURE__ */ jsx20(
+      /* @__PURE__ */ jsx21(
         TextField,
         {
           label: "value",
@@ -3056,14 +3654,14 @@ function EnvEntryEditor({
         }
       )
     ] }),
-    key.trim().length === 0 ? /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsx20(Text20, { color: "yellow", children: "\u26A0 key is required (a blank key is dropped)." }) }) : null,
-    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsx20(Text20, { dimColor: true, children: "\u2191/\u2193 move \xB7 type to edit \xB7 enter apply \xB7 esc cancel." }) })
+    key.trim().length === 0 ? /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "\u26A0 key is required (a blank key is dropped)." }) }) : null,
+    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: "\u2191/\u2193 move \xB7 type to edit \xB7 enter apply \xB7 esc cancel." }) })
   ] });
 }
 function ShellEnvEditor({ env, baselineEnv, onChange, onBack }) {
-  const [editing, setEditing] = useState15(void 0);
+  const [editing, setEditing] = useState16(void 0);
   const modified = modifiedByKey(env, baselineEnv, (e, i) => e.key || `__blank__${i}`);
-  useInput18(
+  useInput19(
     (_input, key) => {
       if (key.escape) onBack();
     },
@@ -3071,7 +3669,7 @@ function ShellEnvEditor({ env, baselineEnv, onChange, onBack }) {
   );
   if (editing !== void 0) {
     const entry = editing === "new" ? { key: "", value: "" } : env[editing] ?? { key: "", value: "" };
-    return /* @__PURE__ */ jsx20(
+    return /* @__PURE__ */ jsx21(
       EnvEntryEditor,
       {
         entry,
@@ -3092,9 +3690,9 @@ function ShellEnvEditor({ env, baselineEnv, onChange, onBack }) {
     error: void 0,
     modified: modified[index]
   }));
-  return /* @__PURE__ */ jsxs20(Box20, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx20(Text20, { bold: true, children: "Environment variables" }),
-    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx20(
+  return /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx21(Text21, { bold: true, children: "Environment variables" }),
+    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx21(
       ListField,
       {
         items,
@@ -3104,12 +3702,12 @@ function ShellEnvEditor({ env, baselineEnv, onChange, onBack }) {
         onDelete: (index) => onChange(env.filter((_, i) => i !== index))
       }
     ) }),
-    /* @__PURE__ */ jsx20(Box20, { marginTop: 1, children: /* @__PURE__ */ jsx20(Text20, { dimColor: true, children: "Extra environment variables passed to every command for this source (e.g. API tokens, hostnames). Stored literally in the config. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
+    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: "Extra environment variables passed to every command for this source (e.g. API tokens, hostnames). Stored literally in the config. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
   ] });
 }
 
 // src/screens/ManifestSourceForm.tsx
-import { jsx as jsx21, jsxs as jsxs21 } from "react/jsx-runtime";
+import { jsx as jsx22, jsxs as jsxs22 } from "react/jsx-runtime";
 function ManifestSourceForm({
   source,
   draft,
@@ -3123,26 +3721,26 @@ function ManifestSourceForm({
   const kind = source.name;
   const manifest = source.manifest;
   const enabled = isKindEnabled(draft, kind);
-  const [focus, setFocus] = useState16(0);
-  const [editingEnv, setEditingEnv] = useState16(false);
+  const [focus, setFocus] = useState17(0);
+  const [editingEnv, setEditingEnv] = useState17(false);
   const maxRow = enabled ? 1 : 0;
   const row2 = Math.min(focus, maxRow);
   const rowRef = useRef9(row2);
   rowRef.current = row2;
-  const [prereqs] = useState16(
+  const [prereqs] = useState17(
     () => (manifest?.prerequisites ?? []).map((p) => ({
       ...p,
       found: probeBin(p.bin)
     }))
   );
-  const [secrets] = useState16(
+  const [secrets] = useState17(
     () => (manifest?.secrets ?? []).map((s) => {
       const envSet = (env[s.env] ?? "").length > 0;
       const fileSet = s.file !== void 0 && manifest?.installDir !== void 0 && probeSecret(manifest.installDir, s.file);
       return { ...s, found: envSet || fileSet };
     })
   );
-  useInput19(
+  useInput20(
     (input, k) => {
       if (k.escape) {
         onBack();
@@ -3163,7 +3761,7 @@ function ManifestSourceForm({
     { isActive: !editingEnv }
   );
   if (editingEnv) {
-    return /* @__PURE__ */ jsx21(
+    return /* @__PURE__ */ jsx22(
       ShellEnvEditor,
       {
         env: readKindEnv(draft, kind),
@@ -3180,80 +3778,80 @@ function ManifestSourceForm({
   );
   const overrides = readKindEnv(draft, kind);
   const defaults = Object.entries(manifest?.env ?? {});
-  return /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsxs21(Text21, { bold: true, children: [
+  return /* @__PURE__ */ jsxs22(Box22, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsxs22(Text22, { bold: true, children: [
       kind,
       " ",
-      /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+      /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
         "(",
         source.origin,
         " source)"
       ] })
     ] }),
-    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: source.description }) }),
-    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsxs21(Text21, { color: row2 === 0 ? "cyan" : void 0, children: [
+    /* @__PURE__ */ jsx22(Box22, { marginTop: 1, children: /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: source.description }) }),
+    /* @__PURE__ */ jsx22(Box22, { marginTop: 1, children: /* @__PURE__ */ jsxs22(Text22, { color: row2 === 0 ? "cyan" : void 0, children: [
       row2 === 0 ? "\u25B8 " : "  ",
       "Source:",
       " ",
-      /* @__PURE__ */ jsx21(Text21, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
-      enableModified ? /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: " \u25CF" }) : null
+      /* @__PURE__ */ jsx22(Text22, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
+      enableModified ? /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: " \u25CF" }) : null
     ] }) }),
-    enabled ? /* @__PURE__ */ jsx21(Box21, { children: /* @__PURE__ */ jsxs21(Text21, { color: row2 === 1 ? "cyan" : void 0, children: [
+    enabled ? /* @__PURE__ */ jsx22(Box22, { children: /* @__PURE__ */ jsxs22(Text22, { color: row2 === 1 ? "cyan" : void 0, children: [
       row2 === 1 ? "\u25B8 " : "  ",
       "env overrides:",
       " ",
-      /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: overrides.length === 0 ? "none (manifest defaults apply)" : overrides.map((e) => e.key).join(", ") }),
-      envModified ? /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: " \u25CF" }) : null
+      /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: overrides.length === 0 ? "none (manifest defaults apply)" : overrides.map((e) => e.key).join(", ") }),
+      envModified ? /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: " \u25CF" }) : null
     ] }) }) : null,
-    defaults.length > 0 ? /* @__PURE__ */ jsx21(Box21, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+    defaults.length > 0 ? /* @__PURE__ */ jsx22(Box22, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
       "defaults: ",
       defaults.map(([k, v]) => `${k}=${v}`).join(" \xB7 ")
     ] }) }) : null,
-    prereqs.length > 0 ? /* @__PURE__ */ jsxs21(Box21, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx21(Text21, { children: "Prerequisites:" }),
-      prereqs.map((p) => /* @__PURE__ */ jsx21(Box21, { flexDirection: "column", children: p.found ? /* @__PURE__ */ jsxs21(Text21, { children: [
+    prereqs.length > 0 ? /* @__PURE__ */ jsxs22(Box22, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx22(Text22, { children: "Prerequisites:" }),
+      prereqs.map((p) => /* @__PURE__ */ jsx22(Box22, { flexDirection: "column", children: p.found ? /* @__PURE__ */ jsxs22(Text22, { children: [
         "  ",
-        /* @__PURE__ */ jsx21(Text21, { color: "green", children: "\u2713" }),
+        /* @__PURE__ */ jsx22(Text22, { color: "green", children: "\u2713" }),
         " ",
         p.bin
-      ] }) : /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", children: [
-        /* @__PURE__ */ jsxs21(Text21, { children: [
+      ] }) : /* @__PURE__ */ jsxs22(Box22, { flexDirection: "column", children: [
+        /* @__PURE__ */ jsxs22(Text22, { children: [
           "  ",
-          /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "\u2717" }),
+          /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: "\u2717" }),
           " ",
           p.bin,
           " ",
-          /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "not found" })
+          /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: "not found" })
         ] }),
-        p.install ? /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+        p.install ? /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
           "    ",
           "install: ",
           p.install
         ] }) : null,
-        p.setup ? /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+        p.setup ? /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
           "    ",
           "then: ",
           p.setup
         ] }) : null
       ] }) }, p.bin))
     ] }) : null,
-    secrets.length > 0 ? /* @__PURE__ */ jsxs21(Box21, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx21(Text21, { children: "Credentials:" }),
-      secrets.map((s) => /* @__PURE__ */ jsx21(Box21, { flexDirection: "column", children: s.found ? /* @__PURE__ */ jsxs21(Text21, { children: [
+    secrets.length > 0 ? /* @__PURE__ */ jsxs22(Box22, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx22(Text22, { children: "Credentials:" }),
+      secrets.map((s) => /* @__PURE__ */ jsx22(Box22, { flexDirection: "column", children: s.found ? /* @__PURE__ */ jsxs22(Text22, { children: [
         "  ",
-        /* @__PURE__ */ jsx21(Text21, { color: "green", children: "\u2713" }),
+        /* @__PURE__ */ jsx22(Text22, { color: "green", children: "\u2713" }),
         " ",
         s.env
-      ] }) : /* @__PURE__ */ jsxs21(Box21, { flexDirection: "column", children: [
-        /* @__PURE__ */ jsxs21(Text21, { children: [
+      ] }) : /* @__PURE__ */ jsxs22(Box22, { flexDirection: "column", children: [
+        /* @__PURE__ */ jsxs22(Text22, { children: [
           "  ",
-          /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "\u2717" }),
+          /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: "\u2717" }),
           " ",
           s.env,
           " ",
-          /* @__PURE__ */ jsx21(Text21, { color: "yellow", children: "not set" })
+          /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: "not set" })
         ] }),
-        s.file !== void 0 && manifest?.installDir !== void 0 ? /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+        s.file !== void 0 && manifest?.installDir !== void 0 ? /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
           "    ",
           "expected at ",
           manifest.installDir,
@@ -3261,20 +3859,20 @@ function ManifestSourceForm({
           s.file,
           s.mode !== void 0 ? ` (chmod ${s.mode})` : ""
         ] }) : null,
-        s.url ? /* @__PURE__ */ jsxs21(Text21, { dimColor: true, children: [
+        s.url ? /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
           "    ",
           "create one: ",
           s.url
         ] }) : null
       ] }) }, s.env))
     ] }) : null,
-    /* @__PURE__ */ jsx21(Box21, { marginTop: 1, children: /* @__PURE__ */ jsx21(Text21, { dimColor: true, children: "Space toggles the source (top row). Enabling is all groundcrew needs \u2014 it installs the source's scripts itself on the next crew run. Prerequisites and credentials above are set up outside this config. esc back." }) })
+    /* @__PURE__ */ jsx22(Box22, { marginTop: 1, children: /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: "Space toggles the source (top row). Enabling is all groundcrew needs \u2014 it installs the source's scripts itself on the next crew run. Prerequisites and credentials above are set up outside this config. esc back." }) })
   ] });
 }
 
 // src/screens/PlanKeeperForm.tsx
-import { Box as Box22, Text as Text22, useInput as useInput20 } from "ink";
-import { jsx as jsx22, jsxs as jsxs22 } from "react/jsx-runtime";
+import { Box as Box23, Text as Text23, useInput as useInput21 } from "ink";
+import { jsx as jsx23, jsxs as jsxs23 } from "react/jsx-runtime";
 function PlanKeeperForm({ draft, baseline, onChange, onBack }) {
   const enabled = isPlanKeeperEnabled(draft);
   const enableModified = isPlanKeeperEnabled(draft) !== isPlanKeeperEnabled(baseline);
@@ -3284,34 +3882,34 @@ function PlanKeeperForm({ draft, baseline, onChange, onBack }) {
     (max, [name]) => Math.max(max, name.length),
     0
   );
-  useInput20((input, key) => {
+  useInput21((input, key) => {
     if (key.escape) onBack();
     if (input === " ") onChange(setPlanKeeperEnabled(draft, !enabled));
   });
-  return /* @__PURE__ */ jsxs22(Box22, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx22(Text22, { bold: true, children: "PlanKeeper" }),
-    /* @__PURE__ */ jsx22(Box22, { marginTop: 1, children: /* @__PURE__ */ jsxs22(Text22, { children: [
+  return /* @__PURE__ */ jsxs23(Box23, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx23(Text23, { bold: true, children: "PlanKeeper" }),
+    /* @__PURE__ */ jsx23(Box23, { marginTop: 1, children: /* @__PURE__ */ jsxs23(Text23, { children: [
       "plan-keeper source:",
       " ",
-      /* @__PURE__ */ jsx22(Text22, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
-      enableModified ? /* @__PURE__ */ jsx22(Text22, { color: "yellow", children: " \u25CF" }) : null
+      /* @__PURE__ */ jsx23(Text23, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
+      enableModified ? /* @__PURE__ */ jsx23(Text23, { color: "yellow", children: " \u25CF" }) : null
     ] }) }),
-    /* @__PURE__ */ jsxs22(Box22, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: "Feeds saved plans from ~/plans in as tasks (via the plan-keeper tool). Space toggles." }),
-      /* @__PURE__ */ jsx22(Text22, { dimColor: true, children: "Install: brew install paulbaranowski/tap/plan-keeper" })
+    /* @__PURE__ */ jsxs23(Box23, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx23(Text23, { dimColor: true, children: "Feeds saved plans from ~/plans in as tasks (via the plan-keeper tool). Space toggles." }),
+      /* @__PURE__ */ jsx23(Text23, { dimColor: true, children: "Install: brew install paulbaranowski/tap/plan-keeper" })
     ] }),
-    commands && commands.length > 0 ? /* @__PURE__ */ jsxs22(Box22, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx22(Text22, { children: "Commands:" }),
-      commands.map(([name, command]) => /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
+    commands && commands.length > 0 ? /* @__PURE__ */ jsxs23(Box23, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx23(Text23, { children: "Commands:" }),
+      commands.map(([name, command]) => /* @__PURE__ */ jsxs23(Text23, { dimColor: true, children: [
         "  ",
         name.padEnd(labelWidth),
         " ",
         command
       ] }, name))
     ] }) : null,
-    sandboxPaths && sandboxPaths.length > 0 ? /* @__PURE__ */ jsxs22(Box22, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx22(Text22, { children: "Sandbox write paths:" }),
-      sandboxPaths.map((p, i) => /* @__PURE__ */ jsxs22(Text22, { dimColor: true, children: [
+    sandboxPaths && sandboxPaths.length > 0 ? /* @__PURE__ */ jsxs23(Box23, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx23(Text23, { children: "Sandbox write paths:" }),
+      sandboxPaths.map((p, i) => /* @__PURE__ */ jsxs23(Text23, { dimColor: true, children: [
         "  ",
         p
       ] }, `${i}:${p}`))
@@ -3320,37 +3918,37 @@ function PlanKeeperForm({ draft, baseline, onChange, onBack }) {
 }
 
 // src/screens/ShellSourcesForm.tsx
-import { useState as useState19 } from "react";
-import { Box as Box25, Text as Text25, useInput as useInput23 } from "ink";
+import { useState as useState20 } from "react";
+import { Box as Box26, Text as Text26, useInput as useInput24 } from "ink";
 
 // src/screens/ShellSourceSubForm.tsx
-import { useRef as useRef10, useState as useState18 } from "react";
-import { Box as Box24, Text as Text24, useInput as useInput22 } from "ink";
+import { useRef as useRef10, useState as useState19 } from "react";
+import { Box as Box25, Text as Text25, useInput as useInput23 } from "ink";
 
 // src/screens/ShellSandboxPathsEditor.tsx
-import { useState as useState17 } from "react";
-import { Box as Box23, Text as Text23, useInput as useInput21 } from "ink";
-import { jsx as jsx23, jsxs as jsxs23 } from "react/jsx-runtime";
+import { useState as useState18 } from "react";
+import { Box as Box24, Text as Text24, useInput as useInput22 } from "ink";
+import { jsx as jsx24, jsxs as jsxs24 } from "react/jsx-runtime";
 function PathEntryEditor({
   value,
   onSave,
   onCancel
 }) {
-  const [path14, setPath] = useState17(value);
+  const [path15, setPath] = useState18(value);
   const guard = useEditGuard();
-  useInput21(
+  useInput22(
     (_input, k) => {
       if (k.escape) {
         guard.requestCancel(onCancel);
         return;
       }
-      if (k.return && path14.trim().length > 0) onSave(path14);
+      if (k.return && path15.trim().length > 0) onSave(path15);
     },
     { isActive: !guard.guarding }
   );
   if (guard.guarding) {
-    const apply = path14.trim().length === 0 ? onCancel : () => onSave(path14);
-    return /* @__PURE__ */ jsx23(
+    const apply = path15.trim().length === 0 ? onCancel : () => onSave(path15);
+    return /* @__PURE__ */ jsx24(
       SaveGuard,
       {
         onApply: apply,
@@ -3359,20 +3957,20 @@ function PathEntryEditor({
       }
     );
   }
-  return /* @__PURE__ */ jsxs23(Box23, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx23(Text23, { bold: true, children: "Sandbox write path" }),
-    /* @__PURE__ */ jsx23(Box23, { flexDirection: "column", marginTop: 1, children: /* @__PURE__ */ jsx23(
+  return /* @__PURE__ */ jsxs24(Box24, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx24(Text24, { bold: true, children: "Sandbox write path" }),
+    /* @__PURE__ */ jsx24(Box24, { flexDirection: "column", marginTop: 1, children: /* @__PURE__ */ jsx24(
       TextField,
       {
         label: "path",
-        value: path14,
+        value: path15,
         placeholder: "absolute or ~ path the command may write to",
         isActive: true,
         onChange: guard.track(setPath)
       }
     ) }),
-    path14.trim().length === 0 ? /* @__PURE__ */ jsx23(Box23, { marginTop: 1, children: /* @__PURE__ */ jsx23(Text23, { color: "yellow", children: "\u26A0 path is required (a blank row is dropped)." }) }) : null,
-    /* @__PURE__ */ jsx23(Box23, { marginTop: 1, children: /* @__PURE__ */ jsx23(Text23, { dimColor: true, children: "type to edit \xB7 enter apply \xB7 esc cancel." }) })
+    path15.trim().length === 0 ? /* @__PURE__ */ jsx24(Box24, { marginTop: 1, children: /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: "\u26A0 path is required (a blank row is dropped)." }) }) : null,
+    /* @__PURE__ */ jsx24(Box24, { marginTop: 1, children: /* @__PURE__ */ jsx24(Text24, { dimColor: true, children: "type to edit \xB7 enter apply \xB7 esc cancel." }) })
   ] });
 }
 function ShellSandboxPathsEditor({
@@ -3381,13 +3979,13 @@ function ShellSandboxPathsEditor({
   onChange,
   onBack
 }) {
-  const [editing, setEditing] = useState17(void 0);
+  const [editing, setEditing] = useState18(void 0);
   const modified = modifiedByKey(
     paths,
     baselinePaths,
     (p, i) => p || `__blank__${i}`
   );
-  useInput21(
+  useInput22(
     (_input, key) => {
       if (key.escape) onBack();
     },
@@ -3395,7 +3993,7 @@ function ShellSandboxPathsEditor({
   );
   if (editing !== void 0) {
     const value = editing === "new" ? "" : paths[editing] ?? "";
-    return /* @__PURE__ */ jsx23(
+    return /* @__PURE__ */ jsx24(
       PathEntryEditor,
       {
         value,
@@ -3410,15 +4008,15 @@ function ShellSandboxPathsEditor({
       String(editing)
     );
   }
-  const items = paths.map((path14, index) => ({
-    label: path14 || "(unnamed)",
+  const items = paths.map((path15, index) => ({
+    label: path15 || "(unnamed)",
     note: void 0,
     error: void 0,
     modified: modified[index]
   }));
-  return /* @__PURE__ */ jsxs23(Box23, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx23(Text23, { bold: true, children: "Sandbox write paths" }),
-    /* @__PURE__ */ jsx23(Box23, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx23(
+  return /* @__PURE__ */ jsxs24(Box24, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx24(Text24, { bold: true, children: "Sandbox write paths" }),
+    /* @__PURE__ */ jsx24(Box24, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx24(
       ListField,
       {
         items,
@@ -3428,12 +4026,12 @@ function ShellSandboxPathsEditor({
         onDelete: (index) => onChange(paths.filter((_, i) => i !== index))
       }
     ) }),
-    /* @__PURE__ */ jsx23(Box23, { marginTop: 1, children: /* @__PURE__ */ jsx23(Text23, { dimColor: true, children: "Extra filesystem paths this source's commands may write to under groundcrew's sandbox. Stored literally; ~ is expanded by groundcrew. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
+    /* @__PURE__ */ jsx24(Box24, { marginTop: 1, children: /* @__PURE__ */ jsx24(Text24, { dimColor: true, children: "Extra filesystem paths this source's commands may write to under groundcrew's sandbox. Stored literally; ~ is expanded by groundcrew. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
   ] });
 }
 
 // src/screens/ShellSourceSubForm.tsx
-import { jsx as jsx24, jsxs as jsxs24 } from "react/jsx-runtime";
+import { jsx as jsx25, jsxs as jsxs25 } from "react/jsx-runtime";
 var ROWS3 = [
   { key: "name", label: "name", placeholder: "kebab-case, e.g. jira" },
   { key: "verify", label: "commands.verify", placeholder: "connectivity check (optional)" },
@@ -3454,17 +4052,17 @@ function ShellSourceSubForm({
   onSave,
   onCancel
 }) {
-  const [fields, setFields] = useState18(() => readShellFields(source));
+  const [fields, setFields] = useState19(() => readShellFields(source));
   const baselineFields = readShellFields(baselineSource);
-  const [active, setActive] = useState18(0);
-  const [mode, setMode] = useState18("fields");
+  const [active, setActive] = useState19(0);
+  const [mode, setMode] = useState19("fields");
   const guard = useEditGuard();
   const activeRef = useRef10(0);
   function moveActive(next) {
     activeRef.current = next;
     setActive(next);
   }
-  useInput22(
+  useInput23(
     (_input, key) => {
       if (key.escape) {
         guard.requestCancel(onCancel);
@@ -3481,7 +4079,7 @@ function ShellSourceSubForm({
     { isActive: mode === "fields" && !guard.guarding }
   );
   if (guard.guarding) {
-    return /* @__PURE__ */ jsx24(
+    return /* @__PURE__ */ jsx25(
       SaveGuard,
       {
         onApply: () => onSave(applyShellFields(source, fields)),
@@ -3491,7 +4089,7 @@ function ShellSourceSubForm({
     );
   }
   if (mode === "env") {
-    return /* @__PURE__ */ jsx24(
+    return /* @__PURE__ */ jsx25(
       ShellEnvEditor,
       {
         env: fields.env,
@@ -3505,7 +4103,7 @@ function ShellSourceSubForm({
     );
   }
   if (mode === "paths") {
-    return /* @__PURE__ */ jsx24(
+    return /* @__PURE__ */ jsx25(
       ShellSandboxPathsEditor,
       {
         paths: fields.sandboxWritePaths,
@@ -3526,12 +4124,12 @@ function ShellSourceSubForm({
   const pathsCount = fields.sandboxWritePaths.length;
   const envModified = baselineSource === void 0 || !valuesEqual(fields.env, baselineFields.env);
   const pathsModified = baselineSource === void 0 || !valuesEqual(fields.sandboxWritePaths, baselineFields.sandboxWritePaths);
-  return /* @__PURE__ */ jsxs24(Box24, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx24(Text24, { bold: true, children: "Shell source" }),
-    /* @__PURE__ */ jsxs24(Box24, { flexDirection: "column", marginTop: 1, children: [
+  return /* @__PURE__ */ jsxs25(Box25, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx25(Text25, { bold: true, children: "Shell source" }),
+    /* @__PURE__ */ jsxs25(Box25, { flexDirection: "column", marginTop: 1, children: [
       ROWS3.map((row2, index) => {
         const modified = baselineSource === void 0 || !valuesEqual(fields[row2.key], baselineFields[row2.key]);
-        return /* @__PURE__ */ jsx24(
+        return /* @__PURE__ */ jsx25(
           TextField,
           {
             label: row2.label,
@@ -3547,40 +4145,40 @@ function ShellSourceSubForm({
           row2.key
         );
       }),
-      /* @__PURE__ */ jsxs24(Box24, { children: [
-        /* @__PURE__ */ jsxs24(Text24, { color: envActive ? "cyan" : void 0, children: [
+      /* @__PURE__ */ jsxs25(Box25, { children: [
+        /* @__PURE__ */ jsxs25(Text25, { color: envActive ? "cyan" : void 0, children: [
           envActive ? "\u203A " : "  ",
           "env",
           " "
         ] }),
-        /* @__PURE__ */ jsxs24(Text24, { dimColor: true, children: [
+        /* @__PURE__ */ jsxs25(Text25, { dimColor: true, children: [
           envCount,
           " variable",
           envCount === 1 ? "" : "s",
           " \u2014 enter to edit"
         ] }),
-        envModified ? /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: " \u25CF" }) : null
+        envModified ? /* @__PURE__ */ jsx25(Text25, { color: "yellow", children: " \u25CF" }) : null
       ] }),
-      /* @__PURE__ */ jsxs24(Box24, { children: [
-        /* @__PURE__ */ jsxs24(Text24, { color: pathsActive ? "cyan" : void 0, children: [
+      /* @__PURE__ */ jsxs25(Box25, { children: [
+        /* @__PURE__ */ jsxs25(Text25, { color: pathsActive ? "cyan" : void 0, children: [
           pathsActive ? "\u203A " : "  ",
           "sandboxWritePaths",
           " "
         ] }),
-        /* @__PURE__ */ jsxs24(Text24, { dimColor: true, children: [
+        /* @__PURE__ */ jsxs25(Text25, { dimColor: true, children: [
           pathsCount,
           " path",
           pathsCount === 1 ? "" : "s",
           " \u2014 enter to edit"
         ] }),
-        pathsModified ? /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: " \u25CF" }) : null
+        pathsModified ? /* @__PURE__ */ jsx25(Text25, { color: "yellow", children: " \u25CF" }) : null
       ] })
     ] }),
-    nameMissing || listTasksMissing ? /* @__PURE__ */ jsxs24(Box24, { marginTop: 1, flexDirection: "column", children: [
-      nameMissing ? /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: "\u26A0 name is required (kebab-case)." }) : null,
-      listTasksMissing ? /* @__PURE__ */ jsx24(Text24, { color: "yellow", children: "\u26A0 commands.listTasks is required (or the legacy fetch alias)." }) : null
+    nameMissing || listTasksMissing ? /* @__PURE__ */ jsxs25(Box25, { marginTop: 1, flexDirection: "column", children: [
+      nameMissing ? /* @__PURE__ */ jsx25(Text25, { color: "yellow", children: "\u26A0 name is required (kebab-case)." }) : null,
+      listTasksMissing ? /* @__PURE__ */ jsx25(Text25, { color: "yellow", children: "\u26A0 commands.listTasks is required (or the legacy fetch alias)." }) : null
     ] }) : null,
-    /* @__PURE__ */ jsx24(Box24, { marginTop: 1, children: /* @__PURE__ */ jsxs24(Text24, { dimColor: true, children: [
+    /* @__PURE__ */ jsx25(Box25, { marginTop: 1, children: /* @__PURE__ */ jsxs25(Text25, { dimColor: true, children: [
       "Commands groundcrew runs to talk to your tracker. listTasks is required;",
       " ",
       "${id}",
@@ -3590,14 +4188,14 @@ function ShellSourceSubForm({
 }
 
 // src/screens/ShellSourcesForm.tsx
-import { jsx as jsx25, jsxs as jsxs25 } from "react/jsx-runtime";
+import { jsx as jsx26, jsxs as jsxs26 } from "react/jsx-runtime";
 function ShellSourcesForm({
   draft,
   baseline,
   onChange,
   onBack
 }) {
-  const [editing, setEditing] = useState19(void 0);
+  const [editing, setEditing] = useState20(void 0);
   const entries = shellSources(draft);
   const baseEntries = shellSources(baseline);
   const modified = modifiedByKey(
@@ -3605,7 +4203,7 @@ function ShellSourcesForm({
     baseEntries,
     (s, i) => s.name || `__blank__${i}`
   );
-  useInput23(
+  useInput24(
     (_input, key) => {
       if (editing !== void 0) return;
       if (key.escape) onBack();
@@ -3618,7 +4216,7 @@ function ShellSourcesForm({
   if (editing !== void 0) {
     const current = entries[editing];
     const baselineSource = baseEntries.find((e) => e.name === current?.name);
-    return /* @__PURE__ */ jsx25(
+    return /* @__PURE__ */ jsx26(
       ShellSourceSubForm,
       {
         source: current,
@@ -3642,9 +4240,9 @@ function ShellSourcesForm({
       modified: modified[index]
     };
   });
-  return /* @__PURE__ */ jsxs25(Box25, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx25(Text25, { bold: true, children: "Shell sources" }),
-    /* @__PURE__ */ jsx25(Box25, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx25(
+  return /* @__PURE__ */ jsxs26(Box26, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx26(Text26, { bold: true, children: "Shell sources" }),
+    /* @__PURE__ */ jsx26(Box26, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx26(
       ListField,
       {
         items,
@@ -3654,14 +4252,14 @@ function ShellSourcesForm({
         onDelete: (index) => commit(entries.filter((_, i) => i !== index))
       }
     ) }),
-    /* @__PURE__ */ jsx25(Box25, { marginTop: 1, children: /* @__PURE__ */ jsx25(Text25, { dimColor: true, children: "Connect any other tracker (Jira, GitHub Issues, \u2026) by giving groundcrew shell commands that list and update its tasks. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
+    /* @__PURE__ */ jsx26(Box26, { marginTop: 1, children: /* @__PURE__ */ jsx26(Text26, { dimColor: true, children: "Connect any other tracker (Jira, GitHub Issues, \u2026) by giving groundcrew shell commands that list and update its tasks. \u2191/\u2193 move \xB7 enter edit \xB7 d delete \xB7 esc back." }) })
   ] });
 }
 
 // src/screens/TodoTxtForm.tsx
-import { useState as useState20 } from "react";
-import { Box as Box26, Text as Text26, useInput as useInput24 } from "ink";
-import { jsx as jsx26, jsxs as jsxs26 } from "react/jsx-runtime";
+import { useState as useState21 } from "react";
+import { Box as Box27, Text as Text27, useInput as useInput25 } from "ink";
+import { jsx as jsx27, jsxs as jsxs27 } from "react/jsx-runtime";
 var FIELDS = [
   { field: "todoPath", placeholder: "~/todo.txt  (default)" },
   { field: "tasksDir", placeholder: "~/tasks  (default)" },
@@ -3671,9 +4269,9 @@ var FIELDS = [
 ];
 function TodoTxtForm({ draft, baseline, onChange, onBack }) {
   const enabled = isTodoTxtEnabled(draft);
-  const [focusIndex, setFocusIndex] = useState20(0);
+  const [focusIndex, setFocusIndex] = useState21(0);
   const focus = FIELDS[focusIndex]?.field ?? "todoPath";
-  useInput24((input, key) => {
+  useInput25((input, key) => {
     if (key.escape) onBack();
     if (input === " ") onChange(setTodoTxtEnabled(draft, !enabled));
     if (!enabled) return;
@@ -3681,19 +4279,19 @@ function TodoTxtForm({ draft, baseline, onChange, onBack }) {
     if (key.upArrow) setFocusIndex((f) => Math.max(0, f - 1));
   });
   const enableModified = isTodoTxtEnabled(draft) !== isTodoTxtEnabled(baseline);
-  return /* @__PURE__ */ jsxs26(Box26, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx26(Text26, { bold: true, children: "todo-txt" }),
-    /* @__PURE__ */ jsx26(Box26, { marginTop: 1, children: /* @__PURE__ */ jsxs26(Text26, { children: [
+  return /* @__PURE__ */ jsxs27(Box27, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx27(Text27, { bold: true, children: "todo-txt" }),
+    /* @__PURE__ */ jsx27(Box27, { marginTop: 1, children: /* @__PURE__ */ jsxs27(Text27, { children: [
       "todo-txt source:",
       " ",
-      /* @__PURE__ */ jsx26(Text26, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
-      enableModified ? /* @__PURE__ */ jsx26(Text26, { color: "yellow", children: " \u25CF" }) : null
+      /* @__PURE__ */ jsx27(Text27, { color: enabled ? "green" : "yellow", children: enabled ? "enabled" : "disabled" }),
+      enableModified ? /* @__PURE__ */ jsx27(Text27, { color: "yellow", children: " \u25CF" }) : null
     ] }) }),
-    enabled ? /* @__PURE__ */ jsx26(Box26, { flexDirection: "column", marginTop: 1, children: FIELDS.map(({ field, placeholder }) => {
+    enabled ? /* @__PURE__ */ jsx27(Box27, { flexDirection: "column", marginTop: 1, children: FIELDS.map(({ field, placeholder }) => {
       const value = getTodoTxtField(draft, field) ?? "";
       const baseValue = getTodoTxtField(baseline, field) ?? "";
       const modified = !valuesEqual(value, baseValue);
-      return /* @__PURE__ */ jsx26(
+      return /* @__PURE__ */ jsx27(
         TextField,
         {
           label: field,
@@ -3706,12 +4304,12 @@ function TodoTxtForm({ draft, baseline, onChange, onBack }) {
         field
       );
     }) }) : null,
-    /* @__PURE__ */ jsx26(Box26, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx26(Text26, { dimColor: true, children: "Use a plain todo.txt file on your computer as the task list \u2014 no accounts or API keys needed. Space toggles. \u2191/\u2193 moves between fields." }) })
+    /* @__PURE__ */ jsx27(Box27, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsx27(Text27, { dimColor: true, children: "Use a plain todo.txt file on your computer as the task list \u2014 no accounts or API keys needed. Space toggles. \u2191/\u2193 moves between fields." }) })
   ] });
 }
 
 // src/screens/TaskSourcesMenu.tsx
-import { jsx as jsx27, jsxs as jsxs27 } from "react/jsx-runtime";
+import { jsx as jsx28, jsxs as jsxs28 } from "react/jsx-runtime";
 function TaskSourcesMenu({
   draft,
   baseline,
@@ -3719,9 +4317,9 @@ function TaskSourcesMenu({
   onBack,
   loadCatalog = loadSourceCatalog
 }) {
-  const [sub, setSub] = useState21("hub");
-  const [catalog, setCatalog] = useState21([]);
-  const [cursor, setCursor] = useState21(0);
+  const [sub, setSub] = useState22("hub");
+  const [catalog, setCatalog] = useState22([]);
+  const [cursor, setCursor] = useState22(0);
   const cursorRef = useRef11(0);
   useEffect4(() => {
     let alive = true;
@@ -3745,7 +4343,7 @@ function TaskSourcesMenu({
     cursorRef.current = next;
     setCursor(next);
   }
-  useInput25(
+  useInput26(
     (_input, key) => {
       if (sub !== "hub") return;
       if (key.escape) onBack();
@@ -3762,7 +4360,7 @@ function TaskSourcesMenu({
   const back = () => setSub("hub");
   if (sub !== "hub") {
     if (sub.screen === "linear")
-      return /* @__PURE__ */ jsx27(
+      return /* @__PURE__ */ jsx28(
         LinearForm,
         {
           draft,
@@ -3772,7 +4370,7 @@ function TaskSourcesMenu({
         }
       );
     if (sub.screen === "todoTxt")
-      return /* @__PURE__ */ jsx27(
+      return /* @__PURE__ */ jsx28(
         TodoTxtForm,
         {
           draft,
@@ -3782,7 +4380,7 @@ function TaskSourcesMenu({
         }
       );
     if (sub.screen === "planKeeper")
-      return /* @__PURE__ */ jsx27(
+      return /* @__PURE__ */ jsx28(
         PlanKeeperForm,
         {
           draft,
@@ -3792,7 +4390,7 @@ function TaskSourcesMenu({
         }
       );
     if (sub.screen === "shell")
-      return /* @__PURE__ */ jsx27(
+      return /* @__PURE__ */ jsx28(
         ShellSourcesForm,
         {
           draft,
@@ -3801,7 +4399,7 @@ function TaskSourcesMenu({
           onBack: back
         }
       );
-    return /* @__PURE__ */ jsx27(
+    return /* @__PURE__ */ jsx28(
       ManifestSourceForm,
       {
         source: sub.source,
@@ -3812,26 +4410,26 @@ function TaskSourcesMenu({
       }
     );
   }
-  return /* @__PURE__ */ jsxs27(Box27, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx27(Text27, { bold: true, children: "Task Sources" }),
-    /* @__PURE__ */ jsx27(Box27, { marginTop: 1, flexDirection: "column", children: rows.map((row2, index) => /* @__PURE__ */ jsxs27(Box27, { children: [
-      /* @__PURE__ */ jsx27(Text27, { color: cursor === index ? "cyan" : void 0, children: cursor === index ? "\u25B8 " : "  " }),
-      /* @__PURE__ */ jsx27(Box27, { width: 20, children: /* @__PURE__ */ jsx27(Text27, { color: cursor === index ? "cyan" : void 0, children: row2.label }) }),
-      /* @__PURE__ */ jsx27(Text27, { dimColor: true, children: row2.status }),
-      row2.modified ? /* @__PURE__ */ jsx27(Text27, { color: "yellow", children: " \u25CF" }) : null
+  return /* @__PURE__ */ jsxs28(Box28, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx28(Text28, { bold: true, children: "Task Sources" }),
+    /* @__PURE__ */ jsx28(Box28, { marginTop: 1, flexDirection: "column", children: rows.map((row2, index) => /* @__PURE__ */ jsxs28(Box28, { children: [
+      /* @__PURE__ */ jsx28(Text28, { color: cursor === index ? "cyan" : void 0, children: cursor === index ? "\u25B8 " : "  " }),
+      /* @__PURE__ */ jsx28(Box28, { width: 20, children: /* @__PURE__ */ jsx28(Text28, { color: cursor === index ? "cyan" : void 0, children: row2.label }) }),
+      /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: row2.status }),
+      row2.modified ? /* @__PURE__ */ jsx28(Text28, { color: "yellow", children: " \u25CF" }) : null
     ] }, row2.label)) }),
-    /* @__PURE__ */ jsx27(Box27, { marginTop: 1, children: /* @__PURE__ */ jsx27(Text27, { dimColor: true, children: "Where groundcrew gets its to-do list. Turn on one or more sources of tasks for it to work through. \u2191/\u2193 move \xB7 enter open \xB7 esc back." }) })
+    /* @__PURE__ */ jsx28(Box28, { marginTop: 1, children: /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: "Where groundcrew gets its to-do list. Turn on one or more sources of tasks for it to work through. \u2191/\u2193 move \xB7 enter open \xB7 esc back." }) })
   ] });
 }
 
 // src/screens/UsageForm.tsx
-import { useState as useState22 } from "react";
-import { Box as Box28, Text as Text28, useInput as useInput26 } from "ink";
-import { jsx as jsx28, jsxs as jsxs28 } from "react/jsx-runtime";
+import { useState as useState23 } from "react";
+import { Box as Box29, Text as Text29, useInput as useInput27 } from "ink";
+import { jsx as jsx29, jsxs as jsxs29 } from "react/jsx-runtime";
 function UsageForm({ draft, baseline, onChange, onBack }) {
   const disabled = isUsageDisabled(draft.agents);
   const hasAgents = Object.keys(draft.agents?.definitions ?? {}).length > 0;
-  const [active, setActive] = useState22(0);
+  const [active, setActive] = useState23(0);
   const limit = draft.orchestrator?.sessionLimitPercentage;
   function setLimit(raw) {
     const value = raw.length === 0 ? void 0 : Number(raw);
@@ -3844,7 +4442,7 @@ function UsageForm({ draft, baseline, onChange, onBack }) {
       )
     );
   }
-  useInput26((input, key) => {
+  useInput27((input, key) => {
     if (key.escape) onBack();
     if (key.downArrow) setActive((a) => Math.min(1, a + 1));
     if (key.upArrow) setActive((a) => Math.max(0, a - 1));
@@ -3857,16 +4455,16 @@ function UsageForm({ draft, baseline, onChange, onBack }) {
     draft.orchestrator?.sessionLimitPercentage
   );
   const trackingModified = isUsageDisabled(baseline.agents) !== disabled;
-  return /* @__PURE__ */ jsxs28(Box28, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx28(Text28, { bold: true, children: "Usage Limits" }),
-    /* @__PURE__ */ jsx28(Box28, { marginTop: 1, children: /* @__PURE__ */ jsxs28(Text28, { color: active === 0 ? "cyan" : void 0, children: [
+  return /* @__PURE__ */ jsxs29(Box29, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx29(Text29, { bold: true, children: "Usage Limits" }),
+    /* @__PURE__ */ jsx29(Box29, { marginTop: 1, children: /* @__PURE__ */ jsxs29(Text29, { color: active === 0 ? "cyan" : void 0, children: [
       active === 0 ? "\u203A " : "  ",
       "Usage tracking:",
       " ",
-      /* @__PURE__ */ jsx28(Text28, { color: disabled ? "yellow" : "green", children: disabled ? "disabled" : "enabled" }),
-      trackingModified ? /* @__PURE__ */ jsx28(Text28, { color: "yellow", children: " \u25CF" }) : null
+      /* @__PURE__ */ jsx29(Text29, { color: disabled ? "yellow" : "green", children: disabled ? "disabled" : "enabled" }),
+      trackingModified ? /* @__PURE__ */ jsx29(Text29, { color: "yellow", children: " \u25CF" }) : null
     ] }) }),
-    /* @__PURE__ */ jsx28(Box28, { marginTop: 1, children: /* @__PURE__ */ jsx28(
+    /* @__PURE__ */ jsx29(Box29, { marginTop: 1, children: /* @__PURE__ */ jsx29(
       TextField,
       {
         label: "sessionLimitPercentage",
@@ -3877,32 +4475,32 @@ function UsageForm({ draft, baseline, onChange, onBack }) {
         onChange: setLimit
       }
     ) }),
-    /* @__PURE__ */ jsxs28(Box28, { marginTop: 1, flexDirection: "column", children: [
-      /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: "Usage tracking lets groundcrew watch your AI subscription's usage so it won't launch agents when you're near your limits. Disabling opts every enabled agent out; the limit % is the ceiling above which it stops launching new agents. \u2191/\u2193 move \xB7 space toggles tracking." }),
-      /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: "Needs the codexbar menu-bar app on Mac (groundcrew reads usage via its codexbar CLI). Install: brew install --cask steipete/tap/codexbar" }),
-      hasAgents ? null : /* @__PURE__ */ jsx28(Text28, { dimColor: true, children: "(no enabled agents to gate \u2014 add one under Agents)" })
+    /* @__PURE__ */ jsxs29(Box29, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx29(Text29, { dimColor: true, children: "Usage tracking lets groundcrew watch your AI subscription's usage so it won't launch agents when you're near your limits. Disabling opts every enabled agent out; the limit % is the ceiling above which it stops launching new agents. \u2191/\u2193 move \xB7 space toggles tracking." }),
+      /* @__PURE__ */ jsx29(Text29, { dimColor: true, children: "Needs the codexbar menu-bar app on Mac (groundcrew reads usage via its codexbar CLI). Install: brew install --cask steipete/tap/codexbar" }),
+      hasAgents ? null : /* @__PURE__ */ jsx29(Text29, { dimColor: true, children: "(no enabled agents to gate \u2014 add one under Agents)" })
     ] })
   ] });
 }
 
 // src/screens/WorkspaceForm.tsx
-import { useState as useState23 } from "react";
-import { Box as Box29, Text as Text29, useInput as useInput27 } from "ink";
-import { jsx as jsx29, jsxs as jsxs29 } from "react/jsx-runtime";
+import { useState as useState24 } from "react";
+import { Box as Box30, Text as Text30, useInput as useInput28 } from "ink";
+import { jsx as jsx30, jsxs as jsxs30 } from "react/jsx-runtime";
 var FOCI = ["projectDir", "worktreeDir"];
 function WorkspaceForm({ draft, baseline, onChange, onBack }) {
-  const [focusIndex, setFocusIndex] = useState23(0);
+  const [focusIndex, setFocusIndex] = useState24(0);
   const focus = FOCI[focusIndex] ?? "projectDir";
-  useInput27((_input, key) => {
+  useInput28((_input, key) => {
     if (key.escape) onBack();
     if (key.downArrow) setFocusIndex((f) => Math.min(FOCI.length - 1, f + 1));
     if (key.upArrow) setFocusIndex((f) => Math.max(0, f - 1));
   });
-  function setField(path14, value) {
+  function setField(path15, value) {
     onChange(
       setByPath(
         draft,
-        path14,
+        path15,
         value.length === 0 ? void 0 : value
       )
     );
@@ -3915,10 +4513,10 @@ function WorkspaceForm({ draft, baseline, onChange, onBack }) {
     baseline.workspace.worktreeDir,
     draft.workspace.worktreeDir
   );
-  return /* @__PURE__ */ jsxs29(Box29, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
-    /* @__PURE__ */ jsx29(Text29, { bold: true, children: "Workspace" }),
-    /* @__PURE__ */ jsxs29(Box29, { flexDirection: "column", marginTop: 1, children: [
-      /* @__PURE__ */ jsx29(
+  return /* @__PURE__ */ jsxs30(Box30, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
+    /* @__PURE__ */ jsx30(Text30, { bold: true, children: "Workspace" }),
+    /* @__PURE__ */ jsxs30(Box30, { flexDirection: "column", marginTop: 1, children: [
+      /* @__PURE__ */ jsx30(
         TextField,
         {
           label: "projectDir",
@@ -3928,7 +4526,7 @@ function WorkspaceForm({ draft, baseline, onChange, onBack }) {
           onChange: (v) => setField("workspace.projectDir", v)
         }
       ),
-      /* @__PURE__ */ jsx29(
+      /* @__PURE__ */ jsx30(
         TextField,
         {
           label: "worktreeDir",
@@ -3940,24 +4538,24 @@ function WorkspaceForm({ draft, baseline, onChange, onBack }) {
         }
       )
     ] }),
-    /* @__PURE__ */ jsx29(Box29, { marginTop: 1, children: /* @__PURE__ */ jsx29(Text29, { dimColor: true, children: 'Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a "git worktree") created under worktreeDir. Add the repos themselves in the Repositories section.' }) })
+    /* @__PURE__ */ jsx30(Box30, { marginTop: 1, children: /* @__PURE__ */ jsx30(Text30, { dimColor: true, children: 'Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a "git worktree") created under worktreeDir. Add the repos themselves in the Repositories section.' }) })
   ] });
 }
 
 // src/app.tsx
-import { jsx as jsx30, jsxs as jsxs30 } from "react/jsx-runtime";
+import { jsx as jsx31, jsxs as jsxs31 } from "react/jsx-runtime";
 function Screen({
   rows,
   columns,
   footer,
   children
 }) {
-  return /* @__PURE__ */ jsxs30(Box30, { width: columns, height: rows, flexDirection: "column", children: [
-    /* @__PURE__ */ jsx30(Box30, { flexGrow: 1, flexDirection: "column", children }),
+  return /* @__PURE__ */ jsxs31(Box31, { width: columns, height: rows, flexDirection: "column", children: [
+    /* @__PURE__ */ jsx31(Box31, { flexGrow: 1, flexDirection: "column", children }),
     footer
   ] });
 }
-function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
+function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoctor }) {
   const { exit } = useApp();
   const { rows, columns } = useFullscreen();
   const rawInitial = initialDraft2 ?? // Degenerate empty seed used when no config exists on disk; distinct from
@@ -3965,24 +4563,37 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
   {
     workspace: { projectDir: "", knownRepositories: [] }
   };
-  const [draft, setDraft] = useState24(
+  const [draft, setDraft] = useState25(
     () => migratePlanKeeperSandboxPaths(rawInitial)
   );
-  const [baseline, setBaseline] = useState24(() => rawInitial);
-  const [route, setRoute] = useState24({ name: "home" });
-  const [homeCursor, setHomeCursor] = useState24(0);
-  const [dirty, setDirty] = useState24(false);
-  const [valid, setValid] = useState24(true);
-  const [checked, setChecked] = useState24(false);
-  const [issues, setIssues] = useState24(/* @__PURE__ */ new Set());
-  const [saved, setSaved] = useState24(false);
-  const [shadowed, setShadowed] = useState24([]);
-  const [quitting, setQuitting] = useState24(false);
+  const [baseline, setBaseline] = useState25(() => rawInitial);
+  const [route, setRoute] = useState25({ name: "home" });
+  const [homeCursor, setHomeCursor] = useState25(0);
+  const [dirty, setDirty] = useState25(false);
+  const [valid, setValid] = useState25(true);
+  const [checked, setChecked] = useState25(false);
+  const [issues, setIssues] = useState25(/* @__PURE__ */ new Set());
+  const [saved, setSaved] = useState25(false);
+  const [shadowed, setShadowed] = useState25([]);
+  const [quitting, setQuitting] = useState25(false);
+  const [doctorOffer, setDoctorOffer] = useState25("hidden");
+  const doctorOfferRef = useRef12("hidden");
+  const [doctorResult, setDoctorResult] = useState25(
+    null
+  );
+  const routeRef = useRef12(route);
+  useEffect5(() => {
+    routeRef.current = route;
+  }, [route]);
+  function setOffer(value) {
+    doctorOfferRef.current = value;
+    setDoctorOffer(value);
+  }
   const configPath2 = targetPath(target2);
   useEffect5(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
-      void validateDraft(draft, path8.dirname(targetPath(target2))).then((result) => {
+      void validateDraft(draft, path10.dirname(targetPath(target2))).then((result) => {
         if (cancelled) return;
         setChecked(true);
         setValid(result.ok);
@@ -4000,6 +4611,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
     setDraft(next);
     setDirty(true);
     setSaved(false);
+    setOffer("hidden");
   }
   async function save() {
     const result = await saveDraft(target2, draft);
@@ -4007,10 +4619,26 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
     setDirty(false);
     setSaved(true);
     setShadowed(result.shadowed);
+    setOffer("offered");
   }
-  useInput28(
-    (input) => {
+  useInput29(
+    (input, key) => {
       if (route.name !== "home") return;
+      if (doctorResult !== null) return;
+      if (doctorOfferRef.current === "offered") {
+        if (input === "y") {
+          setOffer("running");
+          void (crewDoctor ?? runCrewDoctor)().then((result) => {
+            if (routeRef.current.name === "home") setDoctorResult(result);
+            setOffer("hidden");
+          });
+          return;
+        }
+        if (key.escape) {
+          setOffer("hidden");
+          return;
+        }
+      }
       if (input === "s") void save();
       if (input === "q") {
         if (dirty) setQuitting(true);
@@ -4024,7 +4652,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
     [baseline, draft]
   );
   if (quitting) {
-    return /* @__PURE__ */ jsx30(Screen, { rows, columns, children: /* @__PURE__ */ jsx30(
+    return /* @__PURE__ */ jsx31(Screen, { rows, columns, children: /* @__PURE__ */ jsx31(
       QuitGuard,
       {
         onSaveQuit: () => void save().then(() => exit()),
@@ -4033,15 +4661,24 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       }
     ) });
   }
+  if (doctorResult !== null) {
+    return /* @__PURE__ */ jsx31(Screen, { rows, columns, children: /* @__PURE__ */ jsx31(
+      CrewDoctorView,
+      {
+        result: doctorResult,
+        onClose: () => setDoctorResult(null)
+      }
+    ) });
+  }
   const noSources = enabledSourceCount(draft) === 0;
   const homeIssues = noSources ? /* @__PURE__ */ new Set([...issues, "taskSources"]) : issues;
   if (route.name === "home") {
-    return /* @__PURE__ */ jsxs30(
+    return /* @__PURE__ */ jsxs31(
       Screen,
       {
         rows,
         columns,
-        footer: /* @__PURE__ */ jsx30(
+        footer: /* @__PURE__ */ jsx31(
           Footer,
           {
             dirty,
@@ -4053,23 +4690,28 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
           }
         ),
         children: [
-          /* @__PURE__ */ jsxs30(Box30, { justifyContent: "space-between", children: [
-            /* @__PURE__ */ jsx30(Text30, { bold: true, children: "crew-config" }),
-            /* @__PURE__ */ jsx30(Text30, { dimColor: true, children: target2.scope })
+          /* @__PURE__ */ jsxs31(Box31, { justifyContent: "space-between", children: [
+            /* @__PURE__ */ jsx31(Text31, { bold: true, children: "crew-config" }),
+            /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: target2.scope })
           ] }),
-          /* @__PURE__ */ jsx30(Box30, { children: /* @__PURE__ */ jsxs30(Text30, { dimColor: true, children: [
+          /* @__PURE__ */ jsx31(Box31, { children: /* @__PURE__ */ jsxs31(Text31, { dimColor: true, children: [
             "editing",
             " ",
-            /* @__PURE__ */ jsx30(Text30, { color: saved ? "green" : void 0, children: configPath2 }),
-            saved ? /* @__PURE__ */ jsx30(Text30, { color: "green", children: " \u2713 saved" }) : null,
-            saved && shadowed.length > 0 ? /* @__PURE__ */ jsxs30(Text30, { dimColor: true, children: [
+            /* @__PURE__ */ jsx31(Text31, { color: saved ? "green" : void 0, children: configPath2 }),
+            saved ? /* @__PURE__ */ jsx31(Text31, { color: "green", children: " \u2713 saved" }) : null,
+            saved && shadowed.length > 0 ? /* @__PURE__ */ jsxs31(Text31, { dimColor: true, children: [
               " (moved ",
               shadowed.join(", "),
               ")"
             ] }) : null
           ] }) }),
-          /* @__PURE__ */ jsx30(Box30, { marginTop: 1, children: /* @__PURE__ */ jsx30(Text30, { dimColor: true, children: "groundcrew picks up your tasks and runs AI coding agents on them automatically \u2014 each in its own isolated copy of your repo \u2014 then opens a PR. Set it up below." }) }),
-          /* @__PURE__ */ jsx30(Box30, { marginTop: 1, children: /* @__PURE__ */ jsx30(
+          doctorOffer !== "hidden" ? /* @__PURE__ */ jsx31(Box31, { children: /* @__PURE__ */ jsxs31(Text31, { children: [
+            "Run crew doctor to verify?",
+            " ",
+            /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: doctorOffer === "running" ? "running\u2026" : "[y] run \xB7 [esc] dismiss" })
+          ] }) }) : null,
+          /* @__PURE__ */ jsx31(Box31, { marginTop: 1, children: /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: "groundcrew picks up your tasks and runs AI coding agents on them automatically \u2014 each in its own isolated copy of your repo \u2014 then opens a PR. Set it up below." }) }),
+          /* @__PURE__ */ jsx31(Box31, { marginTop: 1, children: /* @__PURE__ */ jsx31(
             Home,
             {
               draft,
@@ -4086,8 +4728,8 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
   }
   const id = route.id;
   const back = () => setRoute({ name: "home" });
-  const configDir = path8.dirname(targetPath(target2));
-  const form = id === "setup" ? /* @__PURE__ */ jsx30(SetupScreen, { onBack: back, deps: setupDeps }) : id === "workspace" ? /* @__PURE__ */ jsx30(
+  const configDir = path10.dirname(targetPath(target2));
+  const form = id === "setup" ? /* @__PURE__ */ jsx31(SetupScreen, { onBack: back, deps: setupDeps }) : id === "workspace" ? /* @__PURE__ */ jsx31(
     WorkspaceForm,
     {
       draft,
@@ -4095,7 +4737,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "repositories" ? /* @__PURE__ */ jsx30(
+  ) : id === "repositories" ? /* @__PURE__ */ jsx31(
     RepositoriesForm,
     {
       draft,
@@ -4103,7 +4745,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "taskSources" ? /* @__PURE__ */ jsx30(
+  ) : id === "taskSources" ? /* @__PURE__ */ jsx31(
     TaskSourcesMenu,
     {
       draft,
@@ -4111,7 +4753,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "usage" ? /* @__PURE__ */ jsx30(
+  ) : id === "usage" ? /* @__PURE__ */ jsx31(
     UsageForm,
     {
       draft,
@@ -4119,7 +4761,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "agents" ? /* @__PURE__ */ jsx30(
+  ) : id === "agents" ? /* @__PURE__ */ jsx31(
     AgentsForm,
     {
       draft,
@@ -4127,7 +4769,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onChange: update,
       onBack: back
     }
-  ) : id === "prompts" ? /* @__PURE__ */ jsx30(
+  ) : id === "prompts" ? /* @__PURE__ */ jsx31(
     PromptsScreen,
     {
       draft,
@@ -4136,7 +4778,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onBack: back,
       configDir
     }
-  ) : /* @__PURE__ */ jsx30(
+  ) : /* @__PURE__ */ jsx31(
     SectionForm,
     {
       title: SECTION_LABEL[id],
@@ -4148,12 +4790,12 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps }) {
       onBack: back
     }
   );
-  return /* @__PURE__ */ jsx30(Screen, { rows, columns, children: form });
+  return /* @__PURE__ */ jsx31(Screen, { rows, columns, children: form });
 }
 
 // src/io/load.ts
-import { existsSync as existsSync4, readFileSync as readFileSync2 } from "fs";
-import path9 from "path";
+import { existsSync as existsSync5, readFileSync as readFileSync4 } from "fs";
+import path11 from "path";
 import { pathToFileURL } from "url";
 import { cosmiconfig } from "cosmiconfig";
 var importModule = async (filepath) => {
@@ -4164,9 +4806,9 @@ var explorer = cosmiconfig("crew", {
   loaders: { ".ts": importModule, ".mjs": importModule, ".js": importModule }
 });
 async function loadDraft(filepath) {
-  if (!existsSync4(filepath)) return void 0;
-  if (path9.extname(filepath) === ".json") {
-    const text = readFileSync2(filepath, "utf8");
+  if (!existsSync5(filepath)) return void 0;
+  if (path11.extname(filepath) === ".json") {
+    const text = readFileSync4(filepath, "utf8");
     try {
       return JSON.parse(text);
     } catch (error) {
@@ -4181,8 +4823,8 @@ async function loadDraft(filepath) {
 }
 
 // src/io/locate.ts
-import { existsSync as existsSync5 } from "fs";
-import path10 from "path";
+import { existsSync as existsSync6 } from "fs";
+import path12 from "path";
 var CONFIG_BASENAMES = [
   "crew.config.ts",
   "crew.config.mjs",
@@ -4198,18 +4840,18 @@ function locate(argv2, cwd) {
   const scope = argv2.includes("--local") ? "local" : "global";
   const target2 = { scope, cwd };
   if (explicit !== void 0) {
-    return { target: target2, path: path10.resolve(cwd, explicit) };
+    return { target: target2, path: path12.resolve(cwd, explicit) };
   }
-  const dir = path10.dirname(targetPath(target2));
-  const existing = CONFIG_BASENAMES.map((name) => path10.join(dir, name)).find(
-    existsSync5
+  const dir = path12.dirname(targetPath(target2));
+  const existing = CONFIG_BASENAMES.map((name) => path12.join(dir, name)).find(
+    existsSync6
   );
   return { target: target2, path: existing ?? targetPath(target2) };
 }
 
 // src/io/seed.ts
-import { existsSync as existsSync6, mkdirSync as mkdirSync3, writeFileSync as writeFileSync4 } from "fs";
-import path11 from "path";
+import { existsSync as existsSync7, mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "fs";
+import path13 from "path";
 
 // src/domain/defaults.ts
 var DEFAULT_PROMPT_FILE = "prompt-initial.md";
@@ -4254,11 +4896,11 @@ function defaultDraft() {
 
 // src/io/seed.ts
 function seedNewConfig(target2) {
-  const dir = path11.dirname(targetPath(target2));
-  const promptPath = path11.join(dir, DEFAULT_PROMPT_FILE);
+  const dir = path13.dirname(targetPath(target2));
+  const promptPath = path13.join(dir, DEFAULT_PROMPT_FILE);
   try {
-    if (!existsSync6(promptPath)) {
-      mkdirSync3(dir, { recursive: true });
+    if (!existsSync7(promptPath)) {
+      mkdirSync4(dir, { recursive: true });
       writeFileSync4(promptPath, DEFAULT_INITIAL_PROMPT);
     }
   } catch {
@@ -4268,156 +4910,10 @@ function seedNewConfig(target2) {
 }
 
 // src/io/setup/doctor.ts
-import { homedir as homedir3 } from "os";
-
-// src/io/setup/probes.ts
-import { readFileSync as readFileSync3, statSync as statSync4 } from "fs";
-import path12 from "path";
-
-// src/domain/setup/rcScan.ts
-var RC_CANDIDATES = [
-  ".zshrc",
-  ".bash_profile",
-  ".bashrc",
-  ".profile"
-];
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function exportPattern(name) {
-  return new RegExp(`^\\s*export\\s+${escapeRegExp(name)}(?=[=\\s]|$)`);
-}
-function functionPattern(name) {
-  return new RegExp(`^\\s*${escapeRegExp(name)}\\s*\\(\\s*\\)`);
-}
-function extractExportValue(strippedLine, name) {
-  const m = strippedLine.match(
-    new RegExp(`^\\s*export\\s+${escapeRegExp(name)}=(.*)$`)
-  );
-  if (m === null) return null;
-  const raw = m[1].trim();
-  const first = raw[0];
-  if (raw.length >= 2 && first === raw[raw.length - 1] && (first === '"' || first === "'")) {
-    return raw.slice(1, -1);
-  }
-  return raw.length > 0 ? raw : null;
-}
-function scanRcContents(files, targets) {
-  const found = /* @__PURE__ */ new Map();
-  for (const { file, content } of files) {
-    const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i += 1) {
-      const stripped = lines[i].trim();
-      if (stripped.length === 0 || stripped.startsWith("#")) continue;
-      for (const target2 of targets) {
-        if (found.has(target2.name)) continue;
-        const pattern = target2.kind === "export" ? exportPattern(target2.name) : functionPattern(target2.name);
-        if (pattern.test(stripped)) {
-          found.set(target2.name, {
-            item: target2.name,
-            file,
-            line: i + 1,
-            value: target2.kind === "export" ? extractExportValue(stripped, target2.name) : null
-          });
-        }
-      }
-    }
-    if (found.size === targets.length) break;
-  }
-  return found;
-}
-
-// src/io/setup/probes.ts
-var CLEARANCE_PERSONAL_HOSTS_PATH = ".config/clearance/personal-allow-hosts";
-var CLEARANCE_PID_PATH = ".cache/clearance/clearance.pid";
-var SAFEHOUSE_SIDECAR_PATH = ".config/agent-safehouse/env.sh";
-function readRcFiles(home) {
-  const out = [];
-  for (const name of RC_CANDIDATES) {
-    const file = path12.join(home, name);
-    try {
-      out.push({ file, content: readFileSync3(file, "utf8") });
-    } catch {
-    }
-  }
-  return out;
-}
-function readTextOrNull(file) {
-  try {
-    return readFileSync3(file, "utf8");
-  } catch {
-    return null;
-  }
-}
-function envVarExported(name, home, env) {
-  if (env[name] !== void 0 && env[name] !== "") return true;
-  return scanRcContents(readRcFiles(home), [{ kind: "export", name }]).has(
-    name
-  );
-}
-function pidIsAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
-  }
-}
-function probeClearance(home, env = process.env) {
-  const personalFile = path12.join(home, CLEARANCE_PERSONAL_HOSTS_PATH);
-  const personalContent = readTextOrNull(personalFile);
-  const personalFileExists = personalContent !== null;
-  const personalFileHasClaudeHosts = personalContent !== null && personalContent.split("\n").some((line) => {
-    const stripped = line.trim();
-    return stripped.length > 0 && !stripped.startsWith("#") && stripped.includes("downloads.claude.ai");
-  });
-  const envExported = envVarExported("CLEARANCE_ALLOW_HOSTS_FILES", home, env);
-  const pidFile = path12.join(home, CLEARANCE_PID_PATH);
-  let daemonPid = null;
-  let daemonAgeSeconds = null;
-  try {
-    const mtimeMs = statSync4(pidFile).mtimeMs;
-    daemonAgeSeconds = Math.round((Date.now() - mtimeMs) / 1e3);
-    const raw = readFileSync3(pidFile, "utf8").trim();
-    const candidate = Number.parseInt(raw, 10);
-    if (String(candidate) === raw && pidIsAlive(candidate)) {
-      daemonPid = candidate;
-    }
-  } catch {
-  }
-  return {
-    personalFileExists,
-    personalFileHasClaudeHosts,
-    envExported,
-    daemonPid,
-    daemonAgeSeconds
-  };
-}
-var SAFE_FN_RE = /^\s*safe\s*\(\s*\)/m;
-var SAFE_CLAUDE_FN_RE = /^\s*safe-claude\s*\(\s*\)/m;
-async function probeSafehouse(home, env = process.env, deps = defaultInstallDeps()) {
-  const binaryPath = deps.which("safehouse");
-  const formula = await probeSafehouseFormula(deps);
-  const envExported = envVarExported("SAFEHOUSE_APPEND_PROFILE", home, env);
-  const sidecarContent = readTextOrNull(
-    path12.join(home, SAFEHOUSE_SIDECAR_PATH)
-  );
-  const sidecarPresent = sidecarContent !== null;
-  const sidecarHasFunctions = sidecarContent !== null && SAFE_FN_RE.test(sidecarContent) && SAFE_CLAUDE_FN_RE.test(sidecarContent);
-  return {
-    binaryAvailable: binaryPath !== null,
-    binaryPath,
-    brewFormulaInstalled: formula.action === "already-installed",
-    envExported,
-    sidecarPresent,
-    sidecarHasFunctions
-  };
-}
-
-// src/io/setup/doctor.ts
+import { homedir as homedir4 } from "os";
 function defaultDoctorDeps() {
   return {
-    home: homedir3(),
+    home: homedir4(),
     platform: process.platform,
     env: process.env,
     installDeps: defaultInstallDeps()
@@ -4530,14 +5026,14 @@ async function runDoctor(argv2, deps = defaultDoctorDeps(), log = console.log) {
 // src/io/upgrade.ts
 import { spawnSync } from "child_process";
 import { realpathSync } from "fs";
-import path13 from "path";
+import path14 from "path";
 var BREW_FORMULA = "paulbaranowski/tap/crew-config";
 var INSTALLER_URL = "https://github.com/paulbaranowski/groundcrew-config/releases/latest/download/install.sh";
 var INSTALLER_PIPELINE = `curl -fsSL ${INSTALLER_URL} | bash`;
 function isContained(child, parent) {
   if (parent === "") return false;
-  const rel = path13.relative(parent, child);
-  return rel === "" || !rel.startsWith("..") && !path13.isAbsolute(rel);
+  const rel = path14.relative(parent, child);
+  return rel === "" || !rel.startsWith("..") && !path14.isAbsolute(rel);
 }
 function detectChannel(input) {
   if (isContained(input.scriptRealpath, input.brewFormulaPrefix)) return "brew";
@@ -4615,7 +5111,7 @@ function runUpgrade(deps = {}) {
 }
 
 // src/meta.ts
-import { readFileSync as readFileSync4 } from "fs";
+import { readFileSync as readFileSync5 } from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
 var HELP = `crew-config \u2014 interactive editor for groundcrew's crew.config.json
 
@@ -4631,7 +5127,7 @@ Flags:
   -v, --version    print the version and exit`;
 function readVersion() {
   const pkgPath = fileURLToPath2(new URL("../package.json", import.meta.url));
-  const pkg = JSON.parse(readFileSync4(pkgPath, "utf8"));
+  const pkg = JSON.parse(readFileSync5(pkgPath, "utf8"));
   return pkg.version;
 }
 function metaOutput(argv2) {
@@ -4641,7 +5137,7 @@ function metaOutput(argv2) {
 }
 
 // src/cli.tsx
-import { jsx as jsx31 } from "react/jsx-runtime";
+import { jsx as jsx32 } from "react/jsx-runtime";
 var argv = process.argv.slice(2);
 var meta = metaOutput(argv);
 if (meta !== null) {
@@ -4662,7 +5158,7 @@ var { target, path: configPath } = locate(argv, process.cwd());
 var initialDraft = await loadDraft(configPath) ?? seedNewConfig(target);
 var dispose = installFullscreen(createFullscreen(process.stdout));
 try {
-  const instance = render(/* @__PURE__ */ jsx31(App, { initialDraft, target }));
+  const instance = render(/* @__PURE__ */ jsx32(App, { initialDraft, target }));
   await instance.waitUntilExit();
 } finally {
   dispose();

@@ -29,13 +29,15 @@ export async function runCrewDoctor(
     };
   }
   const result = await deps.run("crew", ["doctor"], CREW_DOCTOR_TIMEOUT_MS);
-  const combined = [result.stdout, result.stderr]
+  // Partial output survives a timeout/spawn failure: the captured lines are
+  // often the diagnostics the user needs, so the error is appended, not
+  // substituted.
+  const pieces = [result.stdout, result.stderr, result.error ?? ""]
     .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .join("\n");
+    .filter((s) => s.length > 0);
   return {
     available: true,
     code: result.code,
-    output: result.error ?? (combined || "(no output)"),
+    output: pieces.length > 0 ? pieces.join("\n") : "(no output)",
   };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { Footer } from "./components/Footer.tsx";
 import { useFullscreen } from "./hooks/useFullscreen.ts";
@@ -110,9 +110,25 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
   const [doctorOffer, setDoctorOffer] = useState<
     "hidden" | "offered" | "running"
   >("hidden");
+  // Ref mirror for the same burst reason SetupScreen mirrors its row states:
+  // two "y" presses in one tick share a stale render closure and would spawn
+  // two crew-doctor processes without it.
+  const doctorOfferRef = useRef<"hidden" | "offered" | "running">("hidden");
   const [doctorResult, setDoctorResult] = useState<CrewDoctorResult | null>(
     null,
   );
+  // Latest committed route, so a slow crew-doctor resolution can tell whether
+  // the user is still on Home. Popping the result view over a section screen
+  // would unmount it and silently discard buffered sub-editor edits.
+  const routeRef = useRef<Route>(route);
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  function setOffer(value: "hidden" | "offered" | "running"): void {
+    doctorOfferRef.current = value;
+    setDoctorOffer(value);
+  }
 
   // Absolute path of the file we read from / write to, shown on Home so the
   // user always knows which config they're editing (not just its scope).
@@ -152,7 +168,7 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
     setDirty(true);
     setSaved(false);
     // An edit invalidates the just-saved state, so the stale offer goes away.
-    setDoctorOffer("hidden");
+    setOffer("hidden");
   }
 
   // Persists the draft and reconciles all save-state flags: clears `dirty`
@@ -165,7 +181,7 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
     setDirty(false);
     setSaved(true);
     setShadowed(result.shadowed);
-    setDoctorOffer("offered");
+    setOffer("offered");
   }
 
   // Global quit handling on Home, plus the post-save doctor offer's keys.
@@ -175,17 +191,19 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
       // While the doctor result view is open its own useInput owns the
       // keyboard; without this gate "s"/"q" would save or quit underneath it.
       if (doctorResult !== null) return;
-      if (doctorOffer === "offered") {
+      if (doctorOfferRef.current === "offered") {
         if (input === "y") {
-          setDoctorOffer("running");
+          setOffer("running");
           void (crewDoctor ?? runCrewDoctor)().then((result) => {
-            setDoctorResult(result);
-            setDoctorOffer("hidden");
+            // Only surface the result if the user is still on Home; popping
+            // it over a section would unmount in-progress edits.
+            if (routeRef.current.name === "home") setDoctorResult(result);
+            setOffer("hidden");
           });
           return;
         }
         if (key.escape) {
-          setDoctorOffer("hidden");
+          setOffer("hidden");
           return;
         }
       }
