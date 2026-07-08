@@ -25,6 +25,7 @@ crew-config            # edit the global ~/.config/groundcrew/crew.config.json
 crew-config --local    # edit ./crew.config.json in the current project
 crew-config ./path/to/crew.config.json
 crew-config upgrade    # upgrade a brew or installer install in place (other locations: prints how)
+crew-config doctor     # check the machine setup (groundcrew, safehouse, clearance); --json for machines
 ```
 
 - With no config, opens the editor on an empty draft — fill in Workspace and add at least one Task Source (groundcrew needs one to run; the footer warns when none is set).
@@ -35,6 +36,7 @@ crew-config upgrade    # upgrade a brew or installer install in place (other loc
 
 ### Sections
 
+- **Setup** — machine setup, not config: probes whether groundcrew (npm global) and the agent-safehouse sandbox (brew, macOS) are installed, and installs them on request. `crew-config doctor` is the same set of read-only checks headlessly (exit 0 healthy, 1 broken).
 - **Workspace** — project/worktree directories.
 - **Repositories** — the repos groundcrew may work on (`owner/repo`, with an optional per-repo directory override). The repo editor also covers `workdir` (a project subdirectory within the worktree) and `provision` (scripted `create`/`remove` worktree templates — both `create` and `remove` are required, and `provision` is mutually exclusive with the directory override).
 - **Agents** — enable the built-in agents (claude, codex) and edit their fields; any non-built-in agent definitions are listed read-only (author them in `crew.config.json`).

@@ -1,0 +1,205 @@
+import { useEffect, useRef, useState } from "react";
+import { Box, Text, useInput } from "ink";
+import {
+  defaultInstallDeps,
+  installGroundcrew,
+  installSafehouse,
+  probeGroundcrew,
+  probeSafehouseFormula,
+  type InstallReport,
+} from "../io/setup/installs.ts";
+
+// Every effect is injected so tests drive the screen with stubs and no real
+// npm/brew, mirroring how App takes initialDraft/target.
+export interface SetupScreenDeps {
+  platform: string;
+  probeGroundcrew: () => Promise<InstallReport>;
+  installGroundcrew: () => Promise<InstallReport>;
+  probeSafehouse: () => Promise<InstallReport>;
+  installSafehouse: () => Promise<InstallReport>;
+}
+
+export function defaultSetupScreenDeps(): SetupScreenDeps {
+  const installDeps = defaultInstallDeps();
+  return {
+    platform: process.platform,
+    probeGroundcrew: () => probeGroundcrew(installDeps),
+    installGroundcrew: () => installGroundcrew(installDeps),
+    probeSafehouse: () => probeSafehouseFormula(installDeps),
+    installSafehouse: () => installSafehouse(installDeps),
+  };
+}
+
+type RowPhase =
+  | { phase: "checking" }
+  | { phase: "acting" }
+  | { phase: "ready"; report: InstallReport }
+  | { phase: "not-applicable" };
+
+interface InstallRow {
+  id: "groundcrew" | "safehouse";
+  label: string;
+  detail: string;
+}
+
+const ROWS: InstallRow[] = [
+  {
+    id: "groundcrew",
+    label: "groundcrew",
+    detail: "npm global @clipboard-health/groundcrew",
+  },
+  {
+    id: "safehouse",
+    label: "safehouse",
+    detail: "brew eugene1g/safehouse/agent-safehouse (macOS sandbox)",
+  },
+];
+
+function rowText(state: RowPhase): string {
+  switch (state.phase) {
+    case "checking":
+      return "checking…";
+    case "acting":
+      return "installing…";
+    case "not-applicable":
+      return "not applicable on this platform";
+    case "ready": {
+      const r = state.report;
+      if (r.action === "already-installed" || r.action === "installed") {
+        return `${r.version ?? "installed"} ✓`;
+      }
+      if (r.action === "missing") return "not installed - enter to install";
+      return `failed: ${r.details} - enter to retry`;
+    }
+  }
+}
+
+interface Props {
+  onBack: () => void;
+  deps?: SetupScreenDeps;
+}
+
+// Doctor-style screen: probe everything up front, show per-row state, and let
+// the user fix only what is broken. Mutations happen only on enter;
+// re-running an install is a reported no-op.
+export function SetupScreen({ onBack, deps }: Props) {
+  const d = useRef(deps ?? defaultSetupScreenDeps()).current;
+  const [cursor, setCursor] = useState(0);
+  const cursorRef = useRef(0);
+  const [states, setStates] = useState<Record<InstallRow["id"], RowPhase>>({
+    groundcrew: { phase: "checking" },
+    safehouse:
+      d.platform === "darwin"
+        ? { phase: "checking" }
+        : { phase: "not-applicable" },
+  });
+  // Mirror the row states in a ref for the same reason ListField mirrors its
+  // cursor: a burst of keypresses delivered in one tick all share the same
+  // stale render closure, so a double-enter would read "ready" twice and
+  // start two parallel installs. activate() MUST read statesRef.current.
+  const statesRef = useRef(states);
+
+  function setRow(id: InstallRow["id"], state: RowPhase): void {
+    statesRef.current = { ...statesRef.current, [id]: state };
+    setStates(statesRef.current);
+  }
+
+  // One mounted flag covers both the mount-time probes and the long-running
+  // install actions (INSTALL_TIMEOUT_MS is 10 minutes): a resolution landing
+  // after the user esc'd away must not call setState on the unmounted screen.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    void d.probeGroundcrew().then((report) => {
+      if (mountedRef.current) setRow("groundcrew", { phase: "ready", report });
+    });
+    if (d.platform === "darwin") {
+      void d.probeSafehouse().then((report) => {
+        if (mountedRef.current) setRow("safehouse", { phase: "ready", report });
+      });
+    }
+  }, [d]);
+
+  function moveCursor(next: number): void {
+    cursorRef.current = next;
+    setCursor(next);
+  }
+
+  function activate(id: InstallRow["id"]): void {
+    const state = statesRef.current[id];
+    // "acting"/"checking"/"not-applicable" rows have no action (a second
+    // enter mid-install must not double-run).
+    if (state.phase !== "ready") return;
+    // A failed row (probe timeout, install failure) retries with a fresh
+    // probe: read-only, so a retry can never mutate; the probe's result
+    // decides whether an install is offered next.
+    if (state.report.action === "failed") {
+      const probe = id === "groundcrew" ? d.probeGroundcrew : d.probeSafehouse;
+      setRow(id, { phase: "checking" });
+      void probe().then((report) => {
+        if (mountedRef.current) setRow(id, { phase: "ready", report });
+      });
+      return;
+    }
+    if (state.report.action !== "missing") return;
+    const install =
+      id === "groundcrew" ? d.installGroundcrew : d.installSafehouse;
+    setRow(id, { phase: "acting" });
+    void install().then((report) => {
+      if (mountedRef.current) setRow(id, { phase: "ready", report });
+    });
+  }
+
+  useInput((_input, key) => {
+    if (key.escape) {
+      onBack();
+      return;
+    }
+    if (key.downArrow)
+      moveCursor(Math.min(ROWS.length - 1, cursorRef.current + 1));
+    if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
+    if (key.return) {
+      const row = ROWS[cursorRef.current];
+      if (row) activate(row.id);
+    }
+  });
+
+  return (
+    <Box flexDirection="column" borderStyle="round" paddingX={1}>
+      <Text bold>Setup</Text>
+      <Box marginTop={1} flexDirection="column">
+        {ROWS.map((row, index) => (
+          <Box key={row.id} flexDirection="column">
+            <Box>
+              <Text color={cursor === index ? "cyan" : undefined}>
+                {cursor === index ? "▸ " : "  "}
+                {row.label}
+              </Text>
+              <Text dimColor> {rowText(states[row.id])}</Text>
+            </Box>
+            {cursor === index ? (
+              <Text dimColor>
+                {"    "}
+                {row.detail}
+              </Text>
+            ) : null}
+          </Box>
+        ))}
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>
+          Installs and checks the tools groundcrew needs on this machine (it
+          does not edit crew.config.json; the Sandbox section holds the related
+          networkEgress setting). ↑/↓ move · enter install · esc back. Headless:
+          crew-config doctor.
+        </Text>
+      </Box>
+    </Box>
+  );
+}

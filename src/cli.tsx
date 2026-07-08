@@ -4,6 +4,7 @@ import { createFullscreen, installFullscreen } from "./hooks/useFullscreen.ts";
 import { loadDraft } from "./io/load.ts";
 import { locate } from "./io/locate.ts";
 import { seedNewConfig } from "./io/seed.ts";
+import { runDoctor } from "./io/setup/doctor.ts";
 import { runUpgrade } from "./io/upgrade.ts";
 import { metaOutput } from "./meta.ts";
 
@@ -23,6 +24,22 @@ if (meta !== null) {
 // path) and before entering the alt screen.
 if (argv[0] === "upgrade") {
   process.exit(runUpgrade());
+}
+
+// `crew-config doctor [--json]` is a non-interactive, read-only subcommand:
+// it probes the machine setup and exits non-zero when something is broken.
+// Like `upgrade`, it must short-circuit before locate() (which would mistake
+// the bare `doctor` arg for a config path) and before entering the alt screen.
+if (argv[0] === "doctor") {
+  const code = await runDoctor(argv.slice(1));
+  // Drain stdout before exiting: when stdout is a pipe (`doctor --json | jq`)
+  // writes are async, and a bare process.exit() can truncate the tail of the
+  // report. Writes are ordered, so an empty write's callback fires only after
+  // everything queued before it has flushed.
+  await new Promise<void>((resolve) => {
+    process.stdout.write("", () => resolve());
+  });
+  process.exit(code);
 }
 
 const { target, path: configPath } = locate(argv, process.cwd());

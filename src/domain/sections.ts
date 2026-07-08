@@ -20,6 +20,9 @@ import { isUsageDisabled } from "./usage.ts";
 export type { SectionId };
 
 export const SECTION_ORDER: SectionId[] = [
+  // Machine setup comes first: install groundcrew and the sandbox tooling
+  // before configuring anything.
+  "setup",
   // The six primary setup sections, in the order a new user works through them.
   "repositories",
   "workspace",
@@ -37,6 +40,7 @@ export const SECTION_ORDER: SectionId[] = [
 ];
 
 export const SECTION_LABEL: Record<SectionId, string> = {
+  setup: "Setup",
   workspace: "Workspace",
   repositories: "Repositories",
   agents: "Agents",
@@ -58,6 +62,8 @@ export const SECTION_LABEL: Record<SectionId, string> = {
  * screens carry their own (longer) copy inline.
  */
 export const SECTION_DESCRIPTION: Record<SectionId, string> = {
+  setup:
+    "Machine setup for groundcrew: install the crew CLI and the safehouse sandbox, then verify with crew-config doctor. This screen manages your machine, not this config file.",
   workspace:
     "Where groundcrew keeps your code. projectDir is the folder that holds your repos; each task runs in a throwaway copy (a \"git worktree\") created under worktreeDir. Add the repos themselves in the Repositories section.",
   repositories:
@@ -240,6 +246,10 @@ function repoCount(draft: ConfigDraft): number {
 
 export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
   switch (id) {
+    // Static copy: probes are async and this function is sync; live machine
+    // state renders inside the Setup screen and `crew-config doctor`.
+    case "setup":
+      return "install groundcrew & sandbox tools";
     case "workspace": {
       const { projectDir, worktreeDir } = draft.workspace;
       return `${projectDir} · worktreeDir: ${worktreeDir ?? projectDir}`;
