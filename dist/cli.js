@@ -3278,25 +3278,30 @@ function RepositoriesForm({
   const [pendingDelete, setPendingDelete] = useState14(
     void 0
   );
-  const [discovery, setDiscovery] = useState14({ phase: "idle" });
+  const [discovery, setDiscoveryState] = useState14({
+    phase: "idle"
+  });
+  const phaseRef = useRef10("idle");
+  function setDiscovery(next) {
+    phaseRef.current = next.phase;
+    setDiscoveryState(next);
+  }
   const runDiscovery = discover ?? ((workspaceDir) => discoverRepos(homedir3(), workspaceDir));
   const discoveryReq = useRef10(0);
   const entries = normalizeRepos(draft.workspace.knownRepositories);
   const baseEntries = normalizeRepos(baseline.workspace.knownRepositories);
   const modified = modifiedByKey(entries, baseEntries, (entry) => entry.name);
   const errors = repoErrors(entries);
-  const listActive = editing === void 0 && pendingDelete === void 0 && discovery.phase === "idle";
   const inputActive = editing === void 0 && pendingDelete === void 0 && discovery.phase !== "picking";
   useInput16(
     (input, key) => {
-      if (discovery.phase === "loading") {
+      if (phaseRef.current === "loading") {
         if (key.escape) {
           discoveryReq.current += 1;
           setDiscovery({ phase: "idle" });
         }
         return;
       }
-      if (!listActive) return;
       if (key.escape) onBack();
       if (input === "f") {
         const req = discoveryReq.current += 1;

@@ -251,6 +251,41 @@ test("esc during discovery loading returns to the list and ignores a late result
   expect(onChange).not.toHaveBeenCalled();
 });
 
+test("f then esc in a single input tick cancels rather than navigating away", async () => {
+  let resolveDiscovery!: (repos: DiscoveredRepo[]) => void;
+  const discover = vi.fn(
+    () =>
+      new Promise<DiscoveredRepo[]>((resolve) => {
+        resolveDiscovery = resolve;
+      }),
+  );
+  const onBack = vi.fn();
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={onBack}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  // Both keystrokes land in one chunk, before a re-render: the handler sees the
+  // same stale `discovery` closure for both, so the phase ref is what lets esc
+  // resolve to "cancel the scan just started" instead of "back out of screen".
+  stdin.write("f\x1b");
+  await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce());
+  expect(onBack).not.toHaveBeenCalled();
+  // The late scan result must not pop the picker onto an idle/abandoned screen.
+  resolveDiscovery([{ owner: "a", repo: "r", sources: ["gh"] }]);
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  expect(lastFrame()).not.toContain("Discovered repositories");
+});
+
 test("marks a changed repo entry with ●", () => {
   const baseline = {
     workspace: { projectDir: "~/dev", knownRepositories: ["a", "b"] },

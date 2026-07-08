@@ -42,11 +42,22 @@ export function RepositoriesForm({
   const [pendingDelete, setPendingDelete] = useState<number | undefined>(
     undefined,
   );
-  const [discovery, setDiscovery] = useState<
+  type DiscoveryState =
     | { phase: "idle" }
     | { phase: "loading" }
-    | { phase: "picking"; candidates: DiscoveredRepo[] }
-  >({ phase: "idle" });
+    | { phase: "picking"; candidates: DiscoveredRepo[] };
+  const [discovery, setDiscoveryState] = useState<DiscoveryState>({
+    phase: "idle",
+  });
+  // Mirror the phase in a ref: a burst of keystrokes delivered in one input
+  // tick shares a stale `discovery` closure until React re-renders, so the
+  // handler below must read `phaseRef.current` (not `discovery.phase`) to see
+  // an f-then-esc pair land correctly. `setDiscovery` keeps both in sync.
+  const phaseRef = useRef<DiscoveryState["phase"]>("idle");
+  function setDiscovery(next: DiscoveryState): void {
+    phaseRef.current = next.phase;
+    setDiscoveryState(next);
+  }
   const runDiscovery =
     discover ?? ((workspaceDir) => discoverRepos(homedir(), workspaceDir));
   // Monotonic id of the in-flight discovery. Esc during loading bumps it so a
@@ -61,24 +72,21 @@ export function RepositoriesForm({
   // The handler itself stays active through `loading` too (so esc can cancel a
   // slow scan), but goes quiet while a sub-editor, the delete confirmation, or
   // the picker owns input - each of those handles its own esc.
-  const listActive =
-    editing === undefined &&
-    pendingDelete === undefined &&
-    discovery.phase === "idle";
   const inputActive =
     editing === undefined &&
     pendingDelete === undefined &&
     discovery.phase !== "picking";
   useInput(
     (input, key) => {
-      if (discovery.phase === "loading") {
+      if (phaseRef.current === "loading") {
         if (key.escape) {
           discoveryReq.current += 1;
           setDiscovery({ phase: "idle" });
         }
         return;
       }
-      if (!listActive) return;
+      // Past the loading branch the phase is idle (picking is gated off via
+      // isActive, editing/pendingDelete both cleared).
       if (key.escape) onBack();
       if (input === "f") {
         const req = (discoveryReq.current += 1);
