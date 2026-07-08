@@ -3020,21 +3020,33 @@ function extractOwnerRepo(gitConfigContent) {
 }
 function mergeDiscovered(gh, local) {
   const merged = /* @__PURE__ */ new Map();
-  const add = (key, source) => {
-    if (!key.includes("/")) return;
-    const sources = merged.get(key) ?? /* @__PURE__ */ new Set();
-    sources.add(source);
-    merged.set(key, sources);
+  const ensure = (key) => {
+    let entry = merged.get(key);
+    if (entry === void 0) {
+      entry = { sources: /* @__PURE__ */ new Set() };
+      merged.set(key, entry);
+    }
+    return entry;
   };
-  for (const key of gh) add(key, "gh");
-  for (const key of local) add(key, "local");
+  for (const key of gh) {
+    if (!key.includes("/")) continue;
+    ensure(key).sources.add("gh");
+  }
+  for (const hit of local) {
+    if (!hit.ownerRepo.includes("/")) continue;
+    const entry = ensure(hit.ownerRepo);
+    entry.sources.add("local");
+    entry.localName = hit.name;
+  }
   return [...merged.keys()].sort().map((key) => {
     const slash = key.indexOf("/");
-    const sources = merged.get(key);
+    const repo = key.slice(slash + 1);
+    const entry = merged.get(key);
     return {
       owner: key.slice(0, slash),
-      repo: key.slice(slash + 1),
-      sources: ["gh", "local"].filter((s) => sources.has(s))
+      repo,
+      name: entry.localName ?? repo,
+      sources: ["gh", "local"].filter((s) => entry.sources.has(s))
     };
   });
 }
@@ -3104,7 +3116,9 @@ async function discoverRepos(home, workspaceDir, deps = { run: runCommand, which
         continue;
       }
       const ownerRepo = extractOwnerRepo(content);
-      if (ownerRepo !== null) local.push(ownerRepo);
+      if (ownerRepo === null) continue;
+      const name = path9.basename(path9.dirname(path9.dirname(config)));
+      local.push({ ownerRepo, name });
     }
   }
   return mergeDiscovered(gh, local);
@@ -3298,12 +3312,14 @@ function RepoDiscoveryPicker({
   }
   function toggle(index) {
     const candidate = candidates[index];
-    if (candidate === void 0 || existingNames.has(candidate.repo)) return;
+    if (candidate === void 0 || existingNames.has(candidate.name)) return;
     const next = new Set(selectedRef.current);
     if (next.has(index)) {
       next.delete(index);
     } else {
-      const collides = [...next].some((i) => candidates[i]?.repo === candidate.repo);
+      const collides = [...next].some(
+        (i) => candidates[i]?.name === candidate.name
+      );
       if (collides) return;
       next.add(index);
     }
@@ -3316,18 +3332,19 @@ function RepoDiscoveryPicker({
       return;
     }
     if (key.downArrow)
-      moveCursor(Math.min(candidates.length - 1, cursorRef.current + 1));
+      moveCursor(Math.max(0, Math.min(candidates.length - 1, cursorRef.current + 1)));
     if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
     if (input === " ") toggle(cursorRef.current);
     if (key.return) {
-      const names = candidates.map((c, i) => selectedRef.current.has(i) ? c.repo : void 0).filter((n) => n !== void 0);
+      const names = candidates.map((c, i) => selectedRef.current.has(i) ? c.name : void 0).filter((n) => n !== void 0);
       onCommit(names);
     }
   });
   function renderRow(index) {
     const c = candidates[index];
-    const added = existingNames.has(c.repo);
+    const added = existingNames.has(c.name);
     const checked = selected.has(index);
+    const folderNote = c.name !== c.repo ? ` \u2192 ${c.name}` : "";
     return /* @__PURE__ */ jsxs16(Box16, { children: [
       /* @__PURE__ */ jsxs16(Text16, { color: cursor === index ? "cyan" : void 0, dimColor: added, children: [
         cursor === index ? "\u25B8 " : "  ",
@@ -3335,7 +3352,8 @@ function RepoDiscoveryPicker({
         " ",
         c.owner,
         "/",
-        c.repo
+        c.repo,
+        folderNote
       ] }),
       /* @__PURE__ */ jsxs16(Text16, { dimColor: true, children: [
         " ",

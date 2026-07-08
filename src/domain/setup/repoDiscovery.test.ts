@@ -44,12 +44,36 @@ describe("mergeDiscovered", () => {
   it("merges gh and local hits into tagged entries sorted by owner/repo", () => {
     const merged = mergeDiscovered(
       ["acme/widgets", "acme/api"],
-      ["acme/widgets", "zeta/tools"],
+      [
+        { ownerRepo: "acme/widgets", name: "widgets" },
+        { ownerRepo: "zeta/tools", name: "tools" },
+      ],
     );
     expect(merged).toEqual([
-      { owner: "acme", repo: "api", sources: ["gh"] },
-      { owner: "acme", repo: "widgets", sources: ["gh", "local"] },
-      { owner: "zeta", repo: "tools", sources: ["local"] },
+      { owner: "acme", repo: "api", name: "api", sources: ["gh"] },
+      { owner: "acme", repo: "widgets", name: "widgets", sources: ["gh", "local"] },
+      { owner: "zeta", repo: "tools", name: "tools", sources: ["local"] },
+    ]);
+  });
+
+  it("commits the local folder name when it differs from the repo slug", () => {
+    const merged = mergeDiscovered(
+      ["acme/widgets"],
+      [{ ownerRepo: "acme/widgets", name: "my-widgets-fork" }],
+    );
+    expect(merged).toEqual([
+      {
+        owner: "acme",
+        repo: "widgets",
+        name: "my-widgets-fork",
+        sources: ["gh", "local"],
+      },
+    ]);
+  });
+
+  it("falls back to the repo slug for a gh-only hit not on disk", () => {
+    expect(mergeDiscovered(["acme/api"], [])).toEqual([
+      { owner: "acme", repo: "api", name: "api", sources: ["gh"] },
     ]);
   });
 
@@ -58,9 +82,12 @@ describe("mergeDiscovered", () => {
   });
 
   it("dedupes repeated hits within one source", () => {
-    const merged = mergeDiscovered([], ["acme/widgets", "acme/widgets"]);
+    const merged = mergeDiscovered([], [
+      { ownerRepo: "acme/widgets", name: "widgets" },
+      { ownerRepo: "acme/widgets", name: "widgets" },
+    ]);
     expect(merged).toEqual([
-      { owner: "acme", repo: "widgets", sources: ["local"] },
+      { owner: "acme", repo: "widgets", name: "widgets", sources: ["local"] },
     ]);
   });
 });

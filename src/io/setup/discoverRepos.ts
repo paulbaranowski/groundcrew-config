@@ -11,6 +11,7 @@ import {
   mergeDiscovered,
   PRUNE_DIR_NAMES,
   type DiscoveredRepo,
+  type LocalHit,
 } from "../../domain/setup/repoDiscovery.ts";
 import { runCommand, which, type ExecRunner } from "./exec.ts";
 
@@ -99,7 +100,7 @@ export async function discoverRepos(
     if (!scanDirs.includes(expanded)) scanDirs.push(expanded);
   }
 
-  const local: string[] = [];
+  const local: LocalHit[] = [];
   for (const scanDir of scanDirs) {
     for (const config of findGitConfigs(scanDir)) {
       let content: string;
@@ -109,7 +110,12 @@ export async function discoverRepos(
         continue;
       }
       const ownerRepo = extractOwnerRepo(content);
-      if (ownerRepo !== null) local.push(ownerRepo);
+      if (ownerRepo === null) continue;
+      // config is <repoDir>/.git/config; the on-disk folder name is what
+      // groundcrew resolves under projectDir, and it may differ from the
+      // origin repo slug (a fork or a renamed clone).
+      const name = path.basename(path.dirname(path.dirname(config)));
+      local.push({ ownerRepo, name });
     }
   }
   return mergeDiscovered(gh, local);

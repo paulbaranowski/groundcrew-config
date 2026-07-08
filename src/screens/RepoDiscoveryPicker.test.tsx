@@ -4,9 +4,9 @@ import type { DiscoveredRepo } from "../domain/setup/repoDiscovery.ts";
 import { RepoDiscoveryPicker } from "./RepoDiscoveryPicker.tsx";
 
 const CANDIDATES: DiscoveredRepo[] = [
-  { owner: "acme", repo: "api", sources: ["gh"] },
-  { owner: "acme", repo: "widgets", sources: ["gh", "local"] },
-  { owner: "zeta", repo: "tools", sources: ["local"] },
+  { owner: "acme", repo: "api", name: "api", sources: ["gh"] },
+  { owner: "acme", repo: "widgets", name: "widgets", sources: ["gh", "local"] },
+  { owner: "zeta", repo: "tools", name: "tools", sources: ["local"] },
 ];
 
 describe("RepoDiscoveryPicker", () => {
@@ -83,8 +83,8 @@ describe("RepoDiscoveryPicker", () => {
     // Two rows share the folder name "api" (acme/api, other/api); commit keys
     // on folder name, so only one may be selected.
     const collidingCandidates: DiscoveredRepo[] = [
-      { owner: "acme", repo: "api", sources: ["gh"] },
-      { owner: "other", repo: "api", sources: ["local"] },
+      { owner: "acme", repo: "api", name: "api", sources: ["gh"] },
+      { owner: "other", repo: "api", name: "api", sources: ["local"] },
     ];
     const { stdin, lastFrame } = render(
       <RepoDiscoveryPicker
@@ -104,5 +104,35 @@ describe("RepoDiscoveryPicker", () => {
     expect(lastFrame()).not.toContain("[x] other/api");
     stdin.write("\r");
     await vi.waitFor(() => expect(onCommit).toHaveBeenCalledWith(["api"]));
+  });
+
+  it("commits the folder name and shows it when it differs from the repo slug", async () => {
+    const onCommit = vi.fn();
+    // A clone of acme/widgets living in a folder named "my-widgets-fork".
+    const renamed: DiscoveredRepo[] = [
+      {
+        owner: "acme",
+        repo: "widgets",
+        name: "my-widgets-fork",
+        sources: ["local"],
+      },
+    ];
+    const { stdin, lastFrame } = render(
+      <RepoDiscoveryPicker
+        candidates={renamed}
+        existingNames={new Set()}
+        onCommit={onCommit}
+        onCancel={() => {}}
+      />,
+    );
+    // The row surfaces the on-disk folder name so the user sees what commits.
+    await vi.waitFor(() =>
+      expect(lastFrame()).toContain("acme/widgets → my-widgets-fork"),
+    );
+    stdin.write(" ");
+    stdin.write("\r");
+    await vi.waitFor(() =>
+      expect(onCommit).toHaveBeenCalledWith(["my-widgets-fork"]),
+    );
   });
 });

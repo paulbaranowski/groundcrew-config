@@ -93,8 +93,30 @@ describe("discoverRepos", () => {
       which: () => "/usr/local/bin/gh",
     });
     expect(repos).toEqual([
-      { owner: "acme", repo: "widgets", sources: ["gh", "local"] },
-      { owner: "zeta", repo: "tools", sources: ["local"] },
+      { owner: "acme", repo: "widgets", name: "widgets", sources: ["gh", "local"] },
+      { owner: "zeta", repo: "tools", name: "tools", sources: ["local"] },
+    ]);
+  });
+
+  it("commits the on-disk folder name, not the origin repo slug", async () => {
+    // Clone of acme/widgets living in a folder named "my-widgets-fork".
+    const home = mkdtempSync(path.join(tmpdir(), "disc-home-"));
+    makeRepo(
+      path.join(home, "dev"),
+      "my-widgets-fork",
+      "git@github.com:acme/widgets.git",
+    );
+    const repos = await discoverRepos(home, undefined, {
+      run: () => Promise.resolve({ code: 1, stdout: "", stderr: "" }),
+      which: () => null,
+    });
+    expect(repos).toEqual([
+      {
+        owner: "acme",
+        repo: "widgets",
+        name: "my-widgets-fork",
+        sources: ["local"],
+      },
     ]);
   });
 
@@ -105,6 +127,8 @@ describe("discoverRepos", () => {
       run: () => Promise.resolve({ code: 1, stdout: "", stderr: "" }),
       which: () => null,
     });
-    expect(repos).toEqual([{ owner: "a", repo: "app", sources: ["local"] }]);
+    expect(repos).toEqual([
+      { owner: "a", repo: "app", name: "app", sources: ["local"] },
+    ]);
   });
 });

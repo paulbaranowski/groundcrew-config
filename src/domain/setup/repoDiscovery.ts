@@ -5,7 +5,20 @@
 export interface DiscoveredRepo {
   owner: string;
   repo: string;
+  /**
+   * The name committed into workspace.knownRepositories: the on-disk folder
+   * name for a locally-cloned hit (which may differ from `repo` for a fork or
+   * a renamed clone), falling back to `repo` for a gh-only hit that is not on
+   * disk. groundcrew resolves knownRepositories by this folder name.
+   */
+  name: string;
   sources: Array<"gh" | "local">;
+}
+
+/** A local clone hit: its origin slug (for dedup) plus its on-disk folder name. */
+export interface LocalHit {
+  ownerRepo: string;
+  name: string;
 }
 
 /** Common clone roots scanned under $HOME, plus the configured workspace dir. */
@@ -57,28 +70,49 @@ export function extractOwnerRepo(gitConfigContent: string): string | null {
   return null;
 }
 
-/** Merge gh + local "owner/repo" hits: dedup, tag sources, sort alphabetically. */
+/**
+ * Merge gh "owner/repo" slugs with local clone hits: dedup by slug, tag
+ * sources, sort alphabetically. The committed `name` is the local folder name
+ * when the repo was found on disk (authoritative - it is what exists under
+ * projectDir), falling back to the repo slug for a gh-only hit.
+ */
 export function mergeDiscovered(
   gh: readonly string[],
-  local: readonly string[],
+  local: readonly LocalHit[],
 ): DiscoveredRepo[] {
-  const merged = new Map<string, Set<"gh" | "local">>();
-  const add = (key: string, source: "gh" | "local"): void => {
-    if (!key.includes("/")) return;
-    const sources = merged.get(key) ?? new Set<"gh" | "local">();
-    sources.add(source);
-    merged.set(key, sources);
+  interface Entry {
+    sources: Set<"gh" | "local">;
+    localName?: string;
+  }
+  const merged = new Map<string, Entry>();
+  const ensure = (key: string): Entry => {
+    let entry = merged.get(key);
+    if (entry === undefined) {
+      entry = { sources: new Set<"gh" | "local">() };
+      merged.set(key, entry);
+    }
+    return entry;
   };
-  for (const key of gh) add(key, "gh");
-  for (const key of local) add(key, "local");
+  for (const key of gh) {
+    if (!key.includes("/")) continue;
+    ensure(key).sources.add("gh");
+  }
+  for (const hit of local) {
+    if (!hit.ownerRepo.includes("/")) continue;
+    const entry = ensure(hit.ownerRepo);
+    entry.sources.add("local");
+    entry.localName = hit.name;
+  }
 
   return [...merged.keys()].sort().map((key) => {
     const slash = key.indexOf("/");
-    const sources = merged.get(key)!;
+    const repo = key.slice(slash + 1);
+    const entry = merged.get(key)!;
     return {
       owner: key.slice(0, slash),
-      repo: key.slice(slash + 1),
-      sources: (["gh", "local"] as const).filter((s) => sources.has(s)),
+      repo,
+      name: entry.localName ?? repo,
+      sources: (["gh", "local"] as const).filter((s) => entry.sources.has(s)),
     };
   });
 }

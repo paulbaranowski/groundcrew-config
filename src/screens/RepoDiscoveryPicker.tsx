@@ -39,17 +39,18 @@ export function RepoDiscoveryPicker({
 
   // Selection mirrors ListField's cursorRef trick: a space-then-enter burst in
   // one input tick must see the toggle, so the handler reads refs, not state.
+  // Uniqueness is by committed folder name (`name`), not owner/repo: two hits
+  // that land in the same knownRepositories entry must not both be selectable.
   function toggle(index: number): void {
     const candidate = candidates[index];
-    if (candidate === undefined || existingNames.has(candidate.repo)) return;
+    if (candidate === undefined || existingNames.has(candidate.name)) return;
     const next = new Set(selectedRef.current);
     if (next.has(index)) {
       next.delete(index);
     } else {
-      // Repos commit by folder name alone, so two candidates that differ only
-      // by owner (acme/api, other/api) would collapse to one entry. Block the
-      // second selection instead of silently deduping it at commit.
-      const collides = [...next].some((i) => candidates[i]?.repo === candidate.repo);
+      const collides = [...next].some(
+        (i) => candidates[i]?.name === candidate.name,
+      );
       if (collides) return;
       next.add(index);
     }
@@ -63,12 +64,14 @@ export function RepoDiscoveryPicker({
       return;
     }
     if (key.downArrow)
-      moveCursor(Math.min(candidates.length - 1, cursorRef.current + 1));
+      // Floor at 0 so an empty candidate list (length 0 → min(-1, …)) can't
+      // drive the cursor negative.
+      moveCursor(Math.max(0, Math.min(candidates.length - 1, cursorRef.current + 1)));
     if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
     if (input === " ") toggle(cursorRef.current);
     if (key.return) {
       const names = candidates
-        .map((c, i) => (selectedRef.current.has(i) ? c.repo : undefined))
+        .map((c, i) => (selectedRef.current.has(i) ? c.name : undefined))
         .filter((n): n is string => n !== undefined);
       onCommit(names);
     }
@@ -76,13 +79,17 @@ export function RepoDiscoveryPicker({
 
   function renderRow(index: number) {
     const c = candidates[index]!;
-    const added = existingNames.has(c.repo);
+    const added = existingNames.has(c.name);
     const checked = selected.has(index);
+    // Surface the on-disk folder name when it differs from the repo slug, since
+    // that (not owner/repo) is what gets committed.
+    const folderNote = c.name !== c.repo ? ` → ${c.name}` : "";
     return (
       <Box key={`${c.owner}/${c.repo}`}>
         <Text color={cursor === index ? "cyan" : undefined} dimColor={added}>
           {cursor === index ? "▸ " : "  "}
           {added ? "[·]" : checked ? "[x]" : "[ ]"} {c.owner}/{c.repo}
+          {folderNote}
         </Text>
         <Text dimColor>
           {" "}
