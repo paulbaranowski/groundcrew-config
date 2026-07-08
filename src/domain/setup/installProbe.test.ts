@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   GROUNDCREW_PACKAGE,
   parseBrewVersions,
+  parseCrewVersion,
   parseNpmLs,
 } from "./installProbe.ts";
 
@@ -72,4 +73,25 @@ describe("parseBrewVersions", () => {
   it("reports not installed for empty output", () => {
     expect(parseBrewVersions("").installed).toBe(false);
   });
+});
+
+describe("parseCrewVersion", () => {
+  it("parses a bare version line", () => {
+    expect(parseCrewVersion("4.45.2\n")).toBe("4.45.2");
+  });
+
+  it("extracts the version from surrounding text", () => {
+    expect(parseCrewVersion("crew v4.45.2 (build abc)")).toBe("4.45.2");
+  });
+
+  it("keeps a prerelease/suffix on the version token", () => {
+    expect(parseCrewVersion("4.45.2-beta.1")).toBe("4.45.2-beta.1");
+  });
+
+  it.each(["", "no version here", "v", "42"])(
+    "returns null when there is no dotted-numeric token %j",
+    (stdout) => {
+      expect(parseCrewVersion(stdout)).toBeNull();
+    },
+  );
 });

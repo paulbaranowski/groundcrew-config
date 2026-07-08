@@ -3,6 +3,7 @@ import {
   SAFEHOUSE_FORMULA_NAME,
   SAFEHOUSE_FORMULA_REF,
   parseBrewVersions,
+  parseCrewVersion,
   parseNpmLs,
 } from "../../domain/setup/installProbe.ts";
 import {
@@ -39,6 +40,7 @@ export function defaultInstallDeps(): InstallDeps {
 
 const PROBE_TIMEOUT_MS = 30_000;
 const BREW_PROBE_TIMEOUT_MS = 15_000;
+const CREW_VERSION_TIMEOUT_MS = 15_000;
 const INSTALL_TIMEOUT_MS = 600_000;
 
 function failureDetails(result: ExecResult, fallback: string): string {
@@ -51,6 +53,11 @@ export async function probeGroundcrew(
   deps: InstallDeps = defaultInstallDeps(),
 ): Promise<InstallReport> {
   if (deps.which("npm") === null) {
+    // No npm to probe or install with - but a `crew` already on PATH means
+    // groundcrew is installed and usable regardless, so honor that before
+    // falling back to the missing-toolchain guidance.
+    const viaCrew = await probeCrewOnPath(deps);
+    if (viaCrew.action === "already-installed") return viaCrew;
     return {
       action: "failed",
       version: null,
@@ -71,9 +78,37 @@ export async function probeGroundcrew(
   // npm ls exits non-zero when the package is missing but still writes valid
   // JSON, so parse stdout regardless of exit code.
   const probe = parseNpmLs(result.stdout, GROUNDCREW_PACKAGE);
-  return probe.installed
-    ? { action: "already-installed", version: probe.version, details: "" }
-    : { action: "missing", version: null, details: "" };
+  if (probe.installed) {
+    return { action: "already-installed", version: probe.version, details: "" };
+  }
+  // npm ls -g only sees the active npm's global tree, whose prefix can differ
+  // from where groundcrew actually lives (Homebrew node vs nvm). Before
+  // concluding "missing", fall back to the PATH-authoritative signal - whether
+  // `crew` is runnable - so this probe stops disagreeing with crewDoctor.
+  return probeCrewOnPath(deps);
+}
+
+// PATH-authoritative fallback for probeGroundcrew: `crew` on PATH means
+// groundcrew is installed and usable regardless of which npm is active. Mirrors
+// crewDoctor's trust in which("crew"). Absent => genuinely missing.
+async function probeCrewOnPath(deps: InstallDeps): Promise<InstallReport> {
+  if (deps.which("crew") === null) {
+    return { action: "missing", version: null, details: "" };
+  }
+  return {
+    action: "already-installed",
+    version: await crewVersion(deps),
+    details: "",
+  };
+}
+
+// Best-effort version for the PATH fallback: `crew --version` prints a bare
+// "4.45.2" and exits 0. A non-zero exit or spawn failure leaves version null -
+// InstallReport tolerates it and the Setup row still reads installed.
+async function crewVersion(deps: InstallDeps): Promise<string | null> {
+  const result = await deps.run("crew", ["--version"], CREW_VERSION_TIMEOUT_MS);
+  if (result.error !== undefined || result.code !== 0) return null;
+  return parseCrewVersion(result.stdout);
 }
 
 export async function installGroundcrew(
@@ -111,6 +146,10 @@ export async function installGroundcrew(
   return { action: "installed", version: after.version, details: "" };
 }
 
+// Safehouse install/probe is brew-only and macOS-only: every call site gates on
+// host.isSafehouseSupported first (doctor.ts, SetupScreen.tsx), so these never
+// run on Linux. The Linux sandbox story is srt (see domain/io setup/host.ts),
+// which ships with groundcrew and needs no formula install here.
 export async function probeSafehouseFormula(
   deps: InstallDeps = defaultInstallDeps(),
 ): Promise<InstallReport> {

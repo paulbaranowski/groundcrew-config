@@ -43,6 +43,7 @@ describe("isHealthy", () => {
         groundcrew: installedGroundcrew,
         clearance: healthyClearance,
         safehouse: healthySafehouse,
+        srt: null,
       }),
     ).toBe(true);
   });
@@ -54,6 +55,7 @@ describe("isHealthy", () => {
         groundcrew: { action: "missing", version: null, details: "" },
         clearance: healthyClearance,
         safehouse: healthySafehouse,
+        srt: null,
       }),
     ).toBe(false);
   });
@@ -65,6 +67,7 @@ describe("isHealthy", () => {
         groundcrew: installedGroundcrew,
         clearance: { ...healthyClearance, personalFileHasClaudeHosts: false },
         safehouse: healthySafehouse,
+        srt: null,
       }),
     ).toBe(false);
   });
@@ -82,6 +85,7 @@ describe("isHealthy", () => {
           daemonAgeSeconds: null,
         },
         safehouse: healthySafehouse,
+        srt: null,
       }),
     ).toBe(true);
   });
@@ -93,6 +97,7 @@ describe("isHealthy", () => {
         groundcrew: installedGroundcrew,
         clearance: healthyClearance,
         safehouse: null,
+        srt: null,
       }),
     ).toBe(true);
   });
@@ -104,8 +109,21 @@ describe("isHealthy", () => {
         groundcrew: installedGroundcrew,
         clearance: healthyClearance,
         safehouse: { ...healthySafehouse, sidecarHasFunctions: false },
+        srt: null,
       }),
     ).toBe(false);
+  });
+
+  it("stays healthy on Linux when srt deps are missing (informational only)", () => {
+    expect(
+      isHealthy({
+        platform: "linux",
+        groundcrew: installedGroundcrew,
+        clearance: healthyClearance,
+        safehouse: null,
+        srt: { supported: true, ready: false, missing: ["bubblewrap"] },
+      }),
+    ).toBe(true);
   });
 });
 
@@ -140,6 +158,40 @@ describe("collectDoctorReport", () => {
     expect(report.safehouse).not.toBeNull();
     expect(report.safehouse!.brewFormulaInstalled).toBe(false);
   });
+
+  it("reports srt (not safehouse) on Linux with missing deps listed", async () => {
+    const report = await collectDoctorReport(emptyHomeDeps("linux"));
+    expect(report.safehouse).toBeNull();
+    expect(report.srt).not.toBeNull();
+    expect(report.srt!.supported).toBe(true);
+    expect(report.srt!.ready).toBe(false);
+    expect(report.srt!.missing).toEqual(["bubblewrap", "socat", "ripgrep (rg)"]);
+    // srt readiness must NOT gate health (LI2): missing deps alone stay non-fatal.
+    // (groundcrew is also missing here, so healthy is false for that reason;
+    // the srt-specific assertion is that missing deps did not ADD a gate.)
+  });
+
+  it("has srt ready on a Linux host with the deps on PATH", async () => {
+    const base = emptyHomeDeps("linux");
+    const deps: DoctorDeps = {
+      ...base,
+      installDeps: {
+        ...base.installDeps,
+        which: (cmd) =>
+          ["npm", "brew", "bwrap", "socat", "rg"].includes(cmd)
+            ? `/bin/${cmd}`
+            : null,
+      },
+    };
+    const report = await collectDoctorReport(deps);
+    expect(report.srt).toEqual({ supported: true, ready: true, missing: [] });
+  });
+
+  it("leaves srt null on macOS (safehouse is the macOS story)", async () => {
+    const report = await collectDoctorReport(emptyHomeDeps("darwin"));
+    expect(report.srt).toBeNull();
+    expect(report.safehouse).not.toBeNull();
+  });
 });
 
 describe("formatDoctorReport", () => {
@@ -152,6 +204,7 @@ describe("formatDoctorReport", () => {
       binaryAvailable: false,
       binaryPath: null,
     },
+    srt: null,
     healthy: false,
   };
 
@@ -168,9 +221,24 @@ describe("formatDoctorReport", () => {
       ...report,
       platform: "linux",
       safehouse: null,
+      srt: { supported: true, ready: true, missing: [] },
       healthy: true,
     });
-    expect(text).toContain("not applicable");
+    expect(text).toContain("srt sandbox (Linux)");
+  });
+
+  it("renders an srt row on Linux instead of the safehouse rows", () => {
+    const text = formatDoctorReport({
+      platform: "linux",
+      groundcrew: installedGroundcrew,
+      clearance: { ...healthyClearance, daemonPid: null, daemonAgeSeconds: null },
+      safehouse: null,
+      srt: { supported: true, ready: false, missing: ["bubblewrap", "socat"] },
+      healthy: true,
+    });
+    expect(text).toContain("srt sandbox (Linux)");
+    expect(text).toContain("apt install bubblewrap socat ripgrep");
+    expect(text).not.toContain("safehouse (brew formula)");
   });
 });
 

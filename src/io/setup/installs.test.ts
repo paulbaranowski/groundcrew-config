@@ -16,10 +16,10 @@ interface Call {
 
 function fakeDeps(
   respond: (cmd: string, args: string[]) => ExecResult,
-  options: { hasNpm?: boolean; hasBrew?: boolean } = {},
+  options: { hasNpm?: boolean; hasBrew?: boolean; hasCrew?: boolean } = {},
 ): { deps: InstallDeps; calls: Call[] } {
   const calls: Call[] = [];
-  const { hasNpm = true, hasBrew = true } = options;
+  const { hasNpm = true, hasBrew = true, hasCrew = false } = options;
   return {
     calls,
     deps: {
@@ -28,7 +28,9 @@ function fakeDeps(
         return Promise.resolve(respond(cmd, args));
       },
       which: (cmd) =>
-        (cmd === "npm" && hasNpm) || (cmd === "brew" && hasBrew)
+        (cmd === "npm" && hasNpm) ||
+        (cmd === "brew" && hasBrew) ||
+        (cmd === "crew" && hasCrew)
           ? `/usr/local/bin/${cmd}`
           : null,
     },
@@ -51,26 +53,103 @@ const missingNpmLs: ExecResult = {
 };
 
 describe("probeGroundcrew", () => {
-  it("fails with guidance when npm is not on PATH", async () => {
-    const { deps, calls } = fakeDeps(() => installedNpmLs, { hasNpm: false });
+  it("fails with guidance when npm is not on PATH and crew is absent", async () => {
+    const { deps, calls } = fakeDeps(() => installedNpmLs, {
+      hasNpm: false,
+      hasCrew: false,
+    });
     const report = await probeGroundcrew(deps);
     expect(report.action).toBe("failed");
     expect(report.details).toContain("npm not found");
     expect(calls).toHaveLength(0);
   });
 
-  it("reports already-installed with the version", async () => {
-    const { deps } = fakeDeps(() => installedNpmLs);
+  it("reads already-installed via crew even when npm is absent from PATH", async () => {
+    // npm ships with Node, so npm-absent-while-crew-runnable is a corner case,
+    // but a usable `crew` still means groundcrew is installed - not "failed".
+    const { deps } = fakeDeps(
+      (_cmd, args) =>
+        args[0] === "--version"
+          ? { code: 0, stdout: "4.45.2", stderr: "" }
+          : installedNpmLs,
+      { hasNpm: false, hasCrew: true },
+    );
+    expect(await probeGroundcrew(deps)).toEqual({
+      action: "already-installed",
+      version: "4.45.2",
+      details: "",
+    });
+  });
+
+  it("reports already-installed with the version, without probing crew", async () => {
+    const { deps, calls } = fakeDeps(() => installedNpmLs, { hasCrew: true });
     expect(await probeGroundcrew(deps)).toEqual({
       action: "already-installed",
       version: "4.43.2",
       details: "",
     });
+    // The npm ls hit is authoritative; the crew fallback must not spawn.
+    expect(calls.map((c) => c.cmd)).toEqual(["npm"]);
   });
 
-  it("reports missing despite npm ls exiting non-zero", async () => {
-    const { deps } = fakeDeps(() => missingNpmLs);
+  it("reports missing when npm ls is blind AND crew is absent from PATH", async () => {
+    const { deps } = fakeDeps(() => missingNpmLs, { hasCrew: false });
     expect((await probeGroundcrew(deps)).action).toBe("missing");
+  });
+
+  it("falls back to already-installed via which(crew) when npm ls is blind", async () => {
+    // npm ls -g under the active npm can't see a groundcrew installed under a
+    // different node prefix, but `crew` is on PATH and `crew --version` answers.
+    const { deps, calls } = fakeDeps(
+      (_cmd, args) =>
+        args[0] === "--version"
+          ? { code: 0, stdout: "4.45.2\n", stderr: "" }
+          : missingNpmLs,
+      { hasCrew: true },
+    );
+    expect(await probeGroundcrew(deps)).toEqual({
+      action: "already-installed",
+      version: "4.45.2",
+      details: "",
+    });
+    expect(calls.map((c) => c.cmd)).toEqual(["npm", "crew"]);
+  });
+
+  it("falls back with a null version when crew is on PATH but crew --version can't spawn", async () => {
+    const { deps } = fakeDeps(
+      (_cmd, args) =>
+        args[0] === "--version"
+          ? {
+              code: -1,
+              stdout: "",
+              stderr: "",
+              error: "timed out after 15000ms",
+            }
+          : missingNpmLs,
+      { hasCrew: true },
+    );
+    expect(await probeGroundcrew(deps)).toEqual({
+      action: "already-installed",
+      version: null,
+      details: "",
+    });
+  });
+
+  it("falls back with a null version when crew --version exits non-zero", async () => {
+    // A non-zero exit (crew present but the version command errored) still means
+    // groundcrew is installed; only the version is unknown.
+    const { deps } = fakeDeps(
+      (_cmd, args) =>
+        args[0] === "--version"
+          ? { code: 1, stdout: "4.45.2", stderr: "boom" }
+          : missingNpmLs,
+      { hasCrew: true },
+    );
+    expect(await probeGroundcrew(deps)).toEqual({
+      action: "already-installed",
+      version: null,
+      details: "",
+    });
   });
 
   it("reports failed, not missing, when the probe itself times out", async () => {
@@ -93,6 +172,21 @@ describe("installGroundcrew", () => {
     expect(report.action).toBe("already-installed");
     // Only the probe ran; no `npm install` call was made.
     expect(calls.map((c) => c.args[0])).toEqual(["ls"]);
+  });
+
+  it("short-circuits without npm install when crew is on PATH but npm ls is blind", async () => {
+    const { deps, calls } = fakeDeps(
+      (_cmd, args) =>
+        args[0] === "--version"
+          ? { code: 0, stdout: "4.45.2", stderr: "" }
+          : missingNpmLs,
+      { hasCrew: true },
+    );
+    const report = await installGroundcrew(deps);
+    expect(report.action).toBe("already-installed");
+    expect(report.version).toBe("4.45.2");
+    // The PATH fallback proved groundcrew usable; no `npm install -g` ran.
+    expect(calls.map((c) => c.args[0])).not.toContain("install");
   });
 
   it("installs when missing, then re-probes for the new version", async () => {
