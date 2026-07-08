@@ -43,8 +43,16 @@ export function RepoDiscoveryPicker({
     const candidate = candidates[index];
     if (candidate === undefined || existingNames.has(candidate.repo)) return;
     const next = new Set(selectedRef.current);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
+    if (next.has(index)) {
+      next.delete(index);
+    } else {
+      // Repos commit by folder name alone, so two candidates that differ only
+      // by owner (acme/api, other/api) would collapse to one entry. Block the
+      // second selection instead of silently deduping it at commit.
+      const collides = [...next].some((i) => candidates[i]?.repo === candidate.repo);
+      if (collides) return;
+      next.add(index);
+    }
     selectedRef.current = next;
     setSelected(next);
   }

@@ -77,4 +77,32 @@ describe("RepoDiscoveryPicker", () => {
     stdin.write("\x1b");
     await vi.waitFor(() => expect(onCancel).toHaveBeenCalled());
   });
+
+  it("blocks selecting a second candidate with an already-selected folder name", async () => {
+    const onCommit = vi.fn();
+    // Two rows share the folder name "api" (acme/api, other/api); commit keys
+    // on folder name, so only one may be selected.
+    const collidingCandidates: DiscoveredRepo[] = [
+      { owner: "acme", repo: "api", sources: ["gh"] },
+      { owner: "other", repo: "api", sources: ["local"] },
+    ];
+    const { stdin, lastFrame } = render(
+      <RepoDiscoveryPicker
+        candidates={collidingCandidates}
+        existingNames={new Set()}
+        onCommit={onCommit}
+        onCancel={() => {}}
+      />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("acme/api"));
+    stdin.write(" "); // select acme/api
+    await vi.waitFor(() => expect(lastFrame()).toContain("[x] acme/api"));
+    stdin.write("\x1b[B"); // move to other/api
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] other/api"));
+    stdin.write(" "); // blocked: same folder name is already selected
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] other/api"));
+    expect(lastFrame()).not.toContain("[x] other/api");
+    stdin.write("\r");
+    await vi.waitFor(() => expect(onCommit).toHaveBeenCalledWith(["api"]));
+  });
 });

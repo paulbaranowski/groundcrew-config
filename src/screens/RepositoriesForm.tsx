@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { homedir } from "node:os";
 import { Box, Text, useInput } from "ink";
 import { ListField, type ListItem } from "../components/ListField.tsx";
 import { modifiedByKey } from "../domain/modified.ts";
@@ -13,7 +12,7 @@ import {
 import { setByPath } from "../domain/draftPath.ts";
 import type { ConfigDraft } from "../domain/types.ts";
 import type { DiscoveredRepo } from "../domain/setup/repoDiscovery.ts";
-import { discoverRepos } from "../io/setup/discoverRepos.ts";
+import { discoverReposDefault } from "../io/setup/discoverRepos.ts";
 import { RepoSubForm } from "./RepoSubForm.tsx";
 import { RepoDiscoveryPicker } from "./RepoDiscoveryPicker.tsx";
 import { DeleteGuard } from "./DeleteGuard.tsx";
@@ -58,8 +57,7 @@ export function RepositoriesForm({
     phaseRef.current = next.phase;
     setDiscoveryState(next);
   }
-  const runDiscovery =
-    discover ?? ((workspaceDir) => discoverRepos(homedir(), workspaceDir));
+  const runDiscovery = discover ?? discoverReposDefault;
   // Monotonic id of the in-flight discovery. Esc during loading bumps it so a
   // late-resolving scan can't pop the picker after the user backed out.
   const discoveryReq = useRef(0);
@@ -154,22 +152,18 @@ export function RepositoriesForm({
         candidates={discovery.candidates}
         existingNames={new Set(entries.map((e) => e.name))}
         onCommit={(names) => {
-          // Discovery keys candidates on owner/repo, but knownRepositories keys
-          // on folder name alone - so two picked rows (acme/widgets,
-          // fork/widgets) collapse to one entry. Dedupe by name against the
-          // existing entries and within the batch so a commit can never append
-          // a duplicate that would immediately flag a duplicate-name error.
-          const seen = new Set(entries.map((e) => e.name));
-          const additions: RepoEntry[] = [];
-          for (const name of names) {
-            if (seen.has(name)) continue;
-            seen.add(name);
-            additions.push({ name, projectDirOverride: undefined });
-          }
-          if (additions.length > 0) {
+          if (names.length > 0) {
+            // The picker guarantees the names are unique by folder name and
+            // disjoint from existing entries, so we can append directly.
             // Existing entries (with their per-repo settings) pass through
             // untouched; denormalizeRepos keeps the additions as bare strings.
-            commitEntries([...entries, ...additions]);
+            commitEntries([
+              ...entries,
+              ...names.map((name) => ({
+                name,
+                projectDirOverride: undefined,
+              })),
+            ]);
           }
           setDiscovery({ phase: "idle" });
         }}

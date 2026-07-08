@@ -215,19 +215,22 @@ test("picking two owners of the same folder name commits a single entry", async 
       discover={discover}
     />,
   );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
   stdin.write("f");
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("Discovered repositories"),
   );
   stdin.write(" "); // select acme/widgets
   await vi.waitFor(() => expect(lastFrame()).toContain("[x] acme/widgets"));
-  stdin.write("\x1b[B"); // down to fork/widgets
+  stdin.write("\x1b[B"); // down to fork/widgets (same folder name)
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] fork/widgets"));
-  stdin.write(" "); // select fork/widgets too
-  await vi.waitFor(() => expect(lastFrame()).toContain("[x] fork/widgets"));
-  stdin.write("\r"); // commit both
+  stdin.write(" "); // the picker blocks selecting a colliding folder name
+  // Give the (no-op) keystroke a tick; fork/widgets must stay unchecked.
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] fork/widgets"));
+  expect(lastFrame()).not.toContain("[x] fork/widgets");
+  stdin.write("\r"); // commit
   await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
-  // Both rows share the folder name "widgets"; only one entry is committed.
+  // Only the first owner's row was selectable, so one "widgets" entry lands.
   expect(onChange.mock.calls[0]![0].workspace.knownRepositories).toEqual([
     "widgets",
   ]);
@@ -250,6 +253,7 @@ test("esc from the picker returns to the list without changes", async () => {
       discover={discover}
     />,
   );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
   stdin.write("f");
   await vi.waitFor(() => expect(lastFrame()).toContain("Discovered"));
   stdin.write("\x1b");
@@ -278,6 +282,7 @@ test("esc during discovery loading returns to the list and ignores a late result
       discover={discover}
     />,
   );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
   stdin.write("f");
   await vi.waitFor(() => expect(lastFrame()).toContain("discovering repos"));
   stdin.write("\x1b"); // cancel the in-flight scan

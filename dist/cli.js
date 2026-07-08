@@ -2716,7 +2716,6 @@ function QuitGuard({ onSaveQuit, onDiscard, onCancel }) {
 
 // src/screens/RepositoriesForm.tsx
 import { useRef as useRef10, useState as useState14 } from "react";
-import { homedir as homedir3 } from "os";
 import { Box as Box18, Text as Text18, useInput as useInput16 } from "ink";
 
 // src/components/ListField.tsx
@@ -2873,6 +2872,7 @@ function repoErrors(entries) {
 
 // src/io/setup/discoverRepos.ts
 import { readdirSync as readdirSync2, readFileSync as readFileSync4 } from "fs";
+import { homedir as homedir3 } from "os";
 import path9 from "path";
 
 // src/domain/setup/repoDiscovery.ts
@@ -3002,6 +3002,9 @@ async function discoverRepos(home, workspaceDir, deps = { run: runCommand, which
     }
   }
   return mergeDiscovered(gh, local);
+}
+function discoverReposDefault(workspaceDir) {
+  return discoverRepos(homedir3(), workspaceDir);
 }
 
 // src/screens/RepoSubForm.tsx
@@ -3191,8 +3194,13 @@ function RepoDiscoveryPicker({
     const candidate = candidates[index];
     if (candidate === void 0 || existingNames.has(candidate.repo)) return;
     const next = new Set(selectedRef.current);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
+    if (next.has(index)) {
+      next.delete(index);
+    } else {
+      const collides = [...next].some((i) => candidates[i]?.repo === candidate.repo);
+      if (collides) return;
+      next.add(index);
+    }
     selectedRef.current = next;
     setSelected(next);
   }
@@ -3286,7 +3294,7 @@ function RepositoriesForm({
     phaseRef.current = next.phase;
     setDiscoveryState(next);
   }
-  const runDiscovery = discover ?? ((workspaceDir) => discoverRepos(homedir3(), workspaceDir));
+  const runDiscovery = discover ?? discoverReposDefault;
   const discoveryReq = useRef10(0);
   const entries = normalizeRepos(draft.workspace.knownRepositories);
   const baseEntries = normalizeRepos(baseline.workspace.knownRepositories);
@@ -3365,15 +3373,14 @@ function RepositoriesForm({
         candidates: discovery.candidates,
         existingNames: new Set(entries.map((e) => e.name)),
         onCommit: (names) => {
-          const seen = new Set(entries.map((e) => e.name));
-          const additions = [];
-          for (const name of names) {
-            if (seen.has(name)) continue;
-            seen.add(name);
-            additions.push({ name, projectDirOverride: void 0 });
-          }
-          if (additions.length > 0) {
-            commitEntries([...entries, ...additions]);
+          if (names.length > 0) {
+            commitEntries([
+              ...entries,
+              ...names.map((name) => ({
+                name,
+                projectDirOverride: void 0
+              }))
+            ]);
           }
           setDiscovery({ phase: "idle" });
         },

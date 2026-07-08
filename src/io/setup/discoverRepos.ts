@@ -2,6 +2,7 @@
 // local clone scan, merged into the picker's candidate list. Failures here
 // are never errors - they just contribute nothing.
 import { readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import {
   DEFAULT_SCAN_ROOTS,
@@ -112,4 +113,15 @@ export async function discoverRepos(
     }
   }
   return mergeDiscovered(gh, local);
+}
+
+/**
+ * Default wiring for the Repositories screen: discovery rooted at the real
+ * `$HOME`. Kept here so the process effect (`homedir()`) stays in the io layer
+ * and the screen imports an already-wired function.
+ */
+export function discoverReposDefault(
+  workspaceDir: string | undefined,
+): Promise<DiscoveredRepo[]> {
+  return discoverRepos(homedir(), workspaceDir);
 }
