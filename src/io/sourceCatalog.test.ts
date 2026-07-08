@@ -56,6 +56,46 @@ test("joins discovered entries with their manifests", async () => {
   });
 });
 
+test("resolves a per-OS install object to the current platform, with a default fallback", async () => {
+  const perOs = {
+    ...jiraManifest,
+    prerequisites: [
+      {
+        bin: "jira",
+        install: { darwin: "brew install jira-cli", linux: "go install jira" },
+        setup: "jira init",
+      },
+      { bin: "jq", install: { default: "install jq somehow" } },
+    ],
+  };
+  const catalog = await catalogFromModule({
+    listTaskSources: async () => [jiraEntry],
+    getTaskSourceManifest: () => perOs,
+  });
+  const prereqs = catalog[0]?.manifest?.prerequisites;
+  const expectedJira =
+    process.platform === "linux"
+      ? "go install jira"
+      : process.platform === "darwin"
+        ? "brew install jira-cli"
+        : undefined;
+  expect(prereqs?.[0]?.install).toBe(expectedJira);
+  // No entry for the current platform falls back to `default`.
+  expect(prereqs?.[1]?.install).toBe("install jq somehow");
+});
+
+test("drops an install with neither a current-platform entry nor a default", async () => {
+  const noMatch = {
+    ...jiraManifest,
+    prerequisites: [{ bin: "jira", install: { freebsd: "pkg install jira" } }],
+  };
+  const catalog = await catalogFromModule({
+    listTaskSources: async () => [jiraEntry],
+    getTaskSourceManifest: () => noMatch,
+  });
+  expect(catalog[0]?.manifest?.prerequisites[0]?.install).toBeUndefined();
+});
+
 test("returns [] when the catalog exports are missing (older groundcrew)", async () => {
   expect(await catalogFromModule({})).toEqual([]);
   expect(await catalogFromModule({ listTaskSources: "not a fn" })).toEqual([]);

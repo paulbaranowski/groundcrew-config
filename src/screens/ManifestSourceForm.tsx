@@ -4,8 +4,9 @@ import { valuesEqual } from "../domain/diff.ts";
 import {
   isKindEnabled,
   readKindEnv,
+  readKindEnvWithDefaults,
   setKindEnabled,
-  writeKindEnv,
+  writeKindEnvAgainstDefaults,
   type CatalogSource,
 } from "../domain/manifestSources.ts";
 import type { ConfigDraft } from "../domain/types.ts";
@@ -47,6 +48,9 @@ export function ManifestSourceForm({
 }: Props) {
   const kind = source.name;
   const manifest = source.manifest;
+  // The manifest's default env, seeded into the editor and subtracted on save so
+  // an unchanged pre-fill writes nothing (groundcrew merges these at runtime).
+  const defaultsRecord = manifest?.env ?? {};
   const enabled = isKindEnabled(draft, kind);
   const [focus, setFocus] = useState(0);
   const [editingEnv, setEditingEnv] = useState(false);
@@ -103,9 +107,11 @@ export function ManifestSourceForm({
   if (editingEnv) {
     return (
       <ShellEnvEditor
-        env={readKindEnv(draft, kind)}
-        baselineEnv={readKindEnv(baseline, kind)}
-        onChange={(next) => onChange(writeKindEnv(draft, kind, next))}
+        env={readKindEnvWithDefaults(draft, kind, defaultsRecord)}
+        baselineEnv={readKindEnvWithDefaults(baseline, kind, defaultsRecord)}
+        onChange={(next) =>
+          onChange(writeKindEnvAgainstDefaults(draft, kind, next, defaultsRecord))
+        }
         onBack={() => setEditingEnv(false)}
       />
     );
@@ -117,7 +123,7 @@ export function ManifestSourceForm({
     readKindEnv(baseline, kind),
   );
   const overrides = readKindEnv(draft, kind);
-  const defaults = Object.entries(manifest?.env ?? {});
+  const defaults = Object.entries(defaultsRecord);
 
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>

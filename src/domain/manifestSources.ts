@@ -165,6 +165,59 @@ export function writeKindEnv(
   };
 }
 
+/**
+ * The kind entry's effective env for the editor: the manifest `defaults` in
+ * manifest order (each value replaced by an existing override for that key),
+ * followed by any override keys not present in the defaults, in their existing
+ * order. This is what `ManifestSourceForm` pre-fills so the user sees and can
+ * edit every default without retyping it — the "seed" half of the pair whose
+ * "subtract" half is `writeKindEnvAgainstDefaults`.
+ */
+export function readKindEnvWithDefaults(
+  draft: ConfigDraft,
+  kind: string,
+  defaults: Record<string, string>,
+): EnvEntry[] {
+  const overrides = readKindEnv(draft, kind);
+  const overrideByKey = new Map(overrides.map((e) => [e.key, e.value]));
+  const defaultKeys = new Set(Object.keys(defaults));
+  const out: EnvEntry[] = Object.entries(defaults).map(([key, value]) => ({
+    key,
+    value: overrideByKey.has(key) ? (overrideByKey.get(key) as string) : value,
+  }));
+  for (const entry of overrides) {
+    if (!defaultKeys.has(entry.key)) out.push(entry);
+  }
+  return out;
+}
+
+/**
+ * Rebuild the kind entry's `env` from edited entries, persisting only what
+ * diverges from the manifest `defaults`: an entry whose (trimmed, non-empty)
+ * key names a default it still matches is dropped, so an untouched pre-filled
+ * editor writes nothing and the config stays minimal. Blank keys are dropped
+ * and a later duplicate key wins (delegated to `writeKindEnv`); an empty result
+ * removes the `env` key. Because groundcrew merges overrides over defaults at
+ * runtime, deleting a default row just falls back to its default — defaults are
+ * overridable, not removable.
+ */
+export function writeKindEnvAgainstDefaults(
+  draft: ConfigDraft,
+  kind: string,
+  entries: readonly EnvEntry[],
+  defaults: Record<string, string>,
+): ConfigDraft {
+  const changed = entries.filter((entry) => {
+    const key = entry.key.trim();
+    if (key.length === 0) return false;
+    const isDefault =
+      Object.prototype.hasOwnProperty.call(defaults, key) &&
+      defaults[key] === entry.value;
+    return !isDefault;
+  });
+  return writeKindEnv(draft, kind, changed);
+}
+
 /** Catalog names that already have bespoke screens — never rendered as manifest rows. */
 const BESPOKE_KINDS = new Set(["linear", "todo-txt", "shell"]);
 
