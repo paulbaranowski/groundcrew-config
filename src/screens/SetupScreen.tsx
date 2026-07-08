@@ -173,8 +173,8 @@ export function SetupScreen({ onBack, deps }: Props) {
   const d = useRef(deps ?? defaultSetupScreenDeps()).current;
   // One snapshot fixes the row STRUCTURE (which sandbox story this platform
   // gets); a live `host` state tracks srt dep readiness across re-checks.
-  const host0 = useRef(d.detectHost()).current;
-  const rows = useRef(buildRows(host0)).current;
+  const [host0] = useState(() => d.detectHost());
+  const [rows] = useState(() => buildRows(host0));
   const [host, setHost] = useState<HostCapabilities>(host0);
   const [cursor, setCursor] = useState(0);
   const cursorRef = useRef(0);

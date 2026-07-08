@@ -220,7 +220,7 @@ describe("SetupScreen", () => {
     );
     await vi.waitFor(() => expect(lastFrame()).toContain("srt sandbox"));
     // srt is the SECOND row on Linux (after groundcrew): move down once.
-    stdin.write("[B");
+    stdin.write("\u001B[B");
     await vi.waitFor(() => expect(lastFrame()).toContain("▸ srt sandbox"));
     // The user installs the deps out of band; the next re-check sees them.
     caps = linuxReadyCaps;
