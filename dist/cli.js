@@ -987,11 +987,11 @@ function CrewDoctorView({ result, onClose }) {
   const scrollable = maxOffset > 0;
   useInput((_input, key) => {
     if (scrollable && key.downArrow) {
-      setOffset(Math.min(maxOffset, shown + 1));
+      setOffset((o) => Math.min(maxOffset, Math.min(o, maxOffset) + 1));
       return;
     }
     if (scrollable && key.upArrow) {
-      setOffset(Math.max(0, shown - 1));
+      setOffset((o) => Math.max(0, Math.min(o, maxOffset) - 1));
       return;
     }
     onClose();
@@ -4729,9 +4729,9 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoct
             ] }) : null,
             doctorOffer !== "hidden" ? /* @__PURE__ */ jsxs31(Text31, { children: [
               " ",
-              "\xB7 Run crew doctor to verify?",
+              "\xB7 Run crew doctor?",
               " ",
-              /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: doctorOffer === "running" ? "running\u2026" : "[y] run \xB7 [esc] dismiss" })
+              /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: doctorOffer === "running" ? "running\u2026" : "[y]/[esc]" })
             ] }) : null
           ] }) }),
           /* @__PURE__ */ jsx31(Box31, { marginTop: 1, children: /* @__PURE__ */ jsx31(Text31, { dimColor: true, children: "groundcrew picks up your tasks and runs AI coding agents on them automatically \u2014 each in its own isolated copy of your repo \u2014 then opens a PR. Set it up below." }) }),

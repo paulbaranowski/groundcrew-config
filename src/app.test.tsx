@@ -321,7 +321,7 @@ test("offers crew doctor after a successful save and runs it on y", async () => 
     );
     stdin.write("s");
     await vi.waitFor(() => expect(lastFrame()).toContain("✓ saved"));
-    expect(lastFrame()).toContain("Run crew doctor to verify?");
+    expect(lastFrame()).toContain("Run crew doctor?");
     stdin.write("y");
     await vi.waitFor(() => {
       expect(crewDoctor).toHaveBeenCalledOnce();

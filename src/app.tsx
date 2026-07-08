@@ -300,15 +300,14 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
               <Text dimColor> (moved {shadowed.join(", ")})</Text>
             ) : null}
             {/* Folded into this line (not its own row) so Home's chrome-row
-                count stays what visibleRows expects. */}
+                count stays what visibleRows expects; copy kept short so the
+                combined line still fits 80 columns without wrapping. */}
             {doctorOffer !== "hidden" ? (
               <Text>
                 {" "}
-                · Run crew doctor to verify?{" "}
+                · Run crew doctor?{" "}
                 <Text dimColor>
-                  {doctorOffer === "running"
-                    ? "running…"
-                    : "[y] run · [esc] dismiss"}
+                  {doctorOffer === "running" ? "running…" : "[y]/[esc]"}
                 </Text>
               </Text>
             ) : null}

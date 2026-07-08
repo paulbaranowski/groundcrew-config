@@ -25,11 +25,11 @@ export function CrewDoctorView({ result, onClose }: Props) {
 
   useInput((_input, key) => {
     if (scrollable && key.downArrow) {
-      setOffset(Math.min(maxOffset, shown + 1));
+      setOffset((o) => Math.min(maxOffset, Math.min(o, maxOffset) + 1));
       return;
     }
     if (scrollable && key.upArrow) {
-      setOffset(Math.max(0, shown - 1));
+      setOffset((o) => Math.max(0, Math.min(o, maxOffset) - 1));
       return;
     }
     onClose();
