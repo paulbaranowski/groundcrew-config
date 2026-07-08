@@ -16,7 +16,12 @@ import {
 } from "./domain/sources.ts";
 import path from "node:path";
 import { saveDraft, targetPath, type Target } from "./io/save.ts";
+import {
+  runCrewDoctor,
+  type CrewDoctorResult,
+} from "./io/setup/crewDoctor.ts";
 import { validateDraft } from "./io/validate.ts";
+import { CrewDoctorView } from "./screens/CrewDoctorView.tsx";
 import { Home } from "./screens/Home.tsx";
 import { AgentsForm } from "./screens/AgentsForm.tsx";
 import { SetupScreen, type SetupScreenDeps } from "./screens/SetupScreen.tsx";
@@ -33,6 +38,8 @@ interface Props {
   target: Target;
   /** Injectable for tests so opening Setup never probes the real npm/brew. */
   setupDeps?: SetupScreenDeps;
+  /** Injectable for tests; defaults to the real crew-doctor runner. */
+  crewDoctor?: () => Promise<CrewDoctorResult>;
 }
 
 type Route = { name: "home" } | { name: "section"; id: SectionId };
@@ -65,7 +72,7 @@ function Screen({
   );
 }
 
-export function App({ initialDraft, target, setupDeps }: Props) {
+export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
   const { exit } = useApp();
   const { rows, columns } = useFullscreen();
   // Raw on-disk shape (degenerate empty seed if no config exists). Used as the
@@ -98,6 +105,14 @@ export function App({ initialDraft, target, setupDeps }: Props) {
   const [saved, setSaved] = useState(false);
   const [shadowed, setShadowed] = useState<string[]>([]);
   const [quitting, setQuitting] = useState(false);
+  // Post-save crew-doctor offer (F7): appears once per successful save so a
+  // fresh setup ends with a verified-working signal; any edit invalidates it.
+  const [doctorOffer, setDoctorOffer] = useState<
+    "hidden" | "offered" | "running"
+  >("hidden");
+  const [doctorResult, setDoctorResult] = useState<CrewDoctorResult | null>(
+    null,
+  );
 
   // Absolute path of the file we read from / write to, shown on Home so the
   // user always knows which config they're editing (not just its scope).
@@ -136,6 +151,8 @@ export function App({ initialDraft, target, setupDeps }: Props) {
     setDraft(next);
     setDirty(true);
     setSaved(false);
+    // An edit invalidates the just-saved state, so the stale offer goes away.
+    setDoctorOffer("hidden");
   }
 
   // Persists the draft and reconciles all save-state flags: clears `dirty`
@@ -148,12 +165,30 @@ export function App({ initialDraft, target, setupDeps }: Props) {
     setDirty(false);
     setSaved(true);
     setShadowed(result.shadowed);
+    setDoctorOffer("offered");
   }
 
-  // Global quit handling on Home.
+  // Global quit handling on Home, plus the post-save doctor offer's keys.
   useInput(
-    (input) => {
+    (input, key) => {
       if (route.name !== "home") return;
+      // While the doctor result view is open its own useInput owns the
+      // keyboard; without this gate "s"/"q" would save or quit underneath it.
+      if (doctorResult !== null) return;
+      if (doctorOffer === "offered") {
+        if (input === "y") {
+          setDoctorOffer("running");
+          void (crewDoctor ?? runCrewDoctor)().then((result) => {
+            setDoctorResult(result);
+            setDoctorOffer("hidden");
+          });
+          return;
+        }
+        if (key.escape) {
+          setDoctorOffer("hidden");
+          return;
+        }
+      }
       if (input === "s") void save();
       if (input === "q") {
         if (dirty) setQuitting(true);
@@ -179,6 +214,17 @@ export function App({ initialDraft, target, setupDeps }: Props) {
           onSaveQuit={() => void save().then(() => exit())}
           onDiscard={() => exit()}
           onCancel={() => setQuitting(false)}
+        />
+      </Screen>
+    );
+  }
+
+  if (doctorResult !== null) {
+    return (
+      <Screen rows={rows} columns={columns}>
+        <CrewDoctorView
+          result={doctorResult}
+          onClose={() => setDoctorResult(null)}
         />
       </Screen>
     );
@@ -225,6 +271,18 @@ export function App({ initialDraft, target, setupDeps }: Props) {
             ) : null}
           </Text>
         </Box>
+        {doctorOffer !== "hidden" ? (
+          <Box>
+            <Text>
+              Run crew doctor to verify?{" "}
+              <Text dimColor>
+                {doctorOffer === "running"
+                  ? "running…"
+                  : "[y] run · [esc] dismiss"}
+              </Text>
+            </Text>
+          </Box>
+        ) : null}
         <Box marginTop={1}>
           <Text dimColor>
             groundcrew picks up your tasks and runs AI coding agents on them
