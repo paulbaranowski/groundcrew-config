@@ -37,6 +37,14 @@ export function parseNpmLs(
   };
 }
 
+// `crew --version` prints a bare version like "4.45.2" and exits 0. Extract the
+// first dotted-numeric token so an install outside the active npm's global tree
+// (Homebrew node vs nvm) still reports a version; null when the output has none.
+export function parseCrewVersion(stdout: string): string | null {
+  const match = stdout.match(/\d+(?:\.\d+)+[^\s]*/);
+  return match ? match[0] : null;
+}
+
 const VERSION_RE = /^\d+(\.\d+)*(\S*)$/;
 
 // `brew list --versions <formula>` prints "agent-safehouse 0.9.0" on success;

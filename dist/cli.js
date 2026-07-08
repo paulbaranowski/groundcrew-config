@@ -1752,6 +1752,10 @@ function parseNpmLs(stdout, packageName) {
     version: typeof version === "string" ? version : null
   };
 }
+function parseCrewVersion(stdout) {
+  const match = stdout.match(/\d+(?:\.\d+)+[^\s]*/);
+  return match ? match[0] : null;
+}
 var VERSION_RE = /^\d+(\.\d+)*(\S*)$/;
 function parseBrewVersions(stdout) {
   const parts = stdout.trim().split(/\s+/).filter(Boolean);
@@ -1770,12 +1774,15 @@ function defaultInstallDeps() {
 }
 var PROBE_TIMEOUT_MS = 3e4;
 var BREW_PROBE_TIMEOUT_MS = 15e3;
+var CREW_VERSION_TIMEOUT_MS = 15e3;
 var INSTALL_TIMEOUT_MS = 6e5;
 function failureDetails(result, fallback) {
   return result.error ?? (result.stderr.trim() || result.stdout.trim() || fallback);
 }
 async function probeGroundcrew(deps = defaultInstallDeps()) {
   if (deps.which("npm") === null) {
+    const viaCrew = await probeCrewOnPath(deps);
+    if (viaCrew.action === "already-installed") return viaCrew;
     return {
       action: "failed",
       version: null,
@@ -1791,7 +1798,25 @@ async function probeGroundcrew(deps = defaultInstallDeps()) {
     return { action: "failed", version: null, details: result.error };
   }
   const probe = parseNpmLs(result.stdout, GROUNDCREW_PACKAGE);
-  return probe.installed ? { action: "already-installed", version: probe.version, details: "" } : { action: "missing", version: null, details: "" };
+  if (probe.installed) {
+    return { action: "already-installed", version: probe.version, details: "" };
+  }
+  return probeCrewOnPath(deps);
+}
+async function probeCrewOnPath(deps) {
+  if (deps.which("crew") === null) {
+    return { action: "missing", version: null, details: "" };
+  }
+  return {
+    action: "already-installed",
+    version: await crewVersion(deps),
+    details: ""
+  };
+}
+async function crewVersion(deps) {
+  const result = await deps.run("crew", ["--version"], CREW_VERSION_TIMEOUT_MS);
+  if (result.error !== void 0 || result.code !== 0) return null;
+  return parseCrewVersion(result.stdout);
 }
 async function installGroundcrew(deps = defaultInstallDeps()) {
   const existing = await probeGroundcrew(deps);
@@ -3738,6 +3763,28 @@ function writeKindEnv(draft, kind, entries) {
     )
   };
 }
+function readKindEnvWithDefaults(draft, kind, defaults) {
+  const overrides = readKindEnv(draft, kind);
+  const overrideByKey = new Map(overrides.map((e) => [e.key, e.value]));
+  const defaultKeys = new Set(Object.keys(defaults));
+  const out = Object.entries(defaults).map(([key, value]) => ({
+    key,
+    value: overrideByKey.has(key) ? overrideByKey.get(key) : value
+  }));
+  for (const entry of overrides) {
+    if (!defaultKeys.has(entry.key)) out.push(entry);
+  }
+  return out;
+}
+function writeKindEnvAgainstDefaults(draft, kind, entries, defaults) {
+  const changed = entries.filter((entry) => {
+    const key = entry.key.trim();
+    if (key.length === 0) return false;
+    const isDefault = Object.prototype.hasOwnProperty.call(defaults, key) && defaults[key] === entry.value;
+    return !isDefault;
+  });
+  return writeKindEnv(draft, kind, changed);
+}
 var BESPOKE_KINDS = /* @__PURE__ */ new Set(["linear", "todo-txt", "shell"]);
 function hubRows(catalog, draft, baseline) {
   const modified = taskSourceModified(draft, baseline);
@@ -3790,6 +3837,14 @@ var ORIGINS = /* @__PURE__ */ new Set(["builtin", "package", "user"]);
 function asOptionalString(value) {
   return typeof value === "string" ? value : void 0;
 }
+function resolveInstall(raw) {
+  if (typeof raw === "string") return raw;
+  if (raw !== null && typeof raw === "object") {
+    const byOs = raw;
+    return asOptionalString(byOs[process.platform]) ?? asOptionalString(byOs.default);
+  }
+  return void 0;
+}
 function narrowPrerequisites(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
@@ -3798,7 +3853,7 @@ function narrowPrerequisites(raw) {
     if (typeof e?.bin !== "string") continue;
     out.push({
       bin: e.bin,
-      install: asOptionalString(e.install),
+      install: resolveInstall(e.install),
       setup: asOptionalString(e.setup)
     });
   }
@@ -4140,6 +4195,7 @@ function ManifestSourceForm({
 }) {
   const kind = source.name;
   const manifest = source.manifest;
+  const defaultsRecord = manifest?.env ?? {};
   const enabled = isKindEnabled(draft, kind);
   const [focus, setFocus] = useState18(0);
   const [editingEnv, setEditingEnv] = useState18(false);
@@ -4184,9 +4240,9 @@ function ManifestSourceForm({
     return /* @__PURE__ */ jsx23(
       ShellEnvEditor,
       {
-        env: readKindEnv(draft, kind),
-        baselineEnv: readKindEnv(baseline, kind),
-        onChange: (next) => onChange(writeKindEnv(draft, kind, next)),
+        env: readKindEnvWithDefaults(draft, kind, defaultsRecord),
+        baselineEnv: readKindEnvWithDefaults(baseline, kind, defaultsRecord),
+        onChange: (next) => onChange(writeKindEnvAgainstDefaults(draft, kind, next, defaultsRecord)),
         onBack: () => setEditingEnv(false)
       }
     );
@@ -4197,7 +4253,7 @@ function ManifestSourceForm({
     readKindEnv(baseline, kind)
   );
   const overrides = readKindEnv(draft, kind);
-  const defaults = Object.entries(manifest?.env ?? {});
+  const defaults = Object.entries(defaultsRecord);
   return /* @__PURE__ */ jsxs23(Box23, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
     /* @__PURE__ */ jsxs23(Text23, { bold: true, children: [
       kind,

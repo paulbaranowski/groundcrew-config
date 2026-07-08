@@ -21,6 +21,25 @@ function asOptionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+/**
+ * A prerequisite's install hint resolved for the current OS. groundcrew's newer
+ * manifest lets `install` be either a plain string (applies to all platforms)
+ * or an object keyed by `process.platform` (`darwin`/`linux`) with an optional
+ * `default` fallback. An unrecognized shape — or a platform with neither its own
+ * entry nor a `default` — yields `undefined`, so the screen shows no hint rather
+ * than a wrong one. Keeping this in the narrowing layer means an object install
+ * read against an older TUI simply degrades to no hint (this returns undefined)
+ * instead of crashing.
+ */
+function resolveInstall(raw: unknown): string | undefined {
+  if (typeof raw === "string") return raw;
+  if (raw !== null && typeof raw === "object") {
+    const byOs = raw as Record<string, unknown>;
+    return asOptionalString(byOs[process.platform]) ?? asOptionalString(byOs.default);
+  }
+  return undefined;
+}
+
 function narrowPrerequisites(raw: unknown): ManifestPrerequisite[] {
   if (!Array.isArray(raw)) return [];
   const out: ManifestPrerequisite[] = [];
@@ -29,7 +48,7 @@ function narrowPrerequisites(raw: unknown): ManifestPrerequisite[] {
     if (typeof e?.bin !== "string") continue;
     out.push({
       bin: e.bin,
-      install: asOptionalString(e.install),
+      install: resolveInstall(e.install),
       setup: asOptionalString(e.setup),
     });
   }

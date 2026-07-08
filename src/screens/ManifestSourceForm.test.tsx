@@ -153,6 +153,28 @@ test("shows manifest env defaults and opens the env override editor", async () =
   );
 });
 
+test("the env editor is pre-filled with the manifest defaults (no overrides needed)", async () => {
+  const { lastFrame, stdin } = render(
+    <ManifestSourceForm
+      source={jira}
+      draft={enabledDraft}
+      baseline={enabledDraft}
+      onChange={() => {}}
+      onBack={() => {}}
+      {...noProbes}
+    />,
+  );
+  stdin.write("\x1b[B\r"); // down to the env row + enter, one burst
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("Environment variables"),
+  );
+  const frame = lastFrame() ?? "";
+  // enabledDraft carries a bare { kind: "jira" } with no env overrides, yet the
+  // manifest default surfaces in the editor, seeded and editable.
+  expect(frame).toContain("JIRA_STATE_DONE");
+  expect(frame).toContain("= Done");
+});
+
 test("a down+enter burst in one tick opens the env editor (rowRef, not stale closure)", async () => {
   const { lastFrame, stdin } = render(
     <ManifestSourceForm
