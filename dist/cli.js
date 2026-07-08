@@ -1752,6 +1752,10 @@ function parseNpmLs(stdout, packageName) {
     version: typeof version === "string" ? version : null
   };
 }
+function parseCrewVersion(stdout) {
+  const match = stdout.match(/\d+(?:\.\d+)+[^\s]*/);
+  return match ? match[0] : null;
+}
 var VERSION_RE = /^\d+(\.\d+)*(\S*)$/;
 function parseBrewVersions(stdout) {
   const parts = stdout.trim().split(/\s+/).filter(Boolean);
@@ -1770,12 +1774,15 @@ function defaultInstallDeps() {
 }
 var PROBE_TIMEOUT_MS = 3e4;
 var BREW_PROBE_TIMEOUT_MS = 15e3;
+var CREW_VERSION_TIMEOUT_MS = 15e3;
 var INSTALL_TIMEOUT_MS = 6e5;
 function failureDetails(result, fallback) {
   return result.error ?? (result.stderr.trim() || result.stdout.trim() || fallback);
 }
 async function probeGroundcrew(deps = defaultInstallDeps()) {
   if (deps.which("npm") === null) {
+    const viaCrew = await probeCrewOnPath(deps);
+    if (viaCrew.action === "already-installed") return viaCrew;
     return {
       action: "failed",
       version: null,
@@ -1791,7 +1798,25 @@ async function probeGroundcrew(deps = defaultInstallDeps()) {
     return { action: "failed", version: null, details: result.error };
   }
   const probe = parseNpmLs(result.stdout, GROUNDCREW_PACKAGE);
-  return probe.installed ? { action: "already-installed", version: probe.version, details: "" } : { action: "missing", version: null, details: "" };
+  if (probe.installed) {
+    return { action: "already-installed", version: probe.version, details: "" };
+  }
+  return probeCrewOnPath(deps);
+}
+async function probeCrewOnPath(deps) {
+  if (deps.which("crew") === null) {
+    return { action: "missing", version: null, details: "" };
+  }
+  return {
+    action: "already-installed",
+    version: await crewVersion(deps),
+    details: ""
+  };
+}
+async function crewVersion(deps) {
+  const result = await deps.run("crew", ["--version"], CREW_VERSION_TIMEOUT_MS);
+  if (result.error !== void 0 || result.code !== 0) return null;
+  return parseCrewVersion(result.stdout);
 }
 async function installGroundcrew(deps = defaultInstallDeps()) {
   const existing = await probeGroundcrew(deps);
