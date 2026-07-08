@@ -186,6 +186,49 @@ describe("SetupScreen", () => {
     expect(lastFrame()).not.toContain("safehouse env.sh");
   });
 
+  it("shows an srt sandbox row (not safehouse) on Linux", async () => {
+    const { lastFrame } = render(
+      <SetupScreen
+        onBack={() => {}}
+        deps={stubDeps({ detectHost: () => linuxMissingCaps })}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain("srt sandbox");
+      expect(lastFrame()).toContain("bubblewrap");
+    });
+    // The macOS-only rows are absent on Linux.
+    expect(lastFrame()).not.toContain("brew eugene1g");
+  });
+
+  it("shows srt ready when the Linux deps are present", async () => {
+    const { lastFrame } = render(
+      <SetupScreen
+        onBack={() => {}}
+        deps={stubDeps({ detectHost: () => linuxReadyCaps })}
+      />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("srt sandbox"));
+    expect(lastFrame()).toContain("ready ✓");
+  });
+
+  it("re-probes the host when Enter is pressed on the srt row", async () => {
+    let caps = linuxMissingCaps;
+    const detectHost = vi.fn(() => caps);
+    const { stdin, lastFrame } = render(
+      <SetupScreen onBack={() => {}} deps={stubDeps({ detectHost })} />,
+    );
+    await vi.waitFor(() => expect(lastFrame()).toContain("srt sandbox"));
+    // srt is the SECOND row on Linux (after groundcrew): move down once.
+    stdin.write("[B");
+    await vi.waitFor(() => expect(lastFrame()).toContain("▸ srt sandbox"));
+    // The user installs the deps out of band; the next re-check sees them.
+    caps = linuxReadyCaps;
+    stdin.write("\r");
+    await vi.waitFor(() => expect(lastFrame()).toContain("ready ✓"));
+    expect(detectHost.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("degrades a failed probe to a failed row instead of crashing", async () => {
     const deps = stubDeps({
       probeGroundcrew: () =>
