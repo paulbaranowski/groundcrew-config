@@ -3,8 +3,10 @@ import {
   hubRows,
   isKindEnabled,
   readKindEnv,
+  readKindEnvWithDefaults,
   setKindEnabled,
   writeKindEnv,
+  writeKindEnvAgainstDefaults,
   type CatalogSource,
 } from "./manifestSources.ts";
 import type { ConfigDraft } from "./types.ts";
@@ -102,6 +104,77 @@ test("writeKindEnv with no surviving entries removes the env key", () => {
 test("writeKindEnv without a matching entry leaves the draft unchanged", () => {
   const next = writeKindEnv(base, "jira", [{ key: "A", value: "1" }]);
   expect(next.sources ?? []).toEqual([]);
+});
+
+const jiraDefaults = {
+  JIRA_STATE_IN_PROGRESS: "In Progress",
+  JIRA_STATE_IN_REVIEW: "In Review",
+  JIRA_STATE_DONE: "Done",
+};
+
+test("readKindEnvWithDefaults seeds the manifest defaults in order when no overrides", () => {
+  const draft = draftWith([{ kind: "jira" }]);
+  expect(readKindEnvWithDefaults(draft, "jira", jiraDefaults)).toEqual([
+    { key: "JIRA_STATE_IN_PROGRESS", value: "In Progress" },
+    { key: "JIRA_STATE_IN_REVIEW", value: "In Review" },
+    { key: "JIRA_STATE_DONE", value: "Done" },
+  ]);
+  // No entry at all still surfaces the defaults for a to-be-enabled source.
+  expect(readKindEnvWithDefaults(base, "jira", jiraDefaults)).toEqual([
+    { key: "JIRA_STATE_IN_PROGRESS", value: "In Progress" },
+    { key: "JIRA_STATE_IN_REVIEW", value: "In Review" },
+    { key: "JIRA_STATE_DONE", value: "Done" },
+  ]);
+});
+
+test("readKindEnvWithDefaults overlays overrides and appends extra keys after defaults", () => {
+  const draft = draftWith([
+    {
+      kind: "jira",
+      env: { JIRA_STATE_IN_REVIEW: "Reviewing", JIRA_GROUNDCREW_JQL: "labels = gc" },
+    },
+  ]);
+  expect(readKindEnvWithDefaults(draft, "jira", jiraDefaults)).toEqual([
+    { key: "JIRA_STATE_IN_PROGRESS", value: "In Progress" },
+    { key: "JIRA_STATE_IN_REVIEW", value: "Reviewing" },
+    { key: "JIRA_STATE_DONE", value: "Done" },
+    { key: "JIRA_GROUNDCREW_JQL", value: "labels = gc" },
+  ]);
+});
+
+test("writeKindEnvAgainstDefaults persists only entries that differ from defaults", () => {
+  const draft = draftWith([{ kind: "jira" }]);
+  const edited = readKindEnvWithDefaults(draft, "jira", jiraDefaults).map((e) =>
+    e.key === "JIRA_STATE_IN_REVIEW" ? { ...e, value: "Reviewing" } : e,
+  );
+  const next = writeKindEnvAgainstDefaults(draft, "jira", edited, jiraDefaults);
+  expect(next.sources).toEqual([
+    { kind: "jira", env: { JIRA_STATE_IN_REVIEW: "Reviewing" } },
+  ]);
+});
+
+test("writeKindEnvAgainstDefaults keeps non-default keys and drops blanks", () => {
+  const draft = draftWith([{ kind: "jira" }]);
+  const next = writeKindEnvAgainstDefaults(
+    draft,
+    "jira",
+    [
+      { key: "JIRA_STATE_DONE", value: "Done" }, // equals default → dropped
+      { key: "JIRA_GROUNDCREW_JQL", value: "labels = gc" }, // not a default → kept
+      { key: "  ", value: "blank" }, // blank key → dropped
+    ],
+    jiraDefaults,
+  );
+  expect(next.sources).toEqual([
+    { kind: "jira", env: { JIRA_GROUNDCREW_JQL: "labels = gc" } },
+  ]);
+});
+
+test("writeKindEnvAgainstDefaults writes nothing when every entry matches its default", () => {
+  const draft = draftWith([{ kind: "jira" }]);
+  const untouched = readKindEnvWithDefaults(draft, "jira", jiraDefaults);
+  const next = writeKindEnvAgainstDefaults(draft, "jira", untouched, jiraDefaults);
+  expect(next.sources).toEqual([{ kind: "jira" }]);
 });
 
 test("hubRows with an empty catalog yields the four static rows", () => {

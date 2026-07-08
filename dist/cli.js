@@ -3441,6 +3441,28 @@ function writeKindEnv(draft, kind, entries) {
     )
   };
 }
+function readKindEnvWithDefaults(draft, kind, defaults) {
+  const overrides = readKindEnv(draft, kind);
+  const overrideByKey = new Map(overrides.map((e) => [e.key, e.value]));
+  const defaultKeys = new Set(Object.keys(defaults));
+  const out = Object.entries(defaults).map(([key, value]) => ({
+    key,
+    value: overrideByKey.has(key) ? overrideByKey.get(key) : value
+  }));
+  for (const entry of overrides) {
+    if (!defaultKeys.has(entry.key)) out.push(entry);
+  }
+  return out;
+}
+function writeKindEnvAgainstDefaults(draft, kind, entries, defaults) {
+  const changed = entries.filter((entry) => {
+    const key = entry.key.trim();
+    if (key.length === 0) return false;
+    const isDefault = Object.prototype.hasOwnProperty.call(defaults, key) && defaults[key] === entry.value;
+    return !isDefault;
+  });
+  return writeKindEnv(draft, kind, changed);
+}
 var BESPOKE_KINDS = /* @__PURE__ */ new Set(["linear", "todo-txt", "shell"]);
 function hubRows(catalog, draft, baseline) {
   const modified = taskSourceModified(draft, baseline);
@@ -3493,6 +3515,14 @@ var ORIGINS = /* @__PURE__ */ new Set(["builtin", "package", "user"]);
 function asOptionalString(value) {
   return typeof value === "string" ? value : void 0;
 }
+function resolveInstall(raw) {
+  if (typeof raw === "string") return raw;
+  if (raw !== null && typeof raw === "object") {
+    const byOs = raw;
+    return asOptionalString(byOs[process.platform]) ?? asOptionalString(byOs.default);
+  }
+  return void 0;
+}
 function narrowPrerequisites(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
@@ -3501,7 +3531,7 @@ function narrowPrerequisites(raw) {
     if (typeof e?.bin !== "string") continue;
     out.push({
       bin: e.bin,
-      install: asOptionalString(e.install),
+      install: resolveInstall(e.install),
       setup: asOptionalString(e.setup)
     });
   }
@@ -3843,6 +3873,7 @@ function ManifestSourceForm({
 }) {
   const kind = source.name;
   const manifest = source.manifest;
+  const defaultsRecord = manifest?.env ?? {};
   const enabled = isKindEnabled(draft, kind);
   const [focus, setFocus] = useState17(0);
   const [editingEnv, setEditingEnv] = useState17(false);
@@ -3887,9 +3918,9 @@ function ManifestSourceForm({
     return /* @__PURE__ */ jsx22(
       ShellEnvEditor,
       {
-        env: readKindEnv(draft, kind),
-        baselineEnv: readKindEnv(baseline, kind),
-        onChange: (next) => onChange(writeKindEnv(draft, kind, next)),
+        env: readKindEnvWithDefaults(draft, kind, defaultsRecord),
+        baselineEnv: readKindEnvWithDefaults(baseline, kind, defaultsRecord),
+        onChange: (next) => onChange(writeKindEnvAgainstDefaults(draft, kind, next, defaultsRecord)),
         onBack: () => setEditingEnv(false)
       }
     );
@@ -3900,7 +3931,7 @@ function ManifestSourceForm({
     readKindEnv(baseline, kind)
   );
   const overrides = readKindEnv(draft, kind);
-  const defaults = Object.entries(manifest?.env ?? {});
+  const defaults = Object.entries(defaultsRecord);
   return /* @__PURE__ */ jsxs22(Box22, { flexDirection: "column", borderStyle: "round", paddingX: 1, children: [
     /* @__PURE__ */ jsxs22(Text22, { bold: true, children: [
       kind,
