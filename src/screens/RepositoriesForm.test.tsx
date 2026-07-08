@@ -153,8 +153,8 @@ test("c commits the copy immediately; esc returns to a list holding both repos",
 test("f runs discovery and merges picked repos without duplicates", async () => {
   const discover = vi.fn(() =>
     Promise.resolve([
-      { owner: "acme", repo: "widgets", sources: ["gh" as const] },
-      { owner: "acme", repo: "existing-repo", sources: ["local" as const] },
+      { owner: "acme", repo: "widgets", name: "widgets", sources: ["gh" as const] },
+      { owner: "acme", repo: "existing-repo", name: "existing-repo", sources: ["local" as const] },
     ]),
   );
   const onChange = vi.fn();
@@ -198,8 +198,8 @@ test("f runs discovery and merges picked repos without duplicates", async () => 
 test("picking two owners of the same folder name commits a single entry", async () => {
   const discover = vi.fn(() =>
     Promise.resolve([
-      { owner: "acme", repo: "widgets", sources: ["gh" as const] },
-      { owner: "fork", repo: "widgets", sources: ["local" as const] },
+      { owner: "acme", repo: "widgets", name: "widgets", sources: ["gh" as const] },
+      { owner: "fork", repo: "widgets", name: "widgets", sources: ["local" as const] },
     ]),
   );
   const onChange = vi.fn();
@@ -238,7 +238,7 @@ test("picking two owners of the same folder name commits a single entry", async 
 
 test("the '+ discover repositories' row runs discovery like the f key", async () => {
   const discover = vi.fn(() =>
-    Promise.resolve([{ owner: "acme", repo: "widgets", sources: ["gh" as const] }]),
+    Promise.resolve([{ owner: "acme", repo: "widgets", name: "widgets", sources: ["gh" as const] }]),
   );
   const onChange = vi.fn();
   const draft = {
@@ -296,7 +296,7 @@ test("a rejected discovery lands on the picker's empty state, not stuck loading"
 
 test("esc from the picker returns to the list without changes", async () => {
   const discover = vi.fn(() =>
-    Promise.resolve([{ owner: "a", repo: "r", sources: ["gh" as const] }]),
+    Promise.resolve([{ owner: "a", repo: "r", name: "r", sources: ["gh" as const] }]),
   );
   const onChange = vi.fn();
   const draft = {
@@ -346,7 +346,7 @@ test("esc during discovery loading returns to the list and ignores a late result
   stdin.write("\x1b"); // cancel the in-flight scan
   await vi.waitFor(() => expect(lastFrame()).not.toContain("discovering repos"));
   // A scan that resolves after the user backed out must not pop the picker.
-  resolveDiscovery([{ owner: "a", repo: "r", sources: ["gh"] }]);
+  resolveDiscovery([{ owner: "a", repo: "r", name: "r", sources: ["gh"] }]);
   await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
   expect(lastFrame()).not.toContain("Discovered repositories");
   expect(onChange).not.toHaveBeenCalled();
@@ -382,7 +382,7 @@ test("f then esc in a single input tick cancels rather than navigating away", as
   await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce());
   expect(onBack).not.toHaveBeenCalled();
   // The late scan result must not pop the picker onto an idle/abandoned screen.
-  resolveDiscovery([{ owner: "a", repo: "r", sources: ["gh"] }]);
+  resolveDiscovery([{ owner: "a", repo: "r", name: "r", sources: ["gh"] }]);
   await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
   expect(lastFrame()).not.toContain("Discovered repositories");
 });
