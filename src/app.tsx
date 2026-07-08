@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { Footer } from "./components/Footer.tsx";
 import { useFullscreen } from "./hooks/useFullscreen.ts";
@@ -16,7 +16,12 @@ import {
 } from "./domain/sources.ts";
 import path from "node:path";
 import { saveDraft, targetPath, type Target } from "./io/save.ts";
+import {
+  runCrewDoctor,
+  type CrewDoctorResult,
+} from "./io/setup/crewDoctor.ts";
 import { validateDraft } from "./io/validate.ts";
+import { CrewDoctorView } from "./screens/CrewDoctorView.tsx";
 import { Home } from "./screens/Home.tsx";
 import { AgentsForm } from "./screens/AgentsForm.tsx";
 import { SetupScreen, type SetupScreenDeps } from "./screens/SetupScreen.tsx";
@@ -33,6 +38,8 @@ interface Props {
   target: Target;
   /** Injectable for tests so opening Setup never probes the real npm/brew. */
   setupDeps?: SetupScreenDeps;
+  /** Injectable for tests; defaults to the real crew-doctor runner. */
+  crewDoctor?: () => Promise<CrewDoctorResult>;
 }
 
 type Route = { name: "home" } | { name: "section"; id: SectionId };
@@ -65,7 +72,7 @@ function Screen({
   );
 }
 
-export function App({ initialDraft, target, setupDeps }: Props) {
+export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
   const { exit } = useApp();
   const { rows, columns } = useFullscreen();
   // Raw on-disk shape (degenerate empty seed if no config exists). Used as the
@@ -98,6 +105,39 @@ export function App({ initialDraft, target, setupDeps }: Props) {
   const [saved, setSaved] = useState(false);
   const [shadowed, setShadowed] = useState<string[]>([]);
   const [quitting, setQuitting] = useState(false);
+  // Post-save crew-doctor offer (F7): appears once per successful save so a
+  // fresh setup ends with a verified-working signal; any edit invalidates it.
+  const [doctorOffer, setDoctorOffer] = useState<
+    "hidden" | "offered" | "running"
+  >("hidden");
+  // Ref mirror for the same burst reason SetupScreen mirrors its row states:
+  // two "y" presses in one tick share a stale render closure and would spawn
+  // two crew-doctor processes without it.
+  const doctorOfferRef = useRef<"hidden" | "offered" | "running">("hidden");
+  const [doctorResult, setDoctorResult] = useState<CrewDoctorResult | null>(
+    null,
+  );
+  // Latest committed route, so a slow crew-doctor resolution can tell whether
+  // the user is still on Home. Popping the result view over a section screen
+  // would unmount it and silently discard buffered sub-editor edits.
+  const routeRef = useRef<Route>(route);
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+  // A doctor resolution landing after quit must not setState on the unmounted
+  // App (same discipline as SetupScreen's mountedRef).
+  const appMountedRef = useRef(true);
+  useEffect(() => {
+    appMountedRef.current = true;
+    return () => {
+      appMountedRef.current = false;
+    };
+  }, []);
+
+  function setOffer(value: "hidden" | "offered" | "running"): void {
+    doctorOfferRef.current = value;
+    setDoctorOffer(value);
+  }
 
   // Absolute path of the file we read from / write to, shown on Home so the
   // user always knows which config they're editing (not just its scope).
@@ -136,6 +176,8 @@ export function App({ initialDraft, target, setupDeps }: Props) {
     setDraft(next);
     setDirty(true);
     setSaved(false);
+    // An edit invalidates the just-saved state, so the stale offer goes away.
+    setOffer("hidden");
   }
 
   // Persists the draft and reconciles all save-state flags: clears `dirty`
@@ -148,12 +190,41 @@ export function App({ initialDraft, target, setupDeps }: Props) {
     setDirty(false);
     setSaved(true);
     setShadowed(result.shadowed);
+    // A doctor run already in flight keeps its "running…" state: re-offering
+    // here would let a second y spawn a concurrent crew-doctor process.
+    if (doctorOfferRef.current !== "running") setOffer("offered");
   }
 
-  // Global quit handling on Home.
+  // Global quit handling on Home, plus the post-save doctor offer's keys.
   useInput(
-    (input) => {
+    (input, key) => {
       if (route.name !== "home") return;
+      // While the doctor result view is open its own useInput owns the
+      // keyboard; without this gate "s"/"q" would save or quit underneath it.
+      if (doctorResult !== null) return;
+      if (doctorOfferRef.current === "offered") {
+        if (input === "y") {
+          setOffer("running");
+          void (crewDoctor ?? runCrewDoctor)().then((result) => {
+            if (!appMountedRef.current) return;
+            // Only surface the result if the user is still on Home AND the
+            // run wasn't invalidated by an edit (update() hides the offer);
+            // popping over a section would unmount in-progress edits.
+            if (
+              routeRef.current.name === "home" &&
+              doctorOfferRef.current === "running"
+            ) {
+              setDoctorResult(result);
+            }
+            setOffer("hidden");
+          });
+          return;
+        }
+        if (key.escape) {
+          setOffer("hidden");
+          return;
+        }
+      }
       if (input === "s") void save();
       if (input === "q") {
         if (dirty) setQuitting(true);
@@ -179,6 +250,17 @@ export function App({ initialDraft, target, setupDeps }: Props) {
           onSaveQuit={() => void save().then(() => exit())}
           onDiscard={() => exit()}
           onCancel={() => setQuitting(false)}
+        />
+      </Screen>
+    );
+  }
+
+  if (doctorResult !== null) {
+    return (
+      <Screen rows={rows} columns={columns}>
+        <CrewDoctorView
+          result={doctorResult}
+          onClose={() => setDoctorResult(null)}
         />
       </Screen>
     );
@@ -222,6 +304,18 @@ export function App({ initialDraft, target, setupDeps }: Props) {
             {saved ? <Text color="green"> ✓ saved</Text> : null}
             {saved && shadowed.length > 0 ? (
               <Text dimColor> (moved {shadowed.join(", ")})</Text>
+            ) : null}
+            {/* Folded into this line (not its own row) so Home's chrome-row
+                count stays what visibleRows expects; copy kept short so the
+                combined line still fits 80 columns without wrapping. */}
+            {doctorOffer !== "hidden" ? (
+              <Text>
+                {" "}
+                · Run crew doctor?{" "}
+                <Text dimColor>
+                  {doctorOffer === "running" ? "running…" : "[y]/[esc]"}
+                </Text>
+              </Text>
             ) : null}
           </Text>
         </Box>

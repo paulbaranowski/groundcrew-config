@@ -1,0 +1,97 @@
+import { SIDECAR_HEADER_LINES } from "./clearance.ts";
+import type { RcMatch } from "./rcScan.ts";
+
+export const VAR_APPEND_PROFILE = "SAFEHOUSE_APPEND_PROFILE";
+export const FN_SAFE = "safe";
+export const FN_SAFE_CLAUDE = "safe-claude";
+
+// Wrapper bodies verbatim from the eugene1g/agent-safehouse README; these
+// lines must stay byte-identical to what the old plugin wrote (I5).
+const SAFE_BODY = [
+  "safe() {",
+  "  safehouse \\",
+  `    --append-profile="$${VAR_APPEND_PROFILE}" \\`,
+  '    "$@"',
+  "}",
+];
+
+const SAFE_CLAUDE_BODY = [
+  "safe-claude() {",
+  '  safe claude --dangerously-skip-permissions "$@"',
+  "}",
+];
+
+function commentedOut(body: readonly string[]): string[] {
+  return body.map((line) => (line.length > 0 ? `# ${line}` : "#"));
+}
+
+/**
+ * Build the agent-safehouse env sidecar body. Smart-merge (F5): any of the
+ * export / safe() / safe-claude() already defined uncommented in the user's
+ * rc is emitted as a commented copy with a note naming the rc file and line.
+ * The export note shows the rc's actual value (diagnostic clarity, not a
+ * fallback definition).
+ */
+export function renderSafehouseSidecar(
+  rcConflicts: ReadonlyMap<string, RcMatch>,
+  overridesPath: string,
+): string {
+  const lines: string[] = [
+    ...SIDECAR_HEADER_LINES,
+    "",
+    `# ${VAR_APPEND_PROFILE} - path to your machine-local policy overrides.`,
+  ];
+
+  const exportConflict = rcConflicts.get(VAR_APPEND_PROFILE);
+  if (exportConflict !== undefined) {
+    const rcValue = exportConflict.value ?? "(see rc line for value)";
+    lines.push(
+      `# Already exported in ${exportConflict.file}:${exportConflict.line} - sidecar leaving this alone.`,
+      `# (rc value: "${rcValue}")`,
+    );
+  } else {
+    lines.push(`export ${VAR_APPEND_PROFILE}="${overridesPath}"`);
+  }
+  lines.push("");
+
+  lines.push("# safe - wrapper that always applies your append-profile.");
+  const safeConflict = rcConflicts.get(FN_SAFE);
+  if (safeConflict !== undefined) {
+    lines.push(
+      `# Already defined in ${safeConflict.file}:${safeConflict.line} - sidecar leaving this alone.`,
+      ...commentedOut(SAFE_BODY),
+    );
+  } else {
+    lines.push(...SAFE_BODY);
+  }
+  lines.push("");
+
+  lines.push("# safe-claude - convenience wrapper for sandboxed claude code.");
+  const safeClaudeConflict = rcConflicts.get(FN_SAFE_CLAUDE);
+  if (safeClaudeConflict !== undefined) {
+    lines.push(
+      `# Already defined in ${safeClaudeConflict.file}:${safeClaudeConflict.line} - sidecar leaving this alone.`,
+      ...commentedOut(SAFE_CLAUDE_BODY),
+    );
+  } else {
+    lines.push(...SAFE_CLAUDE_BODY);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+// Written once when absent so SAFEHOUSE_APPEND_PROFILE resolves to a real
+// (if empty) file from day one. Never regenerated over user edits (I2).
+export const OVERRIDES_STUB = `;; ~/.config/agent-safehouse/local-overrides.sb
+;;
+;; Empty stub created by crew-config setup so the
+;; SAFEHOUSE_APPEND_PROFILE flag resolves to a real file from day one.
+;;
+;; Add machine-local sandbox-exec rules below; see
+;; https://agent-safehouse.dev/docs/ for the policy DSL.
+;;
+;; Example:
+;;   (allow file-read*
+;;     (home-literal "/.gitignore_global")
+;;     (subpath "/Volumes/Shared/Engineering"))
+`;

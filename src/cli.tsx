@@ -60,3 +60,7 @@ try {
 } finally {
   dispose();
 }
+// An in-flight child (crew doctor, an install) would otherwise keep the event
+// loop alive after the UI exited, hanging the shell with no explanation until
+// the child's timeout. The terminal is already restored; leave nothing behind.
+process.exit(0);
