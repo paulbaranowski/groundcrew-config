@@ -260,12 +260,18 @@ describe("SetupScreen sidecar rows", () => {
       <SetupScreen onBack={() => {}} deps={deps} />,
     );
     await vi.waitFor(() => expect(lastFrame()).toContain("run crew doctor"));
-    // Jump to the last row: five downs from the top.
-    for (const _ of Array.from({ length: 5 })) {
+    // Walk down row by row, awaiting each cursor move so a keystroke is
+    // never sent before the previous re-render settled.
+    for (const label of [
+      "▸ safehouse",
+      "▸ clearance hosts",
+      "▸ clearance env.sh",
+      "▸ safehouse env.sh",
+      "▸ run crew doctor",
+    ]) {
       stdin.write("\u001B[B");
-      await vi.waitFor(() => expect(lastFrame()).toBeTruthy());
+      await vi.waitFor(() => expect(lastFrame()).toContain(label));
     }
-    await vi.waitFor(() => expect(lastFrame()).toContain("▸ run crew doctor"));
     stdin.write("\r");
     await vi.waitFor(() => {
       expect(deps.runCrewDoctor).toHaveBeenCalledOnce();
@@ -295,11 +301,15 @@ describe("SetupScreen sidecar rows", () => {
     );
     await vi.waitFor(() => expect(lastFrame()).toContain("safehouse env.sh"));
     // Navigate to the safehouse env.sh row (5th) and regenerate.
-    for (const _ of Array.from({ length: 4 })) {
+    for (const label of [
+      "▸ safehouse",
+      "▸ clearance hosts",
+      "▸ clearance env.sh",
+      "▸ safehouse env.sh",
+    ]) {
       stdin.write("\u001B[B");
-      await vi.waitFor(() => expect(lastFrame()).toBeTruthy());
+      await vi.waitFor(() => expect(lastFrame()).toContain(label));
     }
-    await vi.waitFor(() => expect(lastFrame()).toContain("▸ safehouse env.sh"));
     stdin.write("\r");
     await vi.waitFor(() => expect(lastFrame()).toContain("defined in your rc"));
   });
@@ -314,11 +324,15 @@ describe("SetupScreen off macOS (N4)", () => {
       <SetupScreen onBack={() => {}} deps={deps} />,
     );
     await vi.waitFor(() => expect(lastFrame()).toContain("safehouse env.sh"));
-    for (const _ of Array.from({ length: 4 })) {
+    for (const label of [
+      "▸ safehouse",
+      "▸ clearance hosts",
+      "▸ clearance env.sh",
+      "▸ safehouse env.sh",
+    ]) {
       stdin.write("\u001B[B");
-      await vi.waitFor(() => expect(lastFrame()).toBeTruthy());
+      await vi.waitFor(() => expect(lastFrame()).toContain(label));
     }
-    await vi.waitFor(() => expect(lastFrame()).toContain("▸ safehouse env.sh"));
     expect(lastFrame()).toContain("not applicable on this platform");
     stdin.write("\r");
     // No action on a not-applicable row; give the handler a tick to prove it.

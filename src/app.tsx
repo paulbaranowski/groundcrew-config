@@ -207,9 +207,15 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
           setOffer("running");
           void (crewDoctor ?? runCrewDoctor)().then((result) => {
             if (!appMountedRef.current) return;
-            // Only surface the result if the user is still on Home; popping
-            // it over a section would unmount in-progress edits.
-            if (routeRef.current.name === "home") setDoctorResult(result);
+            // Only surface the result if the user is still on Home AND the
+            // run wasn't invalidated by an edit (update() hides the offer);
+            // popping over a section would unmount in-progress edits.
+            if (
+              routeRef.current.name === "home" &&
+              doctorOfferRef.current === "running"
+            ) {
+              setDoctorResult(result);
+            }
             setOffer("hidden");
           });
           return;

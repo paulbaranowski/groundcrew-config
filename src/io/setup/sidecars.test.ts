@@ -1,7 +1,7 @@
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
@@ -40,10 +40,10 @@ describe("writeAtomic", () => {
     writeAtomic(target, "one\n");
     writeAtomic(target, "two\n");
     expect(readFileSync(target, "utf8")).toBe("two\n");
-    const siblings = readFileSync(target, "utf8"); // target readable
-    expect(siblings).toBe("two\n");
-    const leftovers = existsSync(target + ".tmp");
-    expect(leftovers).toBe(false);
+    const leftovers = readdirSync(path.dirname(target)).filter((f) =>
+      f.endsWith(".tmp"),
+    );
+    expect(leftovers).toEqual([]);
   });
 });
 
