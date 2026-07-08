@@ -66,6 +66,21 @@ export function RepositoriesForm({
   const modified = modifiedByKey(entries, baseEntries, (entry) => entry.name);
   const errors = repoErrors(entries);
 
+  // Kick off discovery (shared by the `f` key and the "+ discover" list row).
+  function startDiscovery(): void {
+    const req = (discoveryReq.current += 1);
+    setDiscovery({ phase: "loading" });
+    const settle = (candidates: DiscoveredRepo[]): void => {
+      if (discoveryReq.current === req) {
+        setDiscovery({ phase: "picking", candidates });
+      }
+    };
+    // I7: discovery is best-effort. A rejection is a silent non-result, not an
+    // error - fall through to the picker's empty state rather than stranding
+    // the loading view or leaking an unhandled rejection.
+    void runDiscovery(draft.workspace.projectDir).then(settle, () => settle([]));
+  }
+
   // Esc-to-back and the `f` discovery trigger are live only on the bare list.
   // The handler itself stays active through `loading` too (so esc can cancel a
   // slow scan), but goes quiet while a sub-editor, the delete confirmation, or
@@ -86,21 +101,7 @@ export function RepositoriesForm({
       // Past the loading branch the phase is idle (picking is gated off via
       // isActive, editing/pendingDelete both cleared).
       if (key.escape) onBack();
-      if (input === "f") {
-        const req = (discoveryReq.current += 1);
-        setDiscovery({ phase: "loading" });
-        const settle = (candidates: DiscoveredRepo[]): void => {
-          if (discoveryReq.current === req) {
-            setDiscovery({ phase: "picking", candidates });
-          }
-        };
-        // I7: discovery is best-effort. A rejection is a silent non-result, not
-        // an error - fall through to the picker's empty state rather than
-        // stranding the loading view or leaking an unhandled rejection.
-        void runDiscovery(draft.workspace.projectDir).then(settle, () =>
-          settle([]),
-        );
-      }
+      if (input === "f") startDiscovery();
     },
     { isActive: inputActive },
   );
@@ -223,13 +224,17 @@ export function RepositoriesForm({
           }
           onDelete={(index) => setPendingDelete(index)}
           itemActions={[{ key: "c", onPress: duplicateAt }]}
+          extraActions={[
+            { label: "+ discover repositories…", onPress: startDiscovery },
+          ]}
         />
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
           The repos groundcrew is allowed to work on, listed by their local
           folder name (each must already exist under your projectDir). ↑/↓ move ·
-          enter edit · c duplicate · d delete (confirm) · f discover · esc back.
+          enter edit/discover · c duplicate · d delete (confirm) · f discover ·
+          esc back.
         </Text>
       </Box>
     </Box>

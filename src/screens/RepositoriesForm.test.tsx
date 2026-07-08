@@ -236,6 +236,38 @@ test("picking two owners of the same folder name commits a single entry", async 
   ]);
 });
 
+test("the '+ discover repositories' row runs discovery like the f key", async () => {
+  const discover = vi.fn(() =>
+    Promise.resolve([{ owner: "acme", repo: "widgets", sources: ["gh" as const] }]),
+  );
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: ["maple"] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ discover repositories"));
+  // Move cursor down past the item and the add row to the discover row, activate.
+  stdin.write("\x1b[B"); // + add repository…
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ + add"));
+  stdin.write("\x1b[B"); // + discover repositories…
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("▸ + discover repositories"),
+  );
+  stdin.write("\r");
+  await vi.waitFor(() => {
+    expect(discover).toHaveBeenCalledWith("~/dev");
+    expect(lastFrame()).toContain("Discovered repositories");
+  });
+});
+
 test("a rejected discovery lands on the picker's empty state, not stuck loading", async () => {
   const discover = vi.fn(() =>
     Promise.reject(new Error("gh exploded")),

@@ -2729,12 +2729,13 @@ function ListField({
   onActivate,
   onDelete,
   addLabel = "+ add repository\u2026",
-  itemActions
+  itemActions,
+  extraActions = []
 }) {
   const [cursor, setCursor] = useState11(0);
   const cursorRef = useRef8(0);
   const { rows: terminalRows } = useFullscreen();
-  const rows = items.length + 1;
+  const rows = items.length + 1 + extraActions.length;
   const maxVisible = visibleRows(terminalRows, LIST_CHROME_ROWS);
   function moveCursor(next) {
     cursorRef.current = next;
@@ -2744,7 +2745,13 @@ function ListField({
     (input, key) => {
       if (key.downArrow) moveCursor(Math.min(rows - 1, cursorRef.current + 1));
       if (key.upArrow) moveCursor(Math.max(0, cursorRef.current - 1));
-      if (key.return) onActivate(cursorRef.current);
+      if (key.return) {
+        if (cursorRef.current > items.length) {
+          extraActions[cursorRef.current - items.length - 1]?.onPress();
+        } else {
+          onActivate(cursorRef.current);
+        }
+      }
       if (input === "d" && cursorRef.current < items.length) {
         onDelete(cursorRef.current);
         return;
@@ -2769,6 +2776,21 @@ function ListField({
           ]
         },
         "add"
+      );
+    }
+    if (index > items.length) {
+      const action = extraActions[index - items.length - 1];
+      return /* @__PURE__ */ jsxs14(
+        Text14,
+        {
+          color: isActive && cursor === index ? "cyan" : void 0,
+          dimColor: true,
+          children: [
+            isActive && cursor === index ? "\u25B8 " : "  ",
+            action.label
+          ]
+        },
+        `action-${index}`
       );
     }
     const item = items[index];
@@ -3300,6 +3322,16 @@ function RepositoriesForm({
   const baseEntries = normalizeRepos(baseline.workspace.knownRepositories);
   const modified = modifiedByKey(entries, baseEntries, (entry) => entry.name);
   const errors = repoErrors(entries);
+  function startDiscovery() {
+    const req = discoveryReq.current += 1;
+    setDiscovery({ phase: "loading" });
+    const settle = (candidates) => {
+      if (discoveryReq.current === req) {
+        setDiscovery({ phase: "picking", candidates });
+      }
+    };
+    void runDiscovery(draft.workspace.projectDir).then(settle, () => settle([]));
+  }
   const inputActive = editing === void 0 && pendingDelete === void 0 && discovery.phase !== "picking";
   useInput16(
     (input, key) => {
@@ -3311,19 +3343,7 @@ function RepositoriesForm({
         return;
       }
       if (key.escape) onBack();
-      if (input === "f") {
-        const req = discoveryReq.current += 1;
-        setDiscovery({ phase: "loading" });
-        const settle = (candidates) => {
-          if (discoveryReq.current === req) {
-            setDiscovery({ phase: "picking", candidates });
-          }
-        };
-        void runDiscovery(draft.workspace.projectDir).then(
-          settle,
-          () => settle([])
-        );
-      }
+      if (input === "f") startDiscovery();
     },
     { isActive: inputActive }
   );
@@ -3427,10 +3447,13 @@ function RepositoriesForm({
         isActive: pendingDelete === void 0,
         onActivate: (index) => setEditing(index === entries.length ? entries.length : index),
         onDelete: (index) => setPendingDelete(index),
-        itemActions: [{ key: "c", onPress: duplicateAt }]
+        itemActions: [{ key: "c", onPress: duplicateAt }],
+        extraActions: [
+          { label: "+ discover repositories\u2026", onPress: startDiscovery }
+        ]
       }
     ) }),
-    /* @__PURE__ */ jsx18(Box18, { marginTop: 1, children: /* @__PURE__ */ jsx18(Text18, { dimColor: true, children: "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir). \u2191/\u2193 move \xB7 enter edit \xB7 c duplicate \xB7 d delete (confirm) \xB7 f discover \xB7 esc back." }) })
+    /* @__PURE__ */ jsx18(Box18, { marginTop: 1, children: /* @__PURE__ */ jsx18(Text18, { dimColor: true, children: "The repos groundcrew is allowed to work on, listed by their local folder name (each must already exist under your projectDir). \u2191/\u2193 move \xB7 enter edit/discover \xB7 c duplicate \xB7 d delete (confirm) \xB7 f discover \xB7 esc back." }) })
   ] });
 }
 
