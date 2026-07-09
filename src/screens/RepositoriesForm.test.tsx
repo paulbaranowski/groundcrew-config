@@ -3,6 +3,7 @@ import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { RepositoriesForm } from "./RepositoriesForm.tsx";
 import type { ConfigDraft } from "../domain/types.ts";
+import type { DiscoveredRepo } from "../domain/setup/repoDiscovery.ts";
 
 const draft = {
   workspace: {
@@ -147,6 +148,243 @@ test("c commits the copy immediately; esc returns to a list holding both repos",
   await vi.waitFor(() => expect(lastFrame()).toContain("Repositories"));
   expect(lastFrame()).toContain("maple");
   expect(lastFrame()).toContain("maple-copy");
+});
+
+test("f runs discovery and merges picked repos without duplicates", async () => {
+  const discover = vi.fn(() =>
+    Promise.resolve([
+      { owner: "acme", repo: "widgets", name: "widgets", sources: ["gh" as const] },
+      { owner: "acme", repo: "existing-repo", name: "existing-repo", sources: ["local" as const] },
+    ]),
+  );
+  const onChange = vi.fn();
+  // Draft fixture: knownRepositories already holds "existing-repo" (as the
+  // object form with a projectDirOverride, to prove settings are preserved).
+  const draft = {
+    workspace: {
+      projectDir: "~/dev",
+      knownRepositories: [
+        { name: "existing-repo", projectDirOverride: "/elsewhere" },
+      ],
+    },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("existing-repo"));
+  stdin.write("f");
+  await vi.waitFor(() => {
+    expect(discover).toHaveBeenCalledWith("~/dev");
+    expect(lastFrame()).toContain("Discovered repositories");
+  });
+  // Select acme/widgets (first row) and commit.
+  stdin.write(" ");
+  await vi.waitFor(() => expect(lastFrame()).toContain("[x] acme/widgets"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+  const next = onChange.mock.calls[0]![0];
+  expect(next.workspace.knownRepositories).toEqual([
+    { name: "existing-repo", projectDirOverride: "/elsewhere" },
+    "widgets",
+  ]);
+});
+
+test("picking two owners of the same folder name commits a single entry", async () => {
+  const discover = vi.fn(() =>
+    Promise.resolve([
+      { owner: "acme", repo: "widgets", name: "widgets", sources: ["gh" as const] },
+      { owner: "fork", repo: "widgets", name: "widgets", sources: ["local" as const] },
+    ]),
+  );
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  stdin.write("f");
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("Discovered repositories"),
+  );
+  stdin.write(" "); // select acme/widgets
+  await vi.waitFor(() => expect(lastFrame()).toContain("[x] acme/widgets"));
+  stdin.write("\x1b[B"); // down to fork/widgets (same folder name)
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] fork/widgets"));
+  stdin.write(" "); // the picker blocks selecting a colliding folder name
+  // Give the (no-op) keystroke a tick; fork/widgets must stay unchecked.
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] fork/widgets"));
+  expect(lastFrame()).not.toContain("[x] fork/widgets");
+  stdin.write("\r"); // commit
+  await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+  // Only the first owner's row was selectable, so one "widgets" entry lands.
+  expect(onChange.mock.calls[0]![0].workspace.knownRepositories).toEqual([
+    "widgets",
+  ]);
+});
+
+test("the '+ discover repositories' row runs discovery like the f key", async () => {
+  const discover = vi.fn(() =>
+    Promise.resolve([{ owner: "acme", repo: "widgets", name: "widgets", sources: ["gh" as const] }]),
+  );
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: ["maple"] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ discover repositories"));
+  // Move cursor down past the item and the add row to the discover row, activate.
+  stdin.write("\x1b[B"); // + add repository…
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ + add"));
+  stdin.write("\x1b[B"); // + discover repositories…
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("▸ + discover repositories"),
+  );
+  stdin.write("\r");
+  await vi.waitFor(() => {
+    expect(discover).toHaveBeenCalledWith("~/dev");
+    expect(lastFrame()).toContain("Discovered repositories");
+  });
+});
+
+test("a rejected discovery lands on the picker's empty state, not stuck loading", async () => {
+  const discover = vi.fn(() =>
+    Promise.reject(new Error("gh exploded")),
+  ) as unknown as (w: string | undefined) => Promise<DiscoveredRepo[]>;
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  stdin.write("f");
+  // I7: the failure is silent - the picker opens with no candidates rather than
+  // stranding the loading view.
+  await vi.waitFor(() => expect(lastFrame()).toContain("nothing found"));
+  expect(lastFrame()).not.toContain("discovering repos");
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test("esc from the picker returns to the list without changes", async () => {
+  const discover = vi.fn(() =>
+    Promise.resolve([{ owner: "a", repo: "r", name: "r", sources: ["gh" as const] }]),
+  );
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  stdin.write("f");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Discovered"));
+  stdin.write("\x1b");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Repositories"));
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test("esc during discovery loading returns to the list and ignores a late result", async () => {
+  let resolveDiscovery!: (repos: DiscoveredRepo[]) => void;
+  const discover = vi.fn(
+    () =>
+      new Promise<DiscoveredRepo[]>((resolve) => {
+        resolveDiscovery = resolve;
+      }),
+  );
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={() => {}}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  stdin.write("f");
+  await vi.waitFor(() => expect(lastFrame()).toContain("discovering repos"));
+  stdin.write("\x1b"); // cancel the in-flight scan
+  await vi.waitFor(() => expect(lastFrame()).not.toContain("discovering repos"));
+  // A scan that resolves after the user backed out must not pop the picker.
+  resolveDiscovery([{ owner: "a", repo: "r", name: "r", sources: ["gh"] }]);
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  expect(lastFrame()).not.toContain("Discovered repositories");
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test("f then esc in a single input tick cancels rather than navigating away", async () => {
+  let resolveDiscovery!: (repos: DiscoveredRepo[]) => void;
+  const discover = vi.fn(
+    () =>
+      new Promise<DiscoveredRepo[]>((resolve) => {
+        resolveDiscovery = resolve;
+      }),
+  );
+  const onBack = vi.fn();
+  const onChange = vi.fn();
+  const draft = {
+    workspace: { projectDir: "~/dev", knownRepositories: [] },
+  } as never as ConfigDraft;
+  const { stdin, lastFrame } = render(
+    <RepositoriesForm
+      draft={draft}
+      baseline={draft}
+      onChange={onChange}
+      onBack={onBack}
+      discover={discover}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  // Both keystrokes land in one chunk, before a re-render: the handler sees the
+  // same stale `discovery` closure for both, so the phase ref is what lets esc
+  // resolve to "cancel the scan just started" instead of "back out of screen".
+  stdin.write("f\x1b");
+  await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce());
+  expect(onBack).not.toHaveBeenCalled();
+  // The late scan result must not pop the picker onto an idle/abandoned screen.
+  resolveDiscovery([{ owner: "a", repo: "r", name: "r", sources: ["gh"] }]);
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add repository"));
+  expect(lastFrame()).not.toContain("Discovered repositories");
 });
 
 test("marks a changed repo entry with ●", () => {

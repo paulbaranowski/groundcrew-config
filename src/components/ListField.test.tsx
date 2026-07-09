@@ -105,6 +105,58 @@ test("an itemAction does NOT fire on the trailing add row", async () => {
   expect(onPress).not.toHaveBeenCalled();
 });
 
+test("renders extra action rows after the add row and fires onPress on enter", async () => {
+  const onPress = vi.fn();
+  const onActivate = vi.fn();
+  const { stdin, lastFrame } = render(
+    <ListField
+      items={items}
+      isActive
+      onActivate={onActivate}
+      onDelete={() => {}}
+      extraActions={[{ label: "+ discover repositories…", onPress }]}
+    />,
+  );
+  expect(lastFrame()).toContain("+ discover repositories…");
+  stdin.write("\x1b[B"); // c/d
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ c/d"));
+  stdin.write("\x1b[B"); // + add
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ + add"));
+  stdin.write("\x1b[B"); // + discover
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("▸ + discover repositories…"),
+  );
+  stdin.write("\r");
+  expect(onPress).toHaveBeenCalledOnce();
+  // The extra action is not the add row: onActivate must not fire for it.
+  expect(onActivate).not.toHaveBeenCalled();
+});
+
+test("an itemAction does NOT fire on an extra action row", async () => {
+  const onPress = vi.fn();
+  const actionPress = vi.fn();
+  const { stdin, lastFrame } = render(
+    <ListField
+      items={items}
+      isActive
+      onActivate={() => {}}
+      onDelete={() => {}}
+      itemActions={[{ key: "c", onPress }]}
+      extraActions={[{ label: "+ discover repositories…", onPress: actionPress }]}
+    />,
+  );
+  stdin.write("\x1b[B"); // c/d
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ c/d"));
+  stdin.write("\x1b[B"); // + add
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ + add"));
+  stdin.write("\x1b[B"); // + discover
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("▸ + discover repositories…"),
+  );
+  stdin.write("c");
+  expect(onPress).not.toHaveBeenCalled();
+});
+
 test("renders a ● on items marked modified", () => {
   const { lastFrame } = render(
     <ListField
