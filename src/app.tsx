@@ -21,6 +21,7 @@ import {
   type CrewDoctorResult,
 } from "./io/setup/crewDoctor.ts";
 import { validateDraft } from "./io/validate.ts";
+import { readVersion } from "./meta.ts";
 import { CrewDoctorView } from "./screens/CrewDoctorView.tsx";
 import { Home } from "./screens/Home.tsx";
 import { AgentsForm } from "./screens/AgentsForm.tsx";
@@ -294,7 +295,9 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
         }
       >
         <Box justifyContent="space-between">
-          <Text bold>crew-config</Text>
+          <Text bold>
+            crew-config <Text dimColor>v{readVersion()}</Text>
+          </Text>
           <Text dimColor>{target.scope}</Text>
         </Box>
         <Box>

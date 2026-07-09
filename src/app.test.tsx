@@ -4,6 +4,7 @@ import path from "node:path";
 import { render } from "ink-testing-library";
 import { expect, test, vi } from "vitest";
 import { App } from "./app.tsx";
+import { readVersion } from "./meta.ts";
 
 const DOWN = "\x1b[B"; // down-arrow escape sequence
 const ESC = "\x1b";
@@ -26,7 +27,7 @@ test("starts on Home with no existing config", () => {
   const { lastFrame, unmount } = render(
     <App initialDraft={undefined} target={{ scope: "local", cwd: "/tmp" }} />,
   );
-  expect(lastFrame()).toContain("crew-config");
+  expect(lastFrame()).toContain(`crew-config v${readVersion()}`);
   expect(lastFrame()).toContain("Workspace");
   unmount();
 });
