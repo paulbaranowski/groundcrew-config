@@ -157,9 +157,13 @@ export function ManifestSourceForm({
       ) : null}
       {defaults.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
-          <Text dimColor>
-            defaults: {defaults.map(([k, v]) => `${k}=${v}`).join(" · ")}
-          </Text>
+          <Text>Defaults:</Text>
+          {defaults.map(([k, v]) => (
+            <Text key={k} dimColor>
+              {"  "}
+              {k}={v}
+            </Text>
+          ))}
         </Box>
       ) : null}
       {prereqs.length > 0 ? (
