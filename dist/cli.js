@@ -973,6 +973,32 @@ async function validateDraft(draft, configDir) {
   }
 }
 
+// src/meta.ts
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+var HELP = `crew-config \u2014 interactive editor for groundcrew's crew.config.json
+
+Usage:
+  crew-config            edit the global ~/.config/groundcrew/crew.config.json
+  crew-config --local    edit ./crew.config.json in the current project
+  crew-config <path>     edit the crew.config.json at <path>
+  crew-config upgrade    upgrade crew-config to the latest version
+  crew-config doctor     check the machine setup (groundcrew, safehouse, clearance); --json for machines
+
+Flags:
+  -h, --help       show this help and exit
+  -v, --version    print the version and exit`;
+function readVersion() {
+  const pkgPath = fileURLToPath(new URL("../package.json", import.meta.url));
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+  return pkg.version;
+}
+function metaOutput(argv2) {
+  if (argv2.includes("--version") || argv2.includes("-v")) return readVersion();
+  if (argv2.includes("--help") || argv2.includes("-h")) return HELP;
+  return null;
+}
+
 // src/screens/CrewDoctorView.tsx
 import { useState as useState2 } from "react";
 import { Box as Box2, Text as Text2, useInput } from "ink";
@@ -1892,7 +1918,7 @@ async function installSafehouse(deps = defaultInstallDeps()) {
 }
 
 // src/io/setup/probes.ts
-import { readFileSync, statSync as statSync2 } from "fs";
+import { readFileSync as readFileSync2, statSync as statSync2 } from "fs";
 import path5 from "path";
 
 // src/domain/setup/rcScan.ts
@@ -1959,7 +1985,7 @@ function readRcFiles(home) {
   for (const name of RC_CANDIDATES) {
     const file = path5.join(home, name);
     try {
-      out.push({ file, content: readFileSync(file, "utf8") });
+      out.push({ file, content: readFileSync2(file, "utf8") });
     } catch {
     }
   }
@@ -1967,7 +1993,7 @@ function readRcFiles(home) {
 }
 function readTextOrNull(file) {
   try {
-    return readFileSync(file, "utf8");
+    return readFileSync2(file, "utf8");
   } catch {
     return null;
   }
@@ -2001,7 +2027,7 @@ function probeClearance(home, env = process.env) {
   try {
     const mtimeMs = statSync2(pidFile).mtimeMs;
     daemonAgeSeconds = Math.round((Date.now() - mtimeMs) / 1e3);
-    const raw = readFileSync(pidFile, "utf8").trim();
+    const raw = readFileSync2(pidFile, "utf8").trim();
     const candidate = Number.parseInt(raw, 10);
     if (String(candidate) === raw && pidIsAlive(candidate)) {
       daemonPid = candidate;
@@ -2045,7 +2071,7 @@ import {
   fsyncSync,
   mkdirSync as mkdirSync2,
   openSync,
-  readFileSync as readFileSync2,
+  readFileSync as readFileSync3,
   renameSync as renameSync2,
   rmSync as rmSync2,
   writeSync
@@ -2080,7 +2106,7 @@ function writeClearanceHosts(home, mode) {
   if (mode === "create") {
     return { target: target2, wrote: false, refused: true };
   }
-  const existing = readFileSync2(target2, "utf8");
+  const existing = readFileSync3(target2, "utf8");
   const next = computeAppendContent(existing, CLAUDE_HOSTS);
   if (next === existing) {
     return { target: target2, wrote: false, refused: false };
@@ -2503,13 +2529,13 @@ function installPrompt(draft, configDir, prompt) {
 }
 
 // src/prompts/loader.ts
-import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync3, statSync as statSync3 } from "fs";
+import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync4, statSync as statSync3 } from "fs";
 import path8 from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath as fileURLToPath2 } from "url";
 function resolvePromptsDir(moduleUrl = import.meta.url) {
-  const bundled = fileURLToPath(new URL("./prompts/", moduleUrl));
+  const bundled = fileURLToPath2(new URL("./prompts/", moduleUrl));
   if (existsSync4(bundled) && statSync3(bundled).isDirectory()) return bundled;
-  return fileURLToPath(new URL("./", moduleUrl));
+  return fileURLToPath2(new URL("./", moduleUrl));
 }
 var PROMPTS_DIR = resolvePromptsDir();
 function listPackagedPrompts(dir = PROMPTS_DIR) {
@@ -2517,7 +2543,7 @@ function listPackagedPrompts(dir = PROMPTS_DIR) {
   return files.map((name) => readPackagedPrompt(path8.join(dir, name)));
 }
 function readPackagedPrompt(filepath) {
-  const raw = readFileSync3(filepath, "utf8");
+  const raw = readFileSync4(filepath, "utf8");
   const { frontmatter, body } = parseFrontmatter(raw);
   const slug = path8.basename(filepath, ".md");
   return {
@@ -3002,7 +3028,7 @@ function repoErrors(entries) {
 }
 
 // src/io/setup/discoverRepos.ts
-import { readdirSync as readdirSync2, readFileSync as readFileSync4 } from "fs";
+import { readdirSync as readdirSync2, readFileSync as readFileSync5 } from "fs";
 import { homedir as homedir3 } from "os";
 import path9 from "path";
 
@@ -3136,7 +3162,7 @@ async function discoverRepos(home, workspaceDir, deps = { run: runCommand, which
     for (const config of findGitConfigs(scanDir)) {
       let content;
       try {
-        content = readFileSync4(config, "utf8");
+        content = readFileSync5(config, "utf8");
       } catch {
         continue;
       }
@@ -4279,10 +4305,15 @@ function ManifestSourceForm({
       /* @__PURE__ */ jsx23(Text23, { dimColor: true, children: overrides.length === 0 ? "none (manifest defaults apply)" : overrides.map((e) => e.key).join(", ") }),
       envModified ? /* @__PURE__ */ jsx23(Text23, { color: "yellow", children: " \u25CF" }) : null
     ] }) }) : null,
-    defaults.length > 0 ? /* @__PURE__ */ jsx23(Box23, { marginTop: 1, flexDirection: "column", children: /* @__PURE__ */ jsxs23(Text23, { dimColor: true, children: [
-      "defaults: ",
-      defaults.map(([k, v]) => `${k}=${v}`).join(" \xB7 ")
-    ] }) }) : null,
+    defaults.length > 0 ? /* @__PURE__ */ jsxs23(Box23, { marginTop: 1, flexDirection: "column", children: [
+      /* @__PURE__ */ jsx23(Text23, { children: "Defaults:" }),
+      defaults.map(([k, v]) => /* @__PURE__ */ jsxs23(Text23, { dimColor: true, children: [
+        "  ",
+        k,
+        "=",
+        v
+      ] }, k))
+    ] }) : null,
     prereqs.length > 0 ? /* @__PURE__ */ jsxs23(Box23, { marginTop: 1, flexDirection: "column", children: [
       /* @__PURE__ */ jsx23(Text23, { children: "Prerequisites:" }),
       prereqs.map((p) => /* @__PURE__ */ jsx23(Box23, { flexDirection: "column", children: p.found ? /* @__PURE__ */ jsxs23(Text23, { children: [
@@ -5177,7 +5208,13 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoct
         ),
         children: [
           /* @__PURE__ */ jsxs32(Box32, { justifyContent: "space-between", children: [
-            /* @__PURE__ */ jsx32(Text32, { bold: true, children: "crew-config" }),
+            /* @__PURE__ */ jsxs32(Text32, { bold: true, children: [
+              "crew-config ",
+              /* @__PURE__ */ jsxs32(Text32, { dimColor: true, children: [
+                "v",
+                readVersion()
+              ] })
+            ] }),
             /* @__PURE__ */ jsx32(Text32, { dimColor: true, children: target2.scope })
           ] }),
           /* @__PURE__ */ jsx32(Box32, { children: /* @__PURE__ */ jsxs32(Text32, { dimColor: true, children: [
@@ -5281,7 +5318,7 @@ function App({ initialDraft: initialDraft2, target: target2, setupDeps, crewDoct
 }
 
 // src/io/load.ts
-import { existsSync as existsSync5, readFileSync as readFileSync5 } from "fs";
+import { existsSync as existsSync5, readFileSync as readFileSync6 } from "fs";
 import path12 from "path";
 import { pathToFileURL } from "url";
 import { cosmiconfig } from "cosmiconfig";
@@ -5295,7 +5332,7 @@ var explorer = cosmiconfig("crew", {
 async function loadDraft(filepath) {
   if (!existsSync5(filepath)) return void 0;
   if (path12.extname(filepath) === ".json") {
-    const text = readFileSync5(filepath, "utf8");
+    const text = readFileSync6(filepath, "utf8");
     try {
       return JSON.parse(text);
     } catch (error) {
@@ -5616,32 +5653,6 @@ function runUpgrade(deps = {}) {
   }
   d.log(`Upgrading crew-config via: ${command.echo}`);
   return d.run(command.cmd, command.args);
-}
-
-// src/meta.ts
-import { readFileSync as readFileSync6 } from "fs";
-import { fileURLToPath as fileURLToPath2 } from "url";
-var HELP = `crew-config \u2014 interactive editor for groundcrew's crew.config.json
-
-Usage:
-  crew-config            edit the global ~/.config/groundcrew/crew.config.json
-  crew-config --local    edit ./crew.config.json in the current project
-  crew-config <path>     edit the crew.config.json at <path>
-  crew-config upgrade    upgrade crew-config to the latest version
-  crew-config doctor     check the machine setup (groundcrew, safehouse, clearance); --json for machines
-
-Flags:
-  -h, --help       show this help and exit
-  -v, --version    print the version and exit`;
-function readVersion() {
-  const pkgPath = fileURLToPath2(new URL("../package.json", import.meta.url));
-  const pkg = JSON.parse(readFileSync6(pkgPath, "utf8"));
-  return pkg.version;
-}
-function metaOutput(argv2) {
-  if (argv2.includes("--version") || argv2.includes("-v")) return readVersion();
-  if (argv2.includes("--help") || argv2.includes("-h")) return HELP;
-  return null;
 }
 
 // src/cli.tsx
