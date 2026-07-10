@@ -1123,7 +1123,7 @@ import { useState as useState6 } from "react";
 import { Box as Box8, Text as Text8, useInput as useInput6 } from "ink";
 
 // src/domain/agents.ts
-var BUILTIN_AGENTS = ["claude", "codex"];
+var BUILTIN_AGENTS = ["claude", "codex", "cursor"];
 function isAgentEnabled(agents, name) {
   return Object.hasOwn(agents?.definitions ?? {}, name);
 }
@@ -1434,9 +1434,10 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
   const claudeOn = isAgentEnabled(agents, "claude");
   const sandboxRequired = runnerRequiresSandbox(draft.local?.runner);
   const rows = [];
-  rows.push({ kind: "enable", name: "claude" });
-  if (claudeOn) rows.push({ kind: "bypass" });
-  rows.push({ kind: "enable", name: "codex" });
+  for (const name of BUILTIN_AGENTS) {
+    rows.push({ kind: "enable", name });
+    if (name === "claude" && claudeOn) rows.push({ kind: "bypass" });
+  }
   const focused = Math.min(cursor, rows.length - 1);
   const custom = Object.keys(definitions).filter(
     (name) => !BUILTIN_AGENTS.includes(name)
@@ -1531,7 +1532,7 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
       name,
       " \u2014 defined in crew.config.json"
     ] }, name)) }) : null,
-    /* @__PURE__ */ jsx8(Box8, { marginTop: 1, children: /* @__PURE__ */ jsx8(Text8, { dimColor: true, children: 'The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex). Check the ones installed on your machine. "bypass permission prompts" lets the agent act without stopping to ask. \u2191/\u2193 move \xB7 space toggle \xB7 enter edit fields \xB7 esc back.' }) })
+    /* @__PURE__ */ jsx8(Box8, { marginTop: 1, children: /* @__PURE__ */ jsx8(Text8, { dimColor: true, children: 'The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex, Cursor). Check the ones installed on your machine. "bypass permission prompts" lets the agent act without stopping to ask. \u2191/\u2193 move \xB7 space toggle \xB7 enter edit fields \xB7 esc back.' }) })
   ] });
 }
 

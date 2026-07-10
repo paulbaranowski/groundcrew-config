@@ -7,7 +7,7 @@ export type AgentDef = NonNullable<NonNullable<Agents>["definitions"]>[string];
 type Def = AgentDef;
 
 /** Built-in agent presets, in display order. An empty `{}` entry enables one. */
-export const BUILTIN_AGENTS = ["claude", "codex"] as const;
+export const BUILTIN_AGENTS = ["claude", "codex", "cursor"] as const;
 
 /** True when `name` has a definition entry (i.e. the agent is enabled). */
 export function isAgentEnabled(agents: Agents, name: string): boolean {

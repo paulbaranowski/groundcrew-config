@@ -15,7 +15,7 @@ function draftWith(definitions: Record<string, unknown>) {
 const claudeOnly = draftWith({ claude: {} });
 const both = draftWith({ claude: {}, codex: {} });
 
-test("renders enable checkboxes for claude and codex", () => {
+test("renders enable checkboxes for claude, codex, and cursor", () => {
   const { lastFrame } = render(
     <AgentsForm
       draft={draftWith({ claude: {} })}
@@ -27,8 +27,9 @@ test("renders enable checkboxes for claude and codex", () => {
   const f = lastFrame() ?? "";
   expect(f).toContain("claude");
   expect(f).toContain("codex");
+  expect(f).toContain("cursor");
   expect(f).toContain("[x]"); // claude enabled
-  expect(f).toContain("[ ]"); // codex disabled
+  expect(f).toContain("[ ]"); // codex and cursor disabled
 });
 
 test("shows the bypass sub-option only when claude is enabled", () => {
@@ -103,7 +104,7 @@ test("space on the codex row enables codex", async () => {
   const { lastFrame, stdin } = render(
     <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={onChange} onBack={() => {}} />,
   );
-  // rows: claude (0), bypass (1), codex (2)
+  // rows: claude (0), bypass (1), codex (2), cursor (3)
   stdin.write(DOWN);
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("▸     [ ] bypass permission prompts"),
@@ -118,6 +119,44 @@ test("space on the codex row enables codex", async () => {
       }),
     }),
   );
+});
+
+test("space on the cursor row enables cursor", async () => {
+  const onChange = vi.fn();
+  const { lastFrame, stdin } = render(
+    <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={onChange} onBack={() => {}} />,
+  );
+  // rows: claude (0), bypass (1), codex (2), cursor (3)
+  stdin.write(DOWN);
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("▸     [ ] bypass permission prompts"),
+  );
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] codex"));
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] cursor"));
+  stdin.write(" ");
+  expect(onChange).toHaveBeenCalledWith(
+    expect.objectContaining({
+      agents: expect.objectContaining({
+        definitions: { claude: {}, cursor: {} },
+      }),
+    }),
+  );
+});
+
+test("cursor-grok appears as a config-only agent when enabled", () => {
+  const { lastFrame } = render(
+    <AgentsForm
+      draft={draftWith({ claude: {}, "cursor-grok": {} })}
+      baseline={draftWith({ claude: {}, "cursor-grok": {} })}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  const f = lastFrame() ?? "";
+  expect(f).toContain("cursor-grok");
+  expect(f).toContain("crew.config.json");
 });
 
 test("custom agents are listed read-only, authored in the config file", () => {

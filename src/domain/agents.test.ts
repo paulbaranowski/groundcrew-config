@@ -10,8 +10,8 @@ import {
   setAgentEnabled,
 } from "./agents.ts";
 
-test("BUILTIN_AGENTS lists claude then codex", () => {
-  expect(BUILTIN_AGENTS).toEqual(["claude", "codex"]);
+test("BUILTIN_AGENTS lists claude, codex, then cursor", () => {
+  expect(BUILTIN_AGENTS).toEqual(["claude", "codex", "cursor"]);
 });
 
 test("an agent is enabled when present in definitions", () => {

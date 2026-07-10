@@ -27,8 +27,9 @@ type Row =
   | { kind: "bypass" };
 
 // Section editor for the coding agents groundcrew runs: enable/disable each
-// built-in (claude, codex), toggle claude's permission-bypass child row, and edit
-// per-agent fields via AgentSubForm. Follows the screen contract — see SectionForm.
+// built-in (claude, codex, cursor), toggle claude's permission-bypass child row,
+// and edit per-agent fields via AgentSubForm. Follows the screen contract — see
+// SectionForm.
 export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
   const [cursor, setCursor] = useState(0);
   const [editing, setEditing] = useState<string | undefined>(undefined);
@@ -40,11 +41,14 @@ export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
   const claudeOn = isAgentEnabled(agents, "claude");
   const sandboxRequired = runnerRequiresSandbox(draft.local?.runner);
 
-  // claude → (bypass when claude on) → codex. The bypass row is a child of claude.
+  // claude → (bypass when claude on) → codex → cursor. The bypass row is a child
+  // of claude. Model-variant presets such as cursor-grok are config-only built-ins
+  // and appear in the custom-agents list when enabled.
   const rows: Row[] = [];
-  rows.push({ kind: "enable", name: "claude" });
-  if (claudeOn) rows.push({ kind: "bypass" });
-  rows.push({ kind: "enable", name: "codex" });
+  for (const name of BUILTIN_AGENTS) {
+    rows.push({ kind: "enable", name });
+    if (name === "claude" && claudeOn) rows.push({ kind: "bypass" });
+  }
   const focused = Math.min(cursor, rows.length - 1);
 
   const custom = Object.keys(definitions).filter(
@@ -154,7 +158,8 @@ export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
       <Box marginTop={1}>
         <Text dimColor>
           The AI coding tools groundcrew runs on your tasks (e.g. Claude,
-          Codex). Check the ones installed on your machine. "bypass permission
+          Codex, Cursor). Check the ones installed on your machine. "bypass
+          permission
           prompts" lets the agent act without stopping to ask. ↑/↓ move · space
           toggle · enter edit fields · esc back.
         </Text>
