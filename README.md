@@ -39,7 +39,7 @@ crew-config doctor     # check the machine setup (groundcrew, safehouse, clearan
 - **Setup** — machine setup, not config: probes whether groundcrew (npm global) and the agent-safehouse sandbox (brew, macOS) are installed, and installs them on request. `crew-config doctor` is the same set of read-only checks headlessly (exit 0 healthy, 1 broken).
 - **Workspace** — project/worktree directories.
 - **Repositories** — the repos groundcrew may work on (`owner/repo`, with an optional per-repo directory override). The repo editor also covers `workdir` (a project subdirectory within the worktree) and `provision` (scripted `create`/`remove` worktree templates — both `create` and `remove` are required, and `provision` is mutually exclusive with the directory override).
-- **Agents** — enable the built-in agents (claude, codex) and edit their fields; any non-built-in agent definitions are listed read-only (author them in `crew.config.json`).
+- **Agents** — enable the built-in agents (claude, codex, cursor) and edit their fields; any non-built-in agent definitions are listed read-only (author them in `crew.config.json`, e.g. `cursor-grok` or `claude-fable`).
 - **Task Sources** — a hub (groundcrew needs at least one enabled source to run):
   - **Linear** — enable/disable (groundcrew 4.24+ no longer enables Linear implicitly). The API key is read from `GROUNDCREW_LINEAR_API_KEY` / `LINEAR_API_KEY` in your environment, _not_ this file; the screen shows whether it's set.
   - **todo-txt** — enable/disable a zero-credentials local-file source, with editable `todoPath` / `tasksDir`.

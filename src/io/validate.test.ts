@@ -98,6 +98,14 @@ test("a complete config validates ok", async () => {
   expect(result.ok).toBe(true);
 });
 
+test("cursor: {} validates as a built-in enable marker (groundcrew ≥ 4.46.6)", async () => {
+  const result = await validateDraft({
+    workspace: { projectDir: "~/dev", knownRepositories: ["a/b"] },
+    agents: { default: "claude", definitions: { claude: {}, cursor: {} } },
+  } as never);
+  expect(result.ok).toBe(true);
+});
+
 test("a missing projectDir fails and maps to the workspace section", async () => {
   const result = await validateDraft({
     workspace: { knownRepositories: [] },
