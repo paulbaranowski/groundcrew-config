@@ -29,6 +29,7 @@ import { SetupScreen, type SetupScreenDeps } from "./screens/SetupScreen.tsx";
 import { PromptsScreen } from "./screens/PromptsScreen.tsx";
 import { QuitGuard } from "./screens/QuitGuard.tsx";
 import { RepositoriesForm } from "./screens/RepositoriesForm.tsx";
+import { SandboxForm } from "./screens/SandboxForm.tsx";
 import { SectionForm } from "./screens/SectionForm.tsx";
 import { TaskSourcesMenu } from "./screens/TaskSourcesMenu.tsx";
 import { UsageForm } from "./screens/UsageForm.tsx";
@@ -390,6 +391,13 @@ export function App({ initialDraft, target, setupDeps, crewDoctor }: Props) {
       />
     ) : id === "agents" ? (
       <AgentsForm
+        draft={draft}
+        baseline={baseline}
+        onChange={update}
+        onBack={back}
+      />
+    ) : id === "sandbox" ? (
+      <SandboxForm
         draft={draft}
         baseline={baseline}
         onChange={update}

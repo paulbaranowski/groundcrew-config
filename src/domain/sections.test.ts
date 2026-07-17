@@ -153,19 +153,14 @@ test("usage summary shows the configured session limit when tracking is on", () 
   ).toBe("tracking enabled · limit 50%");
 });
 
-test("sandbox is a runner + networkEgress select spec", () => {
-  const spec = simpleSectionSpec("sandbox");
-  expect(spec.map((f) => f.path)).toEqual([
-    "local.runner",
-    "local.networkEgress",
-  ]);
-  expect(spec[0]?.kind).toBe("select");
-  expect(spec[0]?.options).toEqual(["auto", "safehouse", "srt", "sdx", "none"]);
-  expect(spec[1]?.kind).toBe("select");
-  expect(spec[1]?.options).toEqual(["allowlisted", "open"]);
+test("sandbox is a bespoke section (no spec-driven fields)", () => {
+  // Sandbox is rendered by the bespoke SandboxForm because it mixes scalars
+  // (runner, networkEgress) with string-list knobs (readOnlyDirs,
+  // safehouse.enable) that SectionForm's field-spec cannot express.
+  expect(simpleSectionSpec("sandbox")).toEqual([]);
 });
 
-test("sandbox summary always shows runner and egress, with defaults when unset", () => {
+test("sandbox summary shows runner + egress; adds list counts when non-empty", () => {
   const base = { workspace: { projectDir: "~/d", knownRepositories: [] } };
   expect(sectionSummary("sandbox", base as never)).toBe(
     "runner: auto · egress: allowlisted",
@@ -176,6 +171,17 @@ test("sandbox summary always shows runner and egress, with defaults when unset",
       local: { runner: "safehouse", networkEgress: "open" },
     } as never),
   ).toBe("runner: safehouse · egress: open");
+  expect(
+    sectionSummary("sandbox", {
+      ...base,
+      local: {
+        readOnlyDirs: ["~/.rbenv"],
+        safehouse: { enable: ["agent-browser", "browser-native-messaging"] },
+      },
+    } as never),
+  ).toBe(
+    "runner: auto · egress: allowlisted · 1 read-only dir · 2 safehouse profiles",
+  );
 });
 
 test("taskSources summary lists enabled source kinds", () => {

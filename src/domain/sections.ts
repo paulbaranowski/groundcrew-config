@@ -1,8 +1,6 @@
 import {
   GIT_DEFAULTS,
-  NETWORK_EGRESS,
   ORCHESTRATOR_DEFAULTS,
-  RUNNERS,
   WORKSPACE_KINDS,
   type ConfigDraft,
   type SectionId,
@@ -82,7 +80,7 @@ export const SECTION_DESCRIPTION: Record<SectionId, string> = {
   terminal:
     "Which terminal multiplexer hosts the running agents (tmux, cmux, or zellij).",
   sandbox:
-    "Pick the sandbox that isolates each agent from the rest of your machine while it runs. networkEgress controls the agent's network access (safehouse runner only).",
+    "Pick the sandbox that isolates each agent from the rest of your machine while it runs. networkEgress and safehouse.enable apply to the safehouse runner only; readOnlyDirs re-opens masked host dirs read-only inside safehouse + srt (e.g. ~/.rbenv for gems).",
   prompts:
     "The instructions groundcrew gives the agent at the start of every task.",
   advanced: "Where groundcrew writes its log file.",
@@ -101,8 +99,6 @@ export type FieldPath =
   | "git.remote"
   | "git.defaultBranch"
   | "git.branchPrefix"
-  | "local.runner"
-  | "local.networkEgress"
   | "prompts.initial"
   | "prompts.promptFile"
   | "workspaceKind"
@@ -172,33 +168,6 @@ export function simpleSectionSpec(id: SectionId): FieldSpec[] {
           label: "branchPrefix",
           kind: "text",
           help: "Branch name prefix. Defaults to your OS username.",
-        },
-      ];
-    case "sandbox":
-      return [
-        {
-          path: "local.runner",
-          label: "runner",
-          kind: "select",
-          options: RUNNERS,
-          help: [
-            "• auto — chooses for you (safehouse on macOS, sdx on Linux)",
-            "• safehouse — macOS only",
-            "• srt — Anthropic sandbox-runtime, fast & no Docker, macOS + Linux/WSL",
-            "• sdx — Docker Sandboxes, needs Docker, macOS + Linux",
-            "• none — no sandbox (unsafe)",
-          ].join("\n"),
-        },
-        {
-          path: "local.networkEgress",
-          label: "networkEgress",
-          kind: "select",
-          options: NETWORK_EGRESS,
-          help: [
-            "Network access for agents. Only the safehouse runner uses this; srt/sdx/none ignore it.",
-            "• allowlisted — Clearance-wrapped: deny network except the egress allowlist (default)",
-            "• open — keep the filesystem sandbox but open network egress (no Clearance)",
-          ].join("\n"),
         },
       ];
     case "prompts":
@@ -297,10 +266,19 @@ export function sectionSummary(id: SectionId, draft: ConfigDraft): string {
         : "none (per-repo only)";
     case "git":
       return `${draft.git?.remote ?? GIT_DEFAULTS.remote} · ${draft.git?.defaultBranch ?? GIT_DEFAULTS.defaultBranch}`;
-    case "sandbox":
-      return `runner: ${draft.local?.runner ?? "auto"} · egress: ${
-        draft.local?.networkEgress ?? "allowlisted"
-      }`;
+    case "sandbox": {
+      const runner = draft.local?.runner ?? "auto";
+      const egress = draft.local?.networkEgress ?? "allowlisted";
+      const roCount = draft.local?.readOnlyDirs?.length ?? 0;
+      const enableCount = draft.local?.safehouse?.enable?.length ?? 0;
+      const extras: string[] = [];
+      if (roCount > 0) extras.push(`${roCount} read-only dir${roCount === 1 ? "" : "s"}`);
+      if (enableCount > 0) {
+        extras.push(`${enableCount} safehouse profile${enableCount === 1 ? "" : "s"}`);
+      }
+      const tail = extras.length === 0 ? "" : ` · ${extras.join(" · ")}`;
+      return `runner: ${runner} · egress: ${egress}${tail}`;
+    }
     case "prompts": {
       const prompts = draft.prompts ?? {};
       if (prompts.promptFile) return `file: ${prompts.promptFile}`;

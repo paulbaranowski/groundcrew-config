@@ -12,11 +12,11 @@ const spec: FieldSpec[] = [
     placeholder: "origin",
   },
   {
-    path: "local.runner",
-    label: "runner",
+    path: "workspaceKind",
+    label: "workspaceKind",
     kind: "select",
-    options: ["auto", "sdx"],
-    help: "Sandbox backend.",
+    options: ["auto", "tmux"],
+    help: "Terminal session manager.",
   },
 ];
 
