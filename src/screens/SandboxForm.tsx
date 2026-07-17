@@ -255,16 +255,14 @@ function StringListEditor({
   onBack,
 }: StringListProps) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
-  // Two identical strings should not diff against a single baseline slot; the
-  // positional-blank trick from ShellSandboxPathsEditor also covers duplicates
-  // by falling back to `${string}__${i}` for repeats.
-  const seen = new Map<string, number>();
-  const modified = modifiedByKey(items, baselineItems, (value, i) => {
-    const key = value || `__blank__${i}`;
-    const n = seen.get(key) ?? 0;
-    seen.set(key, n + 1);
-    return n === 0 ? key : `${key}__${i}`;
-  });
+  // Same key trick as ShellSandboxPathsEditor: blanks fall back to a positional
+  // key so two blank rows aren't collapsed onto one baseline slot; named
+  // entries key by value so a reorder still diffs as unchanged.
+  const modified = modifiedByKey(
+    items,
+    baselineItems,
+    (value, i) => value || `__blank__${i}`,
+  );
 
   useInput(
     (_input, key) => {

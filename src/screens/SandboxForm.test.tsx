@@ -206,6 +206,7 @@ test("d deletes the focused list entry", async () => {
     />,
   );
   stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("› networkEgress"));
   stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("› readOnlyDirs"));
   stdin.write("\r");
@@ -220,6 +221,35 @@ test("d deletes the focused list entry", async () => {
       }),
     ),
   );
+});
+
+test("unchanged list entries are not marked modified inside the list editor", async () => {
+  // Regression: an earlier implementation shared a `seen` map between
+  // baseline and current keyOf passes, so every unchanged non-empty row was
+  // flagged modified (baseline key "a" vs current key "a__0").
+  const draft = draftWith({ readOnlyDirs: ["~/.rbenv", "~/.local/share/gem"] });
+  const { lastFrame, stdin } = render(
+    <SandboxForm
+      draft={draft}
+      baseline={draft}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("› networkEgress"));
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("› readOnlyDirs"));
+  stdin.write("\r");
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain("Read-only sandbox dirs"),
+  );
+  const frame = lastFrame() ?? "";
+  const rbenvLine = frame.split("\n").find((l) => l.includes("~/.rbenv")) ?? "";
+  const gemLine =
+    frame.split("\n").find((l) => l.includes("~/.local/share/gem")) ?? "";
+  expect(rbenvLine).not.toContain("●");
+  expect(gemLine).not.toContain("●");
 });
 
 test("changed lists render a ● marker on the summary row", () => {
@@ -249,6 +279,7 @@ test("a blank entry is refused (Enter on blank keeps editor open, no onChange)",
     />,
   );
   stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("› networkEgress"));
   stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("› readOnlyDirs"));
   stdin.write("\r");

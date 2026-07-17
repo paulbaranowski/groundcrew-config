@@ -3808,13 +3808,11 @@ function StringListEditor({
   onBack
 }) {
   const [editing, setEditing] = useState15(void 0);
-  const seen = /* @__PURE__ */ new Map();
-  const modified = modifiedByKey(items, baselineItems, (value, i) => {
-    const key = value || `__blank__${i}`;
-    const n = seen.get(key) ?? 0;
-    seen.set(key, n + 1);
-    return n === 0 ? key : `${key}__${i}`;
-  });
+  const modified = modifiedByKey(
+    items,
+    baselineItems,
+    (value, i) => value || `__blank__${i}`
+  );
   useInput18(
     (_input, key) => {
       if (key.escape) onBack();
