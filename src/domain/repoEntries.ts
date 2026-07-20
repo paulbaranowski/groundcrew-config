@@ -27,13 +27,13 @@ export interface RepoEntry {
   prepareWorktreeHook?: string | undefined;
   /**
    * Operator-only, per-repo host-side `prepareWorktree` shell command
-   * (groundcrew PR #306, not yet published). Runs on the host — outside the
-   * agent's sandbox — before the sandboxed `hooks.prepareWorktree`, so repo
-   * setup that the sandbox blocks (native compilation, host toolchains, writes
-   * outside the worktree) can complete before the agent starts. Deliberately
-   * has no `defaults.*` cascade: host execution is granted per repo, not fleet-
-   * wide, and a repo-committed `.groundcrew/config.json` cannot grant itself
-   * host execution.
+   * (groundcrew ≥ 4.48). Runs on the host — outside the agent's sandbox —
+   * before the sandboxed `hooks.prepareWorktree`, so repo setup that the
+   * sandbox blocks (native compilation, host toolchains, writes outside the
+   * worktree) can complete before the agent starts. Deliberately has no
+   * `defaults.*` cascade: host execution is granted per repo, not fleet-wide,
+   * and a repo-committed `.groundcrew/config.json` cannot grant itself host
+   * execution.
    */
   unsandboxedPrepareWorktreeHook?: string | undefined;
 }
