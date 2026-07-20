@@ -15,7 +15,7 @@ interface Props {
   onCancel: () => void;
 }
 
-const FIELD_COUNT = 6;
+const FIELD_COUNT = 7;
 
 export function RepoSubForm({
   entry,
@@ -34,6 +34,9 @@ export function RepoSubForm({
     entry.provision?.remove ?? "",
   );
   const [prepareHook, setPrepareHook] = useState(entry.prepareWorktreeHook ?? "");
+  const [unsandboxedHook, setUnsandboxedHook] = useState(
+    entry.unsandboxedPrepareWorktreeHook ?? "",
+  );
   const [active, setActive] = useState(0);
   const guard = useEditGuard();
 
@@ -64,6 +67,12 @@ export function RepoSubForm({
       prepareHook.length === 0 ? undefined : prepareHook,
       baselineEntry.prepareWorktreeHook,
     );
+  const unsandboxedHookModified =
+    baselineEntry === undefined ||
+    !valuesEqual(
+      unsandboxedHook.length === 0 ? undefined : unsandboxedHook,
+      baselineEntry.unsandboxedPrepareWorktreeHook,
+    );
 
   function buildEntry(): RepoEntry {
     const hasProvision =
@@ -76,6 +85,8 @@ export function RepoSubForm({
         ? { create: provisionCreate, remove: provisionRemove }
         : undefined,
       prepareWorktreeHook: prepareHook.length === 0 ? undefined : prepareHook,
+      unsandboxedPrepareWorktreeHook:
+        unsandboxedHook.length === 0 ? undefined : unsandboxedHook,
     };
   }
 
@@ -175,6 +186,14 @@ export function RepoSubForm({
           modified={prepareHookModified}
           onChange={guard.track(setPrepareHook)}
         />
+        <TextField
+          label="unsandboxedHooks.prepareWorktree"
+          value={unsandboxedHook}
+          placeholder="host-side setup (bin/setup, native builds) — runs OUTSIDE the sandbox (optional)"
+          isActive={active === 6}
+          modified={unsandboxedHookModified}
+          onChange={guard.track(setUnsandboxedHook)}
+        />
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
@@ -193,6 +212,14 @@ export function RepoSubForm({
           hooks.prepareWorktree cascade: a repo-committed
           .groundcrew/config.json wins, then this per-repo setting, then
           defaults.hooks.prepareWorktree.
+        </Text>
+      </Box>
+      <Box>
+        <Text dimColor>
+          unsandboxedHooks.prepareWorktree is operator-only and per-repo (no
+          defaults.*, no repo-committed override). Runs on the host BEFORE
+          hooks.prepareWorktree — for native builds and host toolchains the
+          sandbox blocks. Rejected under runner=sdx.
         </Text>
       </Box>
     </Box>

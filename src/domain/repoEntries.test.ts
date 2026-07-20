@@ -234,6 +234,74 @@ test("duplicateEntry carries the per-repo hook to the copy", () => {
   });
 });
 
+test("round-trips per-repo unsandboxedHooks.prepareWorktree", () => {
+  const union = [
+    {
+      name: "catalog-admin",
+      unsandboxedHooks: { prepareWorktree: "bin/setup" },
+    },
+  ];
+  const entries = normalizeRepos(union);
+  expect(entries).toEqual([
+    {
+      name: "catalog-admin",
+      projectDirOverride: undefined,
+      workdir: undefined,
+      provision: undefined,
+      prepareWorktreeHook: undefined,
+      unsandboxedPrepareWorktreeHook: "bin/setup",
+    },
+  ]);
+  expect(denormalizeRepos(entries)).toEqual(union);
+});
+
+test("denormalize keeps sandboxed and unsandboxed hooks side-by-side", () => {
+  expect(
+    denormalizeRepos([
+      {
+        name: "catalog-admin",
+        projectDirOverride: undefined,
+        prepareWorktreeHook: "npm ci",
+        unsandboxedPrepareWorktreeHook: "bin/setup",
+      },
+    ]),
+  ).toEqual([
+    {
+      name: "catalog-admin",
+      hooks: { prepareWorktree: "npm ci" },
+      unsandboxedHooks: { prepareWorktree: "bin/setup" },
+    },
+  ]);
+});
+
+test("denormalize drops a whitespace-only unsandboxedHook and stays bare-string", () => {
+  expect(
+    denormalizeRepos([
+      {
+        name: "a/b",
+        projectDirOverride: undefined,
+        unsandboxedPrepareWorktreeHook: "   ",
+      },
+    ]),
+  ).toEqual(["a/b"]);
+});
+
+test("duplicateEntry carries the unsandboxed hook to the copy", () => {
+  const original: RepoEntry = {
+    name: "catalog-admin",
+    projectDirOverride: undefined,
+    unsandboxedPrepareWorktreeHook: "bin/setup",
+  };
+  expect(duplicateEntry(original, ["catalog-admin"])).toEqual({
+    name: "catalog-admin-copy",
+    projectDirOverride: undefined,
+    workdir: undefined,
+    provision: undefined,
+    prepareWorktreeHook: undefined,
+    unsandboxedPrepareWorktreeHook: "bin/setup",
+  });
+});
+
 test("a duplicated scripted entry keeps both provision templates on save", () => {
   const original: RepoEntry = {
     name: "maple",

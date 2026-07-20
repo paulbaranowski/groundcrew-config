@@ -269,6 +269,49 @@ test("enter round-trips the per-repo prepareWorktreeHook", () => {
   });
 });
 
+test("enter round-trips the per-repo unsandboxedPrepareWorktreeHook", () => {
+  const entry: RepoEntry = {
+    name: "catalog-admin",
+    projectDirOverride: undefined,
+    unsandboxedPrepareWorktreeHook: "bin/setup",
+  };
+  const onSave = vi.fn();
+  const { stdin } = render(
+    <RepoSubForm
+      entry={entry}
+      baselineEntry={entry}
+      projectDir="~/dev"
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  stdin.write("\r");
+  expect(onSave).toHaveBeenCalledWith({
+    name: "catalog-admin",
+    projectDirOverride: undefined,
+    workdir: undefined,
+    provision: undefined,
+    unsandboxedPrepareWorktreeHook: "bin/setup",
+  });
+});
+
+test("shows the operator-only host-side hint copy for unsandboxedHooks", () => {
+  const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
+  const { lastFrame } = render(
+    <RepoSubForm
+      entry={entry}
+      baselineEntry={entry}
+      projectDir="~/dev"
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("unsandboxedHooks.prepareWorktree");
+  expect(frame).toContain("operator-only");
+  expect(frame).toContain("host");
+});
+
 test("shows the cascade hint copy for prepareWorktree", () => {
   const entry: RepoEntry = { name: "org/repo", projectDirOverride: undefined };
   const { lastFrame } = render(

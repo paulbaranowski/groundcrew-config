@@ -1,10 +1,21 @@
 import type { Config } from "@clipboard-health/groundcrew";
 
-/** A repository entry's object form: name + optional clone-parent override. */
+/**
+ * A repository entry's object form: name + optional clone-parent override.
+ *
+ * Intersected with an optional `unsandboxedHooks` container ahead of the peer
+ * bump: groundcrew PR #306 adds an operator-only, per-repo host-setup hook
+ * (`unsandboxedHooks.prepareWorktree`) that parallels the sandboxed `hooks`
+ * container. The installed groundcrew types don't know the field yet, so we
+ * widen here so the TUI can round-trip it. Once the peer version that ships
+ * PR #306 lands, the intersection becomes a compatible no-op.
+ */
 export type KnownRepo = Exclude<
   Config["workspace"]["knownRepositories"][number],
   string
->;
+> & {
+  unsandboxedHooks?: { prepareWorktree?: string };
+};
 
 /** The loose, user-facing config the TUI edits. Identical to groundcrew's `Config`. */
 export type ConfigDraft = Config;
