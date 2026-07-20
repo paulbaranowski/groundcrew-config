@@ -1,4 +1,4 @@
-import type { ConfigDraft, KnownRepo } from "./types.ts";
+import type { KnownRepo } from "./types.ts";
 
 /**
  * A repo's scripted provisioning templates. groundcrew requires *both* `create`
@@ -25,9 +25,20 @@ export interface RepoEntry {
    * groundcrew's `HookCommands` only models one command today.
    */
   prepareWorktreeHook?: string | undefined;
+  /**
+   * Operator-only, per-repo host-side `prepareWorktree` shell command
+   * (groundcrew ≥ 4.48). Runs on the host — outside the agent's sandbox —
+   * before the sandboxed `hooks.prepareWorktree`, so repo setup that the
+   * sandbox blocks (native compilation, host toolchains, writes outside the
+   * worktree) can complete before the agent starts. Deliberately has no
+   * `defaults.*` cascade: host execution is granted per repo, not fleet-wide,
+   * and a repo-committed `.groundcrew/config.json` cannot grant itself host
+   * execution.
+   */
+  unsandboxedPrepareWorktreeHook?: string | undefined;
 }
 
-type RepoUnion = ConfigDraft["workspace"]["knownRepositories"][number];
+type RepoUnion = string | KnownRepo;
 
 export function normalizeRepos(
   repos: readonly RepoUnion[] | undefined,
@@ -43,6 +54,8 @@ export function normalizeRepos(
             ? { create: entry.provision.create, remove: entry.provision.remove }
             : undefined,
           prepareWorktreeHook: entry.hooks?.prepareWorktree,
+          unsandboxedPrepareWorktreeHook:
+            entry.unsandboxedHooks?.prepareWorktree,
         },
   );
 }
@@ -55,13 +68,22 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
     const create = entry.provision?.create.trim() ?? "";
     const remove = entry.provision?.remove.trim() ?? "";
     const prepareHook = entry.prepareWorktreeHook?.trim() ?? "";
+    const unsandboxedHook =
+      entry.unsandboxedPrepareWorktreeHook?.trim() ?? "";
     const hasOverride = override !== undefined && override.length > 0;
     const hasWorkdir = workdir !== undefined && workdir.length > 0;
     const hasProvision = create.length > 0 || remove.length > 0;
     const hasHook = prepareHook.length > 0;
+    const hasUnsandboxedHook = unsandboxedHook.length > 0;
     // The bare string is the minimal form: emit it only when no per-repo option
     // is set, so an untouched repo never bloats into the object form.
-    if (!hasOverride && !hasWorkdir && !hasProvision && !hasHook) {
+    if (
+      !hasOverride &&
+      !hasWorkdir &&
+      !hasProvision &&
+      !hasHook &&
+      !hasUnsandboxedHook
+    ) {
       return name;
     }
     const repo: KnownRepo = { name };
@@ -72,6 +94,9 @@ export function denormalizeRepos(entries: readonly RepoEntry[]): RepoUnion[] {
     // entry, instead of us silently discarding the half the user did type.
     if (hasProvision) repo.provision = { create, remove };
     if (hasHook) repo.hooks = { prepareWorktree: prepareHook };
+    if (hasUnsandboxedHook) {
+      repo.unsandboxedHooks = { prepareWorktree: unsandboxedHook };
+    }
     return repo;
   });
 }
@@ -112,6 +137,7 @@ export function duplicateEntry(
       ? { create: entry.provision.create, remove: entry.provision.remove }
       : undefined,
     prepareWorktreeHook: entry.prepareWorktreeHook,
+    unsandboxedPrepareWorktreeHook: entry.unsandboxedPrepareWorktreeHook,
   };
 }
 
