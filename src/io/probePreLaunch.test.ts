@@ -111,3 +111,23 @@ test("{{worktree}} is substituted with the provided stand-in", async () => {
   );
   expect(result.rows).toEqual([{ name: "WT", length: "/tmp/some-worktree".length }]);
 });
+
+test("duplicate names produce one row and one unset entry", async () => {
+  // A duplicate name shouldn't render twice in the panel; the report loop
+  // dedups alongside the `unset` scrub so the whole flow uses one sequence.
+  const result = await probePreLaunch(`export DUP=abc`, ["DUP", "DUP"]);
+  expect(result.rows).toEqual([{ name: "DUP", length: 3 }]);
+});
+
+test("a hung hook is killed by the probe timeout, not left spinning", async () => {
+  // The test drops the timeout to 200ms so a `sleep 5` proves the killpath
+  // without slowing the suite. Production keeps the 15s default.
+  const result = await probePreLaunch(
+    `sleep 5; export TOKEN=x`,
+    ["TOKEN"],
+    { cwd: dir, timeoutMs: 200 },
+  );
+  expect(result.rows).toEqual([{ name: "TOKEN", length: 0 }]);
+  expect(result.stderr).toMatch(/timed out after 0\.2s/i);
+  expect(result.exitCode).not.toBe(0);
+});

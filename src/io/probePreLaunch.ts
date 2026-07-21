@@ -6,6 +6,14 @@ const run = promisify(execFile);
 /** POSIX env var name; matches groundcrew's own accepted shape. */
 const POSIX_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+/**
+ * Wall-clock ceiling for a single dry-run. Long enough for a slow token mint,
+ * short enough that a genuinely hung hook (blocking read, deadlocked child)
+ * doesn't leave the TUI spinning; on timeout, execFile rejects and the
+ * timed-out killed-child signal is surfaced in `stderr`.
+ */
+const PROBE_TIMEOUT_MS = 15_000;
+
 /** One probed env var: the byte-safe character length its value ended up with. */
 export interface ProbeRow {
   name: string;
@@ -79,18 +87,27 @@ export function parseProbeOutput(
 export async function probePreLaunch(
   preLaunch: string,
   names: string[],
-  options: { cwd?: string; worktree?: string } = {},
+  options: { cwd?: string; worktree?: string; timeoutMs?: number } = {},
 ): Promise<ProbeResult> {
+  const timeoutMs = options.timeoutMs ?? PROBE_TIMEOUT_MS;
+  // Dedup POSIX-valid names once, so `unset`, the report loop, and the parsed
+  // rows all iterate the same sequence. Otherwise a repeated name would `unset`
+  // once but produce two identical rows in the UI panel — harmless but ugly.
+  const seen = new Set<string>();
   const valid: string[] = [];
   const skipped: string[] = [];
   for (const name of names) {
-    (POSIX_NAME.test(name) ? valid : skipped).push(name);
+    if (!POSIX_NAME.test(name)) {
+      skipped.push(name);
+    } else if (!seen.has(name)) {
+      seen.add(name);
+      valid.push(name);
+    }
   }
 
   const worktree = options.worktree ?? options.cwd ?? process.cwd();
   const rendered = preLaunch.replaceAll("{{worktree}}", worktree);
-  const unsetLine =
-    valid.length > 0 ? `unset ${[...new Set(valid)].join(" ")}` : ":";
+  const unsetLine = valid.length > 0 ? `unset ${valid.join(" ")}` : ":";
   const reportLoop = valid
     .map(
       (name) =>
@@ -110,6 +127,8 @@ export async function probePreLaunch(
       cwd: options.cwd ?? process.cwd(),
       env: process.env,
       maxBuffer: 1024 * 1024,
+      timeout: timeoutMs,
+      killSignal: "SIGTERM",
     });
     // A hook can write to stderr (e.g. `cat: …: No such file`) yet still exit 0 —
     // `export X="$(cat missing)"` masks the substitution failure — so surface
@@ -122,12 +141,30 @@ export async function probePreLaunch(
       skipped,
     };
   } catch (error) {
-    const shellError = error as { stdout?: string; stderr?: string; code?: number };
+    // `execFile`'s error `code` is a number on process exit, but a string on
+    // spawn/kill failures (`ENOENT`, `ETIMEDOUT`). Only trust numeric codes;
+    // fall back to 1 otherwise, and annotate stderr on timeout so the panel
+    // can distinguish a hung hook from a normal non-zero exit.
+    const shellError = error as {
+      stdout?: string;
+      stderr?: string;
+      code?: number | string;
+      signal?: string;
+      killed?: boolean;
+    };
     const { rows, exitCode } = parseProbeOutput(shellError.stdout ?? "", valid);
+    const fallback = typeof shellError.code === "number" ? shellError.code : 1;
+    const timedOut = shellError.killed === true || shellError.code === "ETIMEDOUT";
+    const baseStderr = (shellError.stderr ?? "").trim();
+    const stderr = timedOut
+      ? [`preLaunch timed out after ${timeoutMs / 1000}s`, baseStderr]
+          .filter(Boolean)
+          .join("\n")
+      : baseStderr;
     return {
       rows,
-      exitCode: Number.isNaN(exitCode) ? (shellError.code ?? 1) : exitCode,
-      stderr: (shellError.stderr ?? "").trim(),
+      exitCode: Number.isNaN(exitCode) ? fallback : exitCode,
+      stderr,
       skipped,
     };
   }
