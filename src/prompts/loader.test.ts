@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   listPackagedPrompts,
   parseFrontmatter,
@@ -78,4 +78,72 @@ test("listPackagedPrompts surfaces the bundled coding-task prompt", () => {
   // Frontmatter should not leak into the body that gets installed.
   expect(autonomous?.body.startsWith("---")).toBe(false);
   expect(autonomous?.body).toContain("# Coding task → PR prompt");
+});
+
+test("listPackagedPrompts reads and sorts the .md files in an explicit dir, ignoring non-.md", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "crew-config-prompts-"));
+  writeFileSync(path.join(dir, "beta.md"), "---\ntitle: Beta\n---\nbeta body\n");
+  writeFileSync(path.join(dir, "alpha.md"), "---\ntitle: Alpha\n---\nalpha body\n");
+  // Non-.md files (e.g. a stray README, a dotfile) must be skipped.
+  writeFileSync(path.join(dir, "README.txt"), "not a prompt");
+  const prompts = listPackagedPrompts(dir);
+  expect(prompts.map((p) => p.slug)).toEqual(["alpha", "beta"]);
+  expect(prompts[0]?.title).toBe("Alpha");
+  expect(prompts[0]?.body).toBe("alpha body\n");
+});
+
+test("listPackagedPrompts returns an empty list for a dir with no .md files", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "crew-config-empty-"));
+  writeFileSync(path.join(dir, "notes.txt"), "nothing here");
+  expect(listPackagedPrompts(dir)).toEqual([]);
+});
+
+test("importing the loader does no filesystem I/O, and the default dir resolves lazily and only once", async () => {
+  // Regression guard for the import-time side effect: the module must not touch
+  // the filesystem merely by being imported — resolution is deferred to the
+  // first default-dir call and then memoized. Track fs via a doMock so the
+  // assertion sees exactly which calls the module makes, and when.
+  vi.resetModules();
+  const calls: string[] = [];
+  vi.doMock("node:fs", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("node:fs")>();
+    const orig = actual as unknown as Record<
+      string,
+      (...args: unknown[]) => unknown
+    >;
+    const track =
+      (name: string) =>
+      (...args: unknown[]): unknown => {
+        calls.push(name);
+        return orig[name]?.(...args);
+      };
+    return {
+      ...actual,
+      existsSync: track("existsSync"),
+      statSync: track("statSync"),
+      readdirSync: track("readdirSync"),
+    };
+  });
+  try {
+    const mod = await import("./loader.ts");
+    // Merely importing the module must not touch the filesystem.
+    expect(calls).toEqual([]);
+
+    mod.listPackagedPrompts();
+    // The first default-dir call resolves the dir (existsSync) and lists it.
+    const resolveCallsAfterFirst = calls.filter(
+      (c) => c === "existsSync",
+    ).length;
+    expect(resolveCallsAfterFirst).toBeGreaterThan(0);
+    expect(calls).toContain("readdirSync");
+
+    mod.listPackagedPrompts();
+    // The second call reuses the cached dir: no additional resolution I/O.
+    expect(calls.filter((c) => c === "existsSync").length).toBe(
+      resolveCallsAfterFirst,
+    );
+  } finally {
+    vi.doUnmock("node:fs");
+    vi.resetModules();
+  }
 });

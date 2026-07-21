@@ -924,6 +924,7 @@ import path4 from "path";
 import { promisify } from "util";
 var run = promisify(execFile2);
 var groundcrewUrl = import.meta.resolve("@clipboard-health/groundcrew");
+var VALIDATE_SIDECAR_PREFIX = ".crew.config.validate-";
 var CHILD = `
 const { loadConfig } = await import(${JSON.stringify(groundcrewUrl)});
 try { await loadConfig(); }
@@ -941,7 +942,7 @@ function mapSection(message) {
 async function validateDraft(draft, configDir) {
   const inPlace = configDir !== void 0 && existsSync2(configDir) && statSync(configDir).isDirectory();
   const dir = inPlace ? configDir : mkdtempSync(path4.join(tmpdir(), "cc-validate-"));
-  const file = path4.join(dir, `.crew.config.validate-${randomUUID()}.json`);
+  const file = path4.join(dir, `${VALIDATE_SIDECAR_PREFIX}${randomUUID()}.json`);
   writeFileSync2(file, JSON.stringify(pruneEmpty(draft)));
   try {
     await run(process.execPath, ["--input-type=module", "-e", CHILD], {
@@ -2530,8 +2531,11 @@ function resolvePromptsDir(moduleUrl = import.meta.url) {
   if (existsSync4(bundled) && statSync3(bundled).isDirectory()) return bundled;
   return fileURLToPath2(new URL("./", moduleUrl));
 }
-var PROMPTS_DIR = resolvePromptsDir();
-function listPackagedPrompts(dir = PROMPTS_DIR) {
+var cachedPromptsDir;
+function defaultPromptsDir() {
+  return cachedPromptsDir ??= resolvePromptsDir();
+}
+function listPackagedPrompts(dir = defaultPromptsDir()) {
   const files = readdirSync(dir).filter((name) => name.endsWith(".md")).sort();
   return files.map((name) => readPackagedPrompt(path8.join(dir, name)));
 }

@@ -21,7 +21,10 @@ if (meta !== null) {
 // `crew-config upgrade` is a non-interactive subcommand: it spawns the right
 // channel's upgrade and exits. Like the meta flags, it must short-circuit
 // before locate() (which would mistake the bare `upgrade` arg for a config
-// path) and before entering the alt screen.
+// path) and before entering the alt screen. Note: for the installer channel
+// this shells out to `curl -fsSL … | bash` (see upgrade.ts) — it downloads and
+// executes a remote install script, so it must only ever run on this explicit
+// user-invoked subcommand.
 if (argv[0] === "upgrade") {
   process.exit(runUpgrade());
 }
@@ -51,8 +54,12 @@ const initialDraft = (await loadDraft(configPath)) ?? seedNewConfig(target);
 // terminal is restored on every exit path. No-op when stdout is not a TTY.
 // installFullscreen wires every restore handler before it calls enter(): that
 // order is load-bearing, so a fatal event during startup can never strand the
-// terminal in the alt screen. Any edit to the teardown path must re-run
-// `node scripts/verify-teardown.mjs` (after `npm run build`).
+// terminal in the alt screen. Beyond entering the alt screen, this installs
+// PROCESS-WIDE handlers — `exit`, SIGINT/SIGTERM/SIGHUP, and `uncaughtException`
+// /`unhandledRejection` — so any uncaught error anywhere in the app restores the
+// terminal and then exits(1); `dispose()` unregisters them. Any edit to the
+// teardown path must re-run `node scripts/verify-teardown.mjs` (after
+// `npm run build`).
 const dispose = installFullscreen(createFullscreen(process.stdout));
 try {
   const instance = render(<App initialDraft={initialDraft} target={target} />);

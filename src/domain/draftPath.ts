@@ -3,7 +3,16 @@
 // segment is absent); `setByPath` writes one without mutating its input.
 
 import { isObject } from "./guards.ts";
+import type { ConfigDraft, DraftPath } from "./types.ts";
 
+// Reading a known leaf: constrain `path` to the `DraftPath` registry so callers
+// get autocomplete over the writable paths and a `ConfigDraft`-typed read
+// documents which leaves it touches. The permissive `(unknown, string)` overload
+// remains for genuinely dynamic callers (diff/modified-marker code that walks a
+// computed path). The value stays `unknown` in both — the leaves have different
+// types, so callers still narrow with `asString`/`typeof` at the use site.
+export function getByPath(draft: ConfigDraft, path: DraftPath): unknown;
+export function getByPath(draft: unknown, path: string): unknown;
 export function getByPath(draft: unknown, path: string): unknown {
   let current: unknown = draft;
   for (const key of path.split(".")) {

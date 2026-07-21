@@ -28,9 +28,18 @@ export function resolvePromptsDir(moduleUrl: string = import.meta.url): string {
   return fileURLToPath(new URL("./", moduleUrl));
 }
 
-const PROMPTS_DIR = resolvePromptsDir();
+// Resolve lazily and memoize: `resolvePromptsDir` touches the filesystem
+// (existsSync/statSync), so doing it at module import time would make merely
+// importing this module perform disk I/O. Deferring it to the first call keeps
+// import side-effect-free; the cache means repeated calls resolve only once.
+let cachedPromptsDir: string | undefined;
+function defaultPromptsDir(): string {
+  return (cachedPromptsDir ??= resolvePromptsDir());
+}
 
-export function listPackagedPrompts(dir: string = PROMPTS_DIR): PackagedPrompt[] {
+export function listPackagedPrompts(
+  dir: string = defaultPromptsDir(),
+): PackagedPrompt[] {
   const files = readdirSync(dir)
     .filter((name) => name.endsWith(".md"))
     .sort();

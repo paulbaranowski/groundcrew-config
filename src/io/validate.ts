@@ -29,6 +29,13 @@ export type ValidationResult =
 // independent of the child's cwd.
 const groundcrewUrl = import.meta.resolve("@clipboard-health/groundcrew");
 
+// Sidecar filename prefix. The leading dot is LOAD-BEARING: it makes the file a
+// dotfile, so cosmiconfig's discovery walk skips it and it never shadows the
+// user's real crew.config.json. groundcrew reads it only because we point
+// GROUNDCREW_CONFIG straight at it (below). Drop the dot and a stray, discoverable
+// config leaks into the config dir; drop the env override and the wrong file loads.
+const VALIDATE_SIDECAR_PREFIX = ".crew.config.validate-";
+
 // Child process body: import groundcrew's real loadConfig and exit non-zero with
 // its message if the GROUNDCREW_CONFIG sidecar is rejected.
 const CHILD = `
@@ -86,7 +93,7 @@ export async function validateDraft(
   // A dotfile sidecar groundcrew reads directly via GROUNDCREW_CONFIG (so it
   // never shadows the user's own crew.config.json discovery), placed *in* the
   // config dir — not a subdir — so `path.dirname` matches the real config's.
-  const file = path.join(dir, `.crew.config.validate-${randomUUID()}.json`);
+  const file = path.join(dir, `${VALIDATE_SIDECAR_PREFIX}${randomUUID()}.json`);
   writeFileSync(file, JSON.stringify(pruneEmpty(draft)));
   try {
     await run(process.execPath, ["--input-type=module", "-e", CHILD], {

@@ -10,6 +10,7 @@ import {
   NETWORK_EGRESS,
   RUNNERS,
   type ConfigDraft,
+  type SandboxPath,
 } from "../domain/types.ts";
 import { useEditGuard } from "../hooks/useEditGuard.ts";
 import { SaveGuard } from "./SaveGuard.tsx";
@@ -60,7 +61,11 @@ export function SandboxForm({ draft, baseline, onChange, onBack }: Props) {
   const baselineReadOnlyDirs = baseline.local?.readOnlyDirs ?? [];
   const baselineSafehouseEnable = baseline.local?.safehouse?.enable ?? [];
 
-  function writePath(path: string, value: unknown): void {
+  // `path` is constrained to the sandbox leaves this screen owns, so a typo
+  // (e.g. "local.runer") fails to compile. draftPath is the untyped boundary:
+  // the draft crosses into setByPath as a record and back — same pattern as
+  // SectionForm.update, with SandboxPath keeping the casts honest.
+  function writePath(path: SandboxPath, value: unknown): void {
     onChange(
       setByPath(
         draft as unknown as Record<string, unknown>,

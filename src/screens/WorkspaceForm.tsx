@@ -3,7 +3,7 @@ import { Box, Text, useInput } from "ink";
 import { TextField } from "../components/TextField.tsx";
 import { valuesEqual } from "../domain/diff.ts";
 import { setByPath } from "../domain/draftPath.ts";
-import type { ConfigDraft } from "../domain/types.ts";
+import type { ConfigDraft, WorkspacePath } from "../domain/types.ts";
 
 interface Props {
   draft: ConfigDraft;
@@ -28,7 +28,10 @@ export function WorkspaceForm({ draft, baseline, onChange, onBack }: Props) {
     if (key.upArrow) setFocusIndex((f) => Math.max(0, f - 1));
   });
 
-  function setField(path: string, value: string): void {
+  // `path` is constrained to the two workspace leaves this screen owns, so a
+  // typo fails to compile. draftPath is the untyped boundary (see
+  // SectionForm.update); WorkspacePath keeps the casts honest.
+  function setField(path: WorkspacePath, value: string): void {
     onChange(
       setByPath(
         draft as unknown as Record<string, unknown>,
