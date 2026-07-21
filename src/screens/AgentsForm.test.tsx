@@ -82,7 +82,10 @@ test("space on the bypass row toggles bypass on claude", async () => {
   const { lastFrame, stdin } = render(
     <AgentsForm draft={both} baseline={both} onChange={onChange} onBack={() => {}} />,
   );
-  stdin.write(DOWN); // down to the bypass sub-row
+  // rows: claude (0), configure (1), bypass (2), codex (3), configure (4), cursor (5), configure (6)
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸     › Configure fields…"));
+  stdin.write(DOWN);
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("▸     [ ] bypass permission prompts"),
   );
@@ -104,7 +107,9 @@ test("space on the codex row enables codex", async () => {
   const { lastFrame, stdin } = render(
     <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={onChange} onBack={() => {}} />,
   );
-  // rows: claude (0), bypass (1), codex (2), cursor (3)
+  // rows: claude (0), configure (1), bypass (2), codex (3), configure (4), cursor (5), configure (6)
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸     › Configure fields…"));
   stdin.write(DOWN);
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("▸     [ ] bypass permission prompts"),
@@ -126,13 +131,17 @@ test("space on the cursor row enables cursor", async () => {
   const { lastFrame, stdin } = render(
     <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={onChange} onBack={() => {}} />,
   );
-  // rows: claude (0), bypass (1), codex (2), cursor (3)
+  // rows: claude (0), configure (1), bypass (2), codex (3), configure (4), cursor (5), configure (6)
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸     › Configure fields…"));
   stdin.write(DOWN);
   await vi.waitFor(() =>
     expect(lastFrame()).toContain("▸     [ ] bypass permission prompts"),
   );
   stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] codex"));
+  stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸     › Configure fields…"));
   stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("▸ [ ] cursor"));
   stdin.write(" ");
@@ -171,6 +180,41 @@ test("custom agents are listed read-only, authored in the config file", () => {
   const f = lastFrame() ?? "";
   expect(f).toContain("my-agent");
   expect(f).toContain("crew.config.json");
+});
+
+test("renders a Configure row under every built-in agent", () => {
+  const { lastFrame } = render(
+    <AgentsForm
+      draft={claudeOnly}
+      baseline={claudeOnly}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  const f = lastFrame() ?? "";
+  // One Configure row per built-in (claude, codex, cursor).
+  expect(f.match(/› Configure fields…/g)?.length).toBe(3);
+});
+
+test("enter on a Configure row opens the agent's detail editor", async () => {
+  const { lastFrame, stdin } = render(
+    <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={() => {}} onBack={() => {}} />,
+  );
+  stdin.write(DOWN); // focus claude's Configure row
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸     › Configure fields…"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("Agent: claude"));
+});
+
+test("space on a Configure row does not toggle the parent agent", async () => {
+  const onChange = vi.fn();
+  const { lastFrame, stdin } = render(
+    <AgentsForm draft={claudeOnly} baseline={claudeOnly} onChange={onChange} onBack={() => {}} />,
+  );
+  stdin.write(DOWN); // focus claude's Configure row
+  await vi.waitFor(() => expect(lastFrame()).toContain("▸     › Configure fields…"));
+  stdin.write(" ");
+  expect(onChange).not.toHaveBeenCalled();
 });
 
 test("enter on an agent row opens its detail editor", async () => {
