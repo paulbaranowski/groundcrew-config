@@ -1421,6 +1421,7 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
   const rows = [];
   for (const name of BUILTIN_AGENTS) {
     rows.push({ kind: "enable", name });
+    rows.push({ kind: "configure", name });
     if (name === "claude" && claudeOn) rows.push({ kind: "bypass" });
   }
   const focused = Math.min(cursor, rows.length - 1);
@@ -1448,14 +1449,14 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
       }
       if (key.return) {
         const row2 = rows[focused];
-        if (row2?.kind === "enable") setEditing(row2.name);
+        if (row2?.kind === "enable" || row2?.kind === "configure") setEditing(row2.name);
         return;
       }
       if (key.downArrow) setCursor(Math.min(rows.length - 1, focused + 1));
       if (key.upArrow) setCursor(Math.max(0, focused - 1));
       if (input === " ") {
         const row2 = rows[focused];
-        if (row2) toggle(row2);
+        if (row2?.kind === "enable" || row2?.kind === "bypass") toggle(row2);
       }
     },
     { isActive: editing === void 0 }
@@ -1497,6 +1498,13 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
           modified2 ? /* @__PURE__ */ jsx8(Text8, { color: "yellow", children: " \u25CF" }) : null
         ] }, row2.name);
       }
+      if (row2.kind === "configure") {
+        return /* @__PURE__ */ jsxs8(Text8, { color: active ? "cyan" : void 0, children: [
+          marker,
+          "    ",
+          "\u203A Configure fields\u2026"
+        ] }, `configure-${row2.name}`);
+      }
       const on = isBypassEnabled("claude", definitions.claude);
       const baseBypass = isBypassEnabled("claude", baseDefinitions.claude);
       const modified = on !== baseBypass;
@@ -1517,7 +1525,7 @@ function AgentsForm({ draft, baseline, onChange, onBack }) {
       name,
       " \u2014 defined in crew.config.json"
     ] }, name)) }) : null,
-    /* @__PURE__ */ jsx8(Box8, { marginTop: 1, children: /* @__PURE__ */ jsx8(Text8, { dimColor: true, children: 'The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex, Cursor). Check the ones installed on your machine. "bypass permission prompts" lets the agent act without stopping to ask. \u2191/\u2193 move \xB7 space toggle \xB7 enter edit fields \xB7 esc back.' }) })
+    /* @__PURE__ */ jsx8(Box8, { marginTop: 1, children: /* @__PURE__ */ jsx8(Text8, { dimColor: true, children: 'The AI coding tools groundcrew runs on your tasks (e.g. Claude, Codex, Cursor). Check the ones installed on your machine. "bypass permission prompts" lets the agent act without stopping to ask. \u2191/\u2193 move \xB7 space toggle checkbox \xB7 enter open Configure \xB7 esc back.' }) })
   ] });
 }
 
