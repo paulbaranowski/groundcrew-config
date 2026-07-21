@@ -65,6 +65,42 @@ test("enter saves the merged definition", async () => {
   expect(onSave).toHaveBeenCalledWith({ sandbox: { agent: "claude" } });
 });
 
+test("enter on the preLaunchEnv row opens the list editor, not save", async () => {
+  const def = {};
+  const onSave = vi.fn();
+  const { lastFrame, stdin } = render(
+    <AgentSubForm
+      name="claude"
+      def={def}
+      baselineDef={def}
+      sandboxRequired={false}
+      onSave={onSave}
+      onCancel={() => {}}
+    />,
+  );
+  // Move to the preLaunchEnv summary row (row 3: cmd, color, preLaunch, env).
+  for (let i = 0; i < 3; i++) stdin.write(DOWN);
+  await vi.waitFor(() => expect(lastFrame()).toContain("› preLaunchEnv"));
+  stdin.write("\r");
+  await vi.waitFor(() => expect(lastFrame()).toContain("+ add env name"));
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+test("seeds the preLaunchEnv row count from the definition", () => {
+  const def = { preLaunchEnv: ["GITHUB_TOKEN", "JIRA_API_TOKEN"] };
+  const { lastFrame } = render(
+    <AgentSubForm
+      name="claude"
+      def={def}
+      baselineDef={def}
+      sandboxRequired={false}
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  expect(lastFrame()).toContain("2 names — enter to edit");
+});
+
 test("esc cancels", async () => {
   const def = {};
   const onCancel = vi.fn();
