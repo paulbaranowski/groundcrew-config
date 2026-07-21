@@ -21,9 +21,11 @@ interface Props {
   onBack: () => void;
 }
 
-// A focusable row: enable a built-in agent, or toggle claude's bypass sub-option.
+// A focusable row: enable a built-in agent, open its Configure sub-editor, or
+// toggle claude's bypass sub-option.
 type Row =
   | { kind: "enable"; name: (typeof BUILTIN_AGENTS)[number] }
+  | { kind: "configure"; name: (typeof BUILTIN_AGENTS)[number] }
   | { kind: "bypass" };
 
 // Section editor for the coding agents groundcrew runs: enable/disable each
@@ -41,12 +43,15 @@ export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
   const claudeOn = isAgentEnabled(agents, "claude");
   const sandboxRequired = runnerRequiresSandbox(draft.local?.runner);
 
-  // claude → (bypass when claude on) → codex → cursor. The bypass row is a child
-  // of claude. Model-variant presets such as cursor-grok are config-only built-ins
-  // and appear in the custom-agents list when enabled.
+  // For each built-in: enable row, then a Configure row so the sub-editor is
+  // discoverable without needing to know that Enter on the checkbox opens it.
+  // claude additionally gets a bypass toggle when enabled. Model-variant presets
+  // such as cursor-grok are config-only built-ins and appear in the
+  // custom-agents list when enabled.
   const rows: Row[] = [];
   for (const name of BUILTIN_AGENTS) {
     rows.push({ kind: "enable", name });
+    rows.push({ kind: "configure", name });
     if (name === "claude" && claudeOn) rows.push({ kind: "bypass" });
   }
   const focused = Math.min(cursor, rows.length - 1);
@@ -55,7 +60,7 @@ export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
     (name) => !(BUILTIN_AGENTS as readonly string[]).includes(name),
   );
 
-  function toggle(row: Row): void {
+  function toggle(row: Extract<Row, { kind: "enable" | "bypass" }>): void {
     if (row.kind === "enable") {
       onChange({
         ...draft,
@@ -77,14 +82,14 @@ export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
     }
     if (key.return) {
       const row = rows[focused];
-      if (row?.kind === "enable") setEditing(row.name);
+      if (row?.kind === "enable" || row?.kind === "configure") setEditing(row.name);
       return;
     }
     if (key.downArrow) setCursor(Math.min(rows.length - 1, focused + 1));
     if (key.upArrow) setCursor(Math.max(0, focused - 1));
     if (input === " ") {
       const row = rows[focused];
-      if (row) toggle(row);
+      if (row?.kind === "enable" || row?.kind === "bypass") toggle(row);
     }
     },
     { isActive: editing === undefined },
@@ -132,6 +137,15 @@ export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
               </Text>
             );
           }
+          if (row.kind === "configure") {
+            return (
+              <Text key={`configure-${row.name}`} color={active ? "cyan" : undefined}>
+                {marker}
+                {"    "}
+                › Configure fields…
+              </Text>
+            );
+          }
           const on = isBypassEnabled("claude", definitions.claude);
           const baseBypass = isBypassEnabled("claude", baseDefinitions.claude);
           const modified = on !== baseBypass;
@@ -159,9 +173,8 @@ export function AgentsForm({ draft, baseline, onChange, onBack }: Props) {
         <Text dimColor>
           The AI coding tools groundcrew runs on your tasks (e.g. Claude,
           Codex, Cursor). Check the ones installed on your machine. "bypass
-          permission
-          prompts" lets the agent act without stopping to ask. ↑/↓ move · space
-          toggle · enter edit fields · esc back.
+          permission prompts" lets the agent act without stopping to ask. ↑/↓
+          move · space toggle checkbox · enter open Configure · esc back.
         </Text>
       </Box>
     </Box>
