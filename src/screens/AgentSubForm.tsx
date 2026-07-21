@@ -29,24 +29,69 @@ interface Props {
 /** The text keys of AgentFields — every field except the `preLaunchEnv` list. */
 type TextKey = Exclude<keyof AgentFields, "preLaunchEnv">;
 
-// Rows in display order. Text rows are edited inline; the `env` row is a summary
-// that opens a nested list editor on enter (like ShellSourceSubForm's env row),
-// so a burst of typing/arrows never smashes multiple names into one field. The
+// A single row. Text rows are edited inline; the `env` row is a summary that
+// opens a nested list editor on enter (like ShellSourceSubForm's env row), so a
+// burst of typing/arrows never smashes multiple names into one field. The
 // `action` row (test preLaunch) dry-runs the hook and reports each env var's
-// value length — placed right under the launch fields it exercises.
+// value length.
 type Row =
   | { kind: "text"; key: TextKey; label: string; placeholder: string }
   | { kind: "env"; label: string }
   | { kind: "action"; label: string };
 
-const ROWS: Row[] = [
-  { kind: "text", key: "cmd", label: "cmd", placeholder: "agent-native launch command" },
-  { kind: "text", key: "color", label: "color", placeholder: "#C15F3C" },
-  { kind: "text", key: "preLaunch", label: "preLaunch", placeholder: "shell run before launch (optional)" },
-  { kind: "env", label: "preLaunchEnv" },
-  { kind: "action", label: "test preLaunch" },
-  { kind: "text", key: "sandboxAgent", label: "sandbox.agent", placeholder: "sbx agent name" },
+// Rows grouped into optionally-headed sections. The `Pre-launch` section keeps
+// the hook, its dry-run, and the forwarded env names together, with the test
+// sitting directly under the hook it exercises.
+interface Section {
+  heading?: string;
+  fields: Row[];
+}
+
+const SECTIONS: Section[] = [
+  {
+    fields: [
+      { kind: "text", key: "cmd", label: "cmd", placeholder: "agent-native launch command" },
+      { kind: "text", key: "color", label: "color", placeholder: "#C15F3C" },
+    ],
+  },
+  {
+    heading: "Pre-launch",
+    fields: [
+      { kind: "text", key: "preLaunch", label: "preLaunch", placeholder: "shell run before launch (optional)" },
+      { kind: "action", label: "test preLaunch" },
+      { kind: "env", label: "preLaunchEnv" },
+    ],
+  },
+  {
+    fields: [
+      { kind: "text", key: "sandboxAgent", label: "sandbox.agent", placeholder: "sbx agent name" },
+    ],
+  },
 ];
+
+// Flattened navigable rows; `active` indexes this list. Section headings are
+// presentational only — never focusable — so navigation stays a single flat
+// cursor and the ref-mirrored burst-safety below is untouched.
+const ROWS: Row[] = SECTIONS.flatMap((s) => s.fields);
+
+// Flat ROWS index of each section's first field, so the section-based render can
+// map a (section, field) position back to its cursor index.
+const SECTION_OFFSETS: number[] = (() => {
+  const offsets: number[] = [];
+  let acc = 0;
+  for (const section of SECTIONS) {
+    offsets.push(acc);
+    acc += section.fields.length;
+  }
+  return offsets;
+})();
+
+/** Stable React key for a row, independent of its position. */
+function rowKey(row: Row): string {
+  if (row.kind === "text") return row.key;
+  if (row.kind === "env") return "preLaunchEnv";
+  return "test";
+}
 
 /** Async lifecycle of the "test preLaunch" dry-run. */
 type ProbeState =
@@ -154,63 +199,82 @@ export function AgentSubForm({
     baselineDef === undefined ||
     !valuesEqual(fields.preLaunchEnv, baselineFields.preLaunchEnv);
 
+  function renderRow(row: Row, index: number) {
+    if (row.kind === "env") {
+      const envActive = active === index;
+      const envCount = fields.preLaunchEnv.length;
+      return (
+        <Box>
+          <Text color={envActive ? "cyan" : undefined}>
+            {envActive ? "› " : "  "}
+            {row.label}{" "}
+          </Text>
+          <Text dimColor>
+            {envCount} name{envCount === 1 ? "" : "s"} — enter to edit
+          </Text>
+          {envModified ? <Text color="yellow"> ●</Text> : null}
+        </Box>
+      );
+    }
+    if (row.kind === "action") {
+      const actionActive = active === index;
+      const canTest = fields.preLaunch.trim().length > 0;
+      return (
+        <Box>
+          <Text color={actionActive ? "cyan" : undefined} dimColor={!canTest}>
+            {actionActive ? "› " : "  "}
+            {row.label}
+            {canTest ? " — enter to dry-run" : " — add a preLaunch hook first"}
+          </Text>
+        </Box>
+      );
+    }
+    // For a newly-enabled agent (no baseline def) every field reads as modified.
+    const modified =
+      baselineDef === undefined ||
+      !valuesEqual(fields[row.key], baselineFields[row.key]);
+    return (
+      <TextField
+        label={row.label}
+        value={fields[row.key]}
+        placeholder={
+          row.key === "sandboxAgent" && sandboxRequired
+            ? "required for runner: sdx"
+            : row.placeholder
+        }
+        isActive={active === index}
+        modified={modified}
+        onChange={(v) => {
+          guard.markDirty();
+          setFields((f) => ({ ...f, [row.key]: v }));
+        }}
+      />
+    );
+  }
+
   return (
     <Box flexDirection="column" borderStyle="round" paddingX={1}>
       <Text bold>Agent: {name}</Text>
       <Box flexDirection="column" marginTop={1}>
-        {ROWS.map((row, index) => {
-          if (row.kind === "env") {
-            const envActive = active === index;
-            const envCount = fields.preLaunchEnv.length;
-            return (
-              <Box key="preLaunchEnv">
-                <Text color={envActive ? "cyan" : undefined}>
-                  {envActive ? "› " : "  "}
-                  {row.label}{" "}
-                </Text>
-                <Text dimColor>
-                  {envCount} name{envCount === 1 ? "" : "s"} — enter to edit
-                </Text>
-                {envModified ? <Text color="yellow"> ●</Text> : null}
+        {SECTIONS.map((section, si) => (
+          <Box
+            key={section.heading ?? `section-${si}`}
+            flexDirection="column"
+            marginTop={si === 0 ? 0 : 1}
+          >
+            {section.heading ? (
+              <Text bold dimColor>
+                {section.heading}
+              </Text>
+            ) : null}
+            {section.fields.map((row, fi) => (
+              // Grouped fields indent one step so the heading visibly owns them.
+              <Box key={rowKey(row)} marginLeft={section.heading ? 2 : 0}>
+                {renderRow(row, SECTION_OFFSETS[si]! + fi)}
               </Box>
-            );
-          }
-          if (row.kind === "action") {
-            const actionActive = active === index;
-            const canTest = fields.preLaunch.trim().length > 0;
-            return (
-              <Box key="test">
-                <Text color={actionActive ? "cyan" : undefined} dimColor={!canTest}>
-                  {actionActive ? "› " : "  "}
-                  {row.label}
-                  {canTest ? " — enter to dry-run" : " — add a preLaunch hook first"}
-                </Text>
-              </Box>
-            );
-          }
-          // For a newly-enabled agent (no baseline def) every field reads as modified.
-          const modified =
-            baselineDef === undefined ||
-            !valuesEqual(fields[row.key], baselineFields[row.key]);
-          return (
-            <TextField
-              key={row.key}
-              label={row.label}
-              value={fields[row.key]}
-              placeholder={
-                row.key === "sandboxAgent" && sandboxRequired
-                  ? "required for runner: sdx"
-                  : row.placeholder
-              }
-              isActive={active === index}
-              modified={modified}
-              onChange={(v) => {
-                guard.markDirty();
-                setFields((f) => ({ ...f, [row.key]: v }));
-              }}
-            />
-          );
-        })}
+            ))}
+          </Box>
+        ))}
       </Box>
       <ProbePanel state={probeState} />
       {sandboxMissing ? (

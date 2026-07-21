@@ -54,7 +54,7 @@ test("enter saves the merged definition", async () => {
       onCancel={() => {}}
     />,
   );
-  // Move to sandbox.agent (row 5: cmd, color, preLaunch, env, test, sandbox)
+  // Move to sandbox.agent (row 5: cmd, color, preLaunch, test, env, sandbox)
   // and type a value, then save.
   for (let i = 0; i < 5; i++) stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("› sandbox.agent"));
@@ -79,8 +79,9 @@ test("enter on the preLaunchEnv row opens the list editor, not save", async () =
       onCancel={() => {}}
     />,
   );
-  // Move to the preLaunchEnv summary row (row 3: cmd, color, preLaunch, env).
-  for (let i = 0; i < 3; i++) stdin.write(DOWN);
+  // Move to the preLaunchEnv summary row (row 4: cmd, color, preLaunch, test,
+  // env).
+  for (let i = 0; i < 4; i++) stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("› preLaunchEnv"));
   stdin.write("\r");
   await vi.waitFor(() => expect(lastFrame()).toContain("+ add env name"));
@@ -100,6 +101,30 @@ test("seeds the preLaunchEnv row count from the definition", () => {
     />,
   );
   expect(lastFrame()).toContain("2 names — enter to edit");
+});
+
+test("groups preLaunch, its test, and preLaunchEnv under a Pre-launch heading", () => {
+  const def = {};
+  const { lastFrame } = render(
+    <AgentSubForm
+      name="claude"
+      def={def}
+      baselineDef={def}
+      sandboxRequired={false}
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  const lines = (lastFrame() ?? "").split("\n");
+  const idx = (needle: string) =>
+    lines.findIndex((l) => l.includes(needle));
+  const heading = idx("Pre-launch");
+  expect(heading).toBeGreaterThanOrEqual(0);
+  // The three launch rows follow the heading, in order, and above sandbox.agent.
+  expect(idx("preLaunch ")).toBeGreaterThan(heading);
+  expect(idx("test preLaunch")).toBeGreaterThan(idx("preLaunch "));
+  expect(idx("preLaunchEnv")).toBeGreaterThan(idx("test preLaunch"));
+  expect(idx("sandbox.agent")).toBeGreaterThan(idx("preLaunchEnv"));
 });
 
 test("enter on the test row dry-runs preLaunch and reports value lengths", async () => {
@@ -127,8 +152,8 @@ test("enter on the test row dry-runs preLaunch and reports value lengths", async
       probe={probe}
     />,
   );
-  // Move to the test row (row 4: cmd, color, preLaunch, env, test).
-  for (let i = 0; i < 4; i++) stdin.write(DOWN);
+  // Move to the test row (row 3: cmd, color, preLaunch, test).
+  for (let i = 0; i < 3; i++) stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("› test preLaunch"));
   stdin.write("\r");
   await vi.waitFor(() => expect(lastFrame()).toContain("preLaunch dry-run"));
@@ -156,7 +181,7 @@ test("the test row is inert with no preLaunch hook and never spawns a probe", as
       probe={probe}
     />,
   );
-  for (let i = 0; i < 4; i++) stdin.write(DOWN);
+  for (let i = 0; i < 3; i++) stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("› test preLaunch"));
   expect(lastFrame()).toContain("add a preLaunch hook first");
   stdin.write("\r");
@@ -186,7 +211,7 @@ test("esc dismisses the dry-run result before cancelling the form", async () => 
       probe={probe}
     />,
   );
-  for (let i = 0; i < 4; i++) stdin.write(DOWN);
+  for (let i = 0; i < 3; i++) stdin.write(DOWN);
   await vi.waitFor(() => expect(lastFrame()).toContain("› test preLaunch"));
   stdin.write("\r");
   await vi.waitFor(() => expect(lastFrame()).toContain("preLaunch dry-run"));
