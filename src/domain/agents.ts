@@ -53,8 +53,8 @@ export interface AgentFields {
   cmd: string;
   color: string;
   preLaunch: string;
-  /** Comma-separated env var names, e.g. "SESSION_TOKEN, API_KEY". */
-  preLaunchEnv: string;
+  /** Env var names to forward into the agent, one per entry. */
+  preLaunchEnv: string[];
   /** The sbx agent name bound under `sandbox.agent`. */
   sandboxAgent: string;
 }
@@ -67,8 +67,8 @@ function asString(value: unknown): string {
 export function readAgentFields(def: Def): AgentFields {
   const sandbox = def.sandbox as { agent?: unknown } | undefined;
   const env = Array.isArray(def.preLaunchEnv)
-    ? def.preLaunchEnv.filter((n): n is string => typeof n === "string").join(", ")
-    : "";
+    ? def.preLaunchEnv.filter((n): n is string => typeof n === "string")
+    : [];
   return {
     cmd: asString(def.cmd),
     color: asString(def.color),
@@ -80,9 +80,9 @@ export function readAgentFields(def: Def): AgentFields {
 
 /**
  * Merge edited fields back into a definition. Empty strings clear the key;
- * `preLaunchEnv` parses a comma list (blanks dropped); `sandboxAgent` nests
- * under `sandbox.agent` (clearing it drops the whole `sandbox` block, whose
- * only field is `agent`).
+ * `preLaunchEnv` trims each entry and drops blanks (empty list clears the key);
+ * `sandboxAgent` nests under `sandbox.agent` (clearing it drops the whole
+ * `sandbox` block, whose only field is `agent`).
  */
 export function applyAgentFields(def: Def, fields: AgentFields): Def {
   const next = { ...def };
@@ -91,7 +91,6 @@ export function applyAgentFields(def: Def, fields: AgentFields): Def {
     else next[key] = fields[key];
   }
   const env = fields.preLaunchEnv
-    .split(",")
     .map((n) => n.trim())
     .filter((n) => n.length > 0);
   if (env.length === 0) delete next.preLaunchEnv;

@@ -99,15 +99,15 @@ test("readAgentFields flattens cmd/color/preLaunch, env list, and sandbox.agent"
     cmd: "claude",
     color: "#C15F3C",
     preLaunch: "export T=$(mint)",
-    preLaunchEnv: "T, U",
+    preLaunchEnv: ["T", "U"],
     sandboxAgent: "claude",
   });
-  // Missing fields read as empty strings.
+  // Missing fields read as empty strings / an empty list.
   expect(readAgentFields({})).toEqual({
     cmd: "",
     color: "",
     preLaunch: "",
-    preLaunchEnv: "",
+    preLaunchEnv: [],
     sandboxAgent: "",
   });
 });
@@ -119,7 +119,7 @@ test("applyAgentFields parses the env list and nests sandbox.agent", () => {
       cmd: "claude --permission-mode auto",
       color: "#C15F3C",
       preLaunch: "export T=$(mint)",
-      preLaunchEnv: "T , U,",
+      preLaunchEnv: ["T ", " U", ""],
       sandboxAgent: "claude",
     },
   );
@@ -135,7 +135,7 @@ test("applyAgentFields parses the env list and nests sandbox.agent", () => {
 test("applyAgentFields clears emptied keys and drops the sandbox block", () => {
   const def = applyAgentFields(
     { cmd: "old", preLaunchEnv: ["X"], sandbox: { agent: "claude" } },
-    { cmd: "", color: "", preLaunch: "", preLaunchEnv: " ", sandboxAgent: "" },
+    { cmd: "", color: "", preLaunch: "", preLaunchEnv: [" "], sandboxAgent: "" },
   );
   expect(def).toEqual({});
 });
