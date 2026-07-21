@@ -88,6 +88,82 @@ test("marks a changed name row with ●", () => {
   expect(line).toContain("●");
 });
 
+test("t dry-runs preLaunch and reports each name's value length", async () => {
+  const probe = vi.fn().mockResolvedValue({
+    rows: [
+      { name: "GITHUB_TOKEN", length: 40 },
+      { name: "JIRA_API_TOKEN", length: 0 },
+    ],
+    exitCode: 0,
+    stderr: "",
+    skipped: [],
+  });
+  const { lastFrame, stdin } = render(
+    <PreLaunchEnvEditor
+      names={["GITHUB_TOKEN", "JIRA_API_TOKEN"]}
+      baselineNames={["GITHUB_TOKEN", "JIRA_API_TOKEN"]}
+      preLaunch={`export JIRA_API_TOKEN="$(cat jira.token)"`}
+      probe={probe}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  stdin.write("t");
+  await vi.waitFor(() => expect(lastFrame()).toContain("preLaunch dry-run"));
+  const f = lastFrame() ?? "";
+  expect(probe).toHaveBeenCalledOnce();
+  expect(f).toContain("GITHUB_TOKEN len=40");
+  expect(f).toContain("JIRA_API_TOKEN empty (len=0)");
+});
+
+test("t is inert when there is no preLaunch hook to test", async () => {
+  const probe = vi.fn();
+  const { lastFrame, stdin } = render(
+    <PreLaunchEnvEditor
+      names={["GITHUB_TOKEN"]}
+      baselineNames={["GITHUB_TOKEN"]}
+      preLaunch=""
+      probe={probe}
+      onChange={() => {}}
+      onBack={() => {}}
+    />,
+  );
+  // No hook → no dry-run affordance in the help line, and `t` does nothing.
+  expect(lastFrame()).not.toContain("dry-run preLaunch");
+  stdin.write("t");
+  await new Promise((r) => setTimeout(r, 20));
+  expect(probe).not.toHaveBeenCalled();
+});
+
+test("esc dismisses the dry-run result before leaving the editor", async () => {
+  const onBack = vi.fn();
+  const probe = vi.fn().mockResolvedValue({
+    rows: [{ name: "TOK", length: 5 }],
+    exitCode: 0,
+    stderr: "",
+    skipped: [],
+  });
+  const { lastFrame, stdin } = render(
+    <PreLaunchEnvEditor
+      names={["TOK"]}
+      baselineNames={["TOK"]}
+      preLaunch="export TOK=abc"
+      probe={probe}
+      onChange={() => {}}
+      onBack={onBack}
+    />,
+  );
+  stdin.write("t");
+  await vi.waitFor(() => expect(lastFrame()).toContain("preLaunch dry-run"));
+  stdin.write(ESC); // first esc dismisses the panel, does not leave
+  await vi.waitFor(() =>
+    expect(lastFrame()).not.toContain("preLaunch dry-run"),
+  );
+  expect(onBack).not.toHaveBeenCalled();
+  stdin.write(ESC); // second esc leaves
+  await vi.waitFor(() => expect(onBack).toHaveBeenCalled());
+});
+
 test("Enter on a blank name does not commit and keeps the editor open", async () => {
   const onChange = vi.fn();
   const { lastFrame, stdin } = render(

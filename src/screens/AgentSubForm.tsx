@@ -97,6 +97,7 @@ export function AgentSubForm({
       <PreLaunchEnvEditor
         names={fields.preLaunchEnv}
         baselineNames={baselineFields.preLaunchEnv}
+        preLaunch={fields.preLaunch}
         onChange={(preLaunchEnv) => {
           guard.markDirty();
           setFields((f) => ({ ...f, preLaunchEnv }));
