@@ -4,6 +4,7 @@ import {
   WORKSPACE_KINDS,
   type ConfigDraft,
   type SectionId,
+  type SpecFieldPath,
 } from "./types.ts";
 import {
   customKindNames,
@@ -89,20 +90,11 @@ export const SECTION_DESCRIPTION: Record<SectionId, string> = {
 /**
  * The dotted paths the spec-driven sections write into the draft. Every `path`
  * value produced by `simpleSectionSpec` appears here; adding a field to a
- * spec-driven section means adding its path to this union (typecheck enforces
- * the round trip through `setByPath`).
+ * spec-driven section means adding its path to `SpecFieldPath` in `types.ts`
+ * (which also folds it into the shared `DraftPath` registry). Typecheck enforces
+ * the round trip through `setByPath`.
  */
-export type FieldPath =
-  | "orchestrator.maximumInProgress"
-  | "orchestrator.pollIntervalMilliseconds"
-  | "defaults.hooks.prepareWorktree"
-  | "git.remote"
-  | "git.defaultBranch"
-  | "git.branchPrefix"
-  | "prompts.initial"
-  | "prompts.promptFile"
-  | "workspaceKind"
-  | "logging.file";
+export type FieldPath = SpecFieldPath;
 
 /**
  * A field in the generic SectionForm. `path` is a dotted path into the draft;

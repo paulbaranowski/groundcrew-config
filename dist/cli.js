@@ -924,6 +924,7 @@ import path4 from "path";
 import { promisify } from "util";
 var run = promisify(execFile2);
 var groundcrewUrl = import.meta.resolve("@clipboard-health/groundcrew");
+var VALIDATE_SIDECAR_PREFIX = ".crew.config.validate-";
 var CHILD = `
 const { loadConfig } = await import(${JSON.stringify(groundcrewUrl)});
 try { await loadConfig(); }
@@ -941,7 +942,7 @@ function mapSection(message) {
 async function validateDraft(draft, configDir) {
   const inPlace = configDir !== void 0 && existsSync2(configDir) && statSync(configDir).isDirectory();
   const dir = inPlace ? configDir : mkdtempSync(path4.join(tmpdir(), "cc-validate-"));
-  const file = path4.join(dir, `.crew.config.validate-${randomUUID()}.json`);
+  const file = path4.join(dir, `${VALIDATE_SIDECAR_PREFIX}${randomUUID()}.json`);
   writeFileSync2(file, JSON.stringify(pruneEmpty(draft)));
   try {
     await run(process.execPath, ["--input-type=module", "-e", CHILD], {
@@ -2522,8 +2523,11 @@ function resolvePromptsDir(moduleUrl = import.meta.url) {
   if (existsSync4(bundled) && statSync3(bundled).isDirectory()) return bundled;
   return fileURLToPath2(new URL("./", moduleUrl));
 }
-var PROMPTS_DIR = resolvePromptsDir();
-function listPackagedPrompts(dir = PROMPTS_DIR) {
+var cachedPromptsDir;
+function defaultPromptsDir() {
+  return cachedPromptsDir ??= resolvePromptsDir();
+}
+function listPackagedPrompts(dir = defaultPromptsDir()) {
   const files = readdirSync(dir).filter((name) => name.endsWith(".md")).sort();
   return files.map((name) => readPackagedPrompt(path8.join(dir, name)));
 }
@@ -2949,7 +2953,8 @@ function normalizeRepos(repos) {
       projectDirOverride: entry.projectDirOverride,
       workdir: entry.workdir,
       provision: entry.provision ? { create: entry.provision.create, remove: entry.provision.remove } : void 0,
-      prepareWorktreeHook: entry.hooks?.prepareWorktree
+      prepareWorktreeHook: entry.hooks?.prepareWorktree,
+      unsandboxedPrepareWorktreeHook: entry.unsandboxedHooks?.prepareWorktree
     }
   );
 }
@@ -2961,11 +2966,13 @@ function denormalizeRepos(entries) {
     const create = entry.provision?.create.trim() ?? "";
     const remove = entry.provision?.remove.trim() ?? "";
     const prepareHook = entry.prepareWorktreeHook?.trim() ?? "";
+    const unsandboxedHook = entry.unsandboxedPrepareWorktreeHook?.trim() ?? "";
     const hasOverride = override !== void 0 && override.length > 0;
     const hasWorkdir = workdir !== void 0 && workdir.length > 0;
     const hasProvision = create.length > 0 || remove.length > 0;
     const hasHook = prepareHook.length > 0;
-    if (!hasOverride && !hasWorkdir && !hasProvision && !hasHook) {
+    const hasUnsandboxedHook = unsandboxedHook.length > 0;
+    if (!hasOverride && !hasWorkdir && !hasProvision && !hasHook && !hasUnsandboxedHook) {
       return name;
     }
     const repo = { name };
@@ -2973,6 +2980,9 @@ function denormalizeRepos(entries) {
     if (hasWorkdir) repo.workdir = workdir;
     if (hasProvision) repo.provision = { create, remove };
     if (hasHook) repo.hooks = { prepareWorktree: prepareHook };
+    if (hasUnsandboxedHook) {
+      repo.unsandboxedHooks = { prepareWorktree: unsandboxedHook };
+    }
     return repo;
   });
 }
@@ -2992,7 +3002,8 @@ function duplicateEntry(entry, existingNames) {
     projectDirOverride: entry.projectDirOverride,
     workdir: entry.workdir,
     provision: entry.provision ? { create: entry.provision.create, remove: entry.provision.remove } : void 0,
-    prepareWorktreeHook: entry.prepareWorktreeHook
+    prepareWorktreeHook: entry.prepareWorktreeHook,
+    unsandboxedPrepareWorktreeHook: entry.unsandboxedPrepareWorktreeHook
   };
 }
 function repoErrors(entries) {
@@ -3167,7 +3178,7 @@ function discoverReposDefault(workspaceDir) {
 import { useState as useState12 } from "react";
 import { Box as Box15, Text as Text15, useInput as useInput13 } from "ink";
 import { jsx as jsx15, jsxs as jsxs15 } from "react/jsx-runtime";
-var FIELD_COUNT = 6;
+var FIELD_COUNT = 7;
 function RepoSubForm({
   entry,
   baselineEntry,
@@ -3185,6 +3196,9 @@ function RepoSubForm({
     entry.provision?.remove ?? ""
   );
   const [prepareHook, setPrepareHook] = useState12(entry.prepareWorktreeHook ?? "");
+  const [unsandboxedHook, setUnsandboxedHook] = useState12(
+    entry.unsandboxedPrepareWorktreeHook ?? ""
+  );
   const [active, setActive] = useState12(0);
   const guard = useEditGuard();
   const nameModified = baselineEntry === void 0 || !valuesEqual(name, baselineEntry.name);
@@ -3202,6 +3216,10 @@ function RepoSubForm({
     prepareHook.length === 0 ? void 0 : prepareHook,
     baselineEntry.prepareWorktreeHook
   );
+  const unsandboxedHookModified = baselineEntry === void 0 || !valuesEqual(
+    unsandboxedHook.length === 0 ? void 0 : unsandboxedHook,
+    baselineEntry.unsandboxedPrepareWorktreeHook
+  );
   function buildEntry() {
     const hasProvision = provisionCreate.trim().length > 0 || provisionRemove.trim().length > 0;
     return {
@@ -3209,7 +3227,8 @@ function RepoSubForm({
       projectDirOverride: override.length === 0 ? void 0 : override,
       workdir: workdir.length === 0 ? void 0 : workdir,
       provision: hasProvision ? { create: provisionCreate, remove: provisionRemove } : void 0,
-      prepareWorktreeHook: prepareHook.length === 0 ? void 0 : prepareHook
+      prepareWorktreeHook: prepareHook.length === 0 ? void 0 : prepareHook,
+      unsandboxedPrepareWorktreeHook: unsandboxedHook.length === 0 ? void 0 : unsandboxedHook
     };
   }
   useInput13(
@@ -3312,6 +3331,17 @@ function RepoSubForm({
           modified: prepareHookModified,
           onChange: guard.track(setPrepareHook)
         }
+      ),
+      /* @__PURE__ */ jsx15(
+        TextField,
+        {
+          label: "unsandboxedHooks.prepareWorktree",
+          value: unsandboxedHook,
+          placeholder: "host-side setup (bin/setup, native builds) \u2014 runs OUTSIDE the sandbox (optional)",
+          isActive: active === 6,
+          modified: unsandboxedHookModified,
+          onChange: guard.track(setUnsandboxedHook)
+        }
       )
     ] }),
     /* @__PURE__ */ jsx15(Box15, { marginTop: 1, children: /* @__PURE__ */ jsxs15(Text15, { dimColor: true, children: [
@@ -3321,7 +3351,8 @@ function RepoSubForm({
       name
     ] }) }),
     /* @__PURE__ */ jsx15(Box15, { children: /* @__PURE__ */ jsx15(Text15, { dimColor: true, children: `Settings for one repository. "name" is its folder name; everything else is an optional override. provision is scripted worktree setup \u2014 it needs both templates and can't combine with projectDirOverride.` }) }),
-    /* @__PURE__ */ jsx15(Box15, { marginTop: 1, children: /* @__PURE__ */ jsx15(Text15, { dimColor: true, children: "hooks.prepareWorktree cascade: a repo-committed .groundcrew/config.json wins, then this per-repo setting, then defaults.hooks.prepareWorktree." }) })
+    /* @__PURE__ */ jsx15(Box15, { marginTop: 1, children: /* @__PURE__ */ jsx15(Text15, { dimColor: true, children: "hooks.prepareWorktree cascade: a repo-committed .groundcrew/config.json wins, then this per-repo setting, then defaults.hooks.prepareWorktree." }) }),
+    /* @__PURE__ */ jsx15(Box15, { children: /* @__PURE__ */ jsx15(Text15, { dimColor: true, children: "unsandboxedHooks.prepareWorktree is operator-only and per-repo (no defaults.*, no repo-committed override). Runs on the host BEFORE hooks.prepareWorktree \u2014 for native builds and host toolchains the sandbox blocks. Rejected under runner=sdx." }) })
   ] });
 }
 

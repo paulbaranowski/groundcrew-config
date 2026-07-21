@@ -1,25 +1,30 @@
 import { Box, Text, useInput } from "ink";
 
-interface Props {
+// Generic over the option literal `T` so a caller passing a domain enum
+// (`RUNNERS`, `NETWORK_EGRESS`, …) gets an `onChange` typed to that enum rather
+// than bare `string` — a wrong literal handed back to the writer fails to
+// compile. Callers with a plain `readonly string[]` (SectionForm) infer `string`
+// and behave exactly as before.
+interface Props<T extends string> {
   label: string;
-  value: string;
-  options: readonly string[];
+  value: T;
+  options: readonly T[];
   isActive: boolean;
-  onChange: (next: string) => void;
+  onChange: (next: T) => void;
   /** True when the current value differs from its last-saved baseline. */
   modified?: boolean;
 }
 
 // A left/right-arrow option cycler (not a dropdown): renders every option inline
 // with the active one in brackets, wrapping past the ends.
-export function SelectField({
+export function SelectField<T extends string>({
   label,
   value,
   options,
   isActive,
   onChange,
   modified = false,
-}: Props) {
+}: Props<T>) {
   useInput(
     (_input, key) => {
       if (options.length === 0) return; // nothing to cycle; avoids `% 0` → NaN
